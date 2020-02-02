@@ -2,6 +2,8 @@
 ![radishla128b](https://user-images.githubusercontent.com/24559785/73605022-e488d000-4590-11ea-9530-95b6267f634a.png)  
 Radish Shape Analysis Laboratory
 
+[English](https://github.com/iciromaco/RadiShLab/blob/master/README-Eng.md)
+
 ## Description
 
 **RadiShLab** は プログラミング言語 python で記述されたダイコンの形状解析のためのライブラリです.
@@ -13,7 +15,6 @@ Radish Shape Analysis Laboratory
 # New!
 
   - OPENCV 4.X 用にコードを書き換え
-  - Rewritten code for OPENCV 4.X
 
 ====
 ## Demo
