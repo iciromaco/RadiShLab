@@ -13,21 +13,28 @@ Radish Shape Analysis Laboratory
 
   - OPENCV 4.X 用にコードを書き換え- 
 
-Name
 ====
 ## Demo
 [![](https://img.youtube.com/vi/E4WwWzWe_so/0.jpg)](https://www.youtube.com/watch?v=E4WwWzWe_so)
+
 ## VS. 
 - [SHAPE](http://lbm.ab.a.u-tokyo.ac.jp/~iwata/shape/index.html)
 
 ## Requirement
-- [**Anaconda**](https://www.anaconda.com/python) (python programming environment)
+## python と jupyter notebook が実行できる環境
+-（推奨1） [**Anaconda**](https://www.anaconda.com/python) (python プログラミング開発環境)
 
-  Any other python distribution may replace Anaconda if it contains libraries **jupyter notebook**,**numpy**, **matplotlib** and **opencv**.
+  **jupyter notebook**,**numpy**, **matplotlib** and **opencv** などが含まれているなら他のディストリビューションでも構いません．
   
-  The easiest way to try RadishLab is to run it on [**Google Colaboratory**](https://colab.research.google.com/notebooks/welcome.ipynb?hl=ja). However, GUI programs cannot be used in colaboratory.
+- （推奨2)  [**Google Colaboratory**](https://colab.research.google.com/notebooks/welcome.ipynb?hl=ja). 
 
+  一番楽なのは Google Colaboratory を使うことです．これは Google が提供してくれる jupyter notebook の実況環境であり，必要なライブラリがすべて含まれています．ただし，colaboratory ではGUI を使うプログラムを実行できません．
+  
 ## Usage
+
+機能ごとにノートブックにしてあります．ターミナルで試したいノートブックのあるディレクトリで jupyter notebook を起動し，ブラウザでノートブックを開いてプログラムを実行してください．ノートブックを壊してしまわないよう，複製上で実行するのがよいでしょう．
+
+Google Colaboratory で実行する場合は，ノートブックをアップロードして実行してください．
 
 ## Install
 
@@ -48,15 +55,11 @@ Name
 
   - OPENCV 4.X 用にコードを書き換え- 
 
-Name
+English
 ====
-## Demo
-[![](https://img.youtube.com/vi/E4WwWzWe_so/0.jpg)](https://www.youtube.com/watch?v=E4WwWzWe_so)
-## VS. 
-- [SHAPE](http://lbm.ab.a.u-tokyo.ac.jp/~iwata/shape/index.html)
-
 ## Requirement
-- [**Anaconda**](https://www.anaconda.com/python) (python programming environment)
+### python and jupyter notebook execution environment
+- (recomended 1) [**Anaconda**](https://www.anaconda.com/python) (python programming environment)
 
   Any other python distribution may replace Anaconda if it contains libraries **jupyter notebook**,**numpy**, **matplotlib** and **opencv**.
   
