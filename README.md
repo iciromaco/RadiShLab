@@ -26,7 +26,7 @@ Radish Shape Analysis Laboratory
 [![](https://img.youtube.com/vi/geLT5e6Tkqg/0.jpg)](https://www.youtube.com/watch?v=geLT5e6Tkqg)
 
 ## Requirement
-### python と jupyter notebook が実行できる環境
+- ### python と jupyter notebook が実行できる環境
 （推奨1)  [**Google Colaboratory**](https://colab.research.google.com/notebooks/welcome.ipynb?hl=ja). 
 
   一番楽なのは Google Colaboratory を使うことです．これは Google がクラウドで提供してくれる jupyter notebook の実況環境であり，必要なライブラリがすべて含まれています．あなたは何もインストールする必要はありません．ただし，Colaboratory はローカルPCにウィンドウを開けないので，GUI を使うプログラムを実行できません．
