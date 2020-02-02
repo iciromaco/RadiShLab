@@ -1,6 +1,7 @@
 # RadiShLab
 Radish Shape Analysis Laboratory
-[![RadishLabLogo]()]()
+![radishlab](https://user-images.githubusercontent.com/24559785/73604978-3c730700-4590-11ea-9d7f-920d959fc55e.png)
+
 ## Description
 
 **RadiShLab** は プログラミング言語 python で記述されたダイコンの形状解析のための画像処理ライブラリです.
