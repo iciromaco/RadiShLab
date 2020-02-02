@@ -1,6 +1,6 @@
 # RadiShLab
 Radish Shape Analysis Laboratory
-![radishlab](https://user-images.githubusercontent.com/24559785/73604978-3c730700-4590-11ea-9d7f-920d959fc55e.png)
+![radishla128b](https://user-images.githubusercontent.com/24559785/73605022-e488d000-4590-11ea-9530-95b6267f634a.png)
 
 ## Description
 
