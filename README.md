@@ -10,12 +10,6 @@ Radish Shape Analysis Laboratory
   - シルエットの形状記述
   - 曲がりを考慮した計測
 
-**RadiShLab** is a python library for shape analysis of radishes.
-
-  - Generatation of silhouette images from radish photos
-  - Silhouette shape description
-  - Measurement taking into account the radish body bending
-
 # New!
 
   - OPENCV 4.X 用にコードを書き換え
@@ -29,7 +23,7 @@ Radish Shape Analysis Laboratory
 - ### python と jupyter notebook が実行できる環境
 （推奨1)  [**Google Colaboratory**](https://colab.research.google.com/notebooks/welcome.ipynb?hl=ja). 
 
-  一番楽なのは Google Colaboratory を使うことです．これは Google がクラウドで提供してくれる jupyter notebook の実況環境であり，必要なライブラリがすべて含まれています．あなたは何もインストールする必要はありません．ただし，Colaboratory はローカルPCにウィンドウを開けないので，GUI を使うプログラムを実行できません．
+  一番楽なのは Google Colaboratory を使うことです．これは Google がクラウドで提供してくれる jupyter notebook の実行環境であり，必要なライブラリはインストール済みです．機械学習用の高価なGPUやTPUを使うこともできます．ただし，Colaboratory はローカルPCにウィンドウを開けないので，GUI を使うプログラムを実行できません．
 
 （推奨2） [**Anaconda**](https://www.anaconda.com/python) (python プログラミング開発環境)
 
@@ -38,9 +32,9 @@ Radish Shape Analysis Laboratory
 python や Anaconda，そして 画像処理ライブラリ OpenCV は非常に頻繁にバージョンが更新されていきます．
 
 最新を追いかける必要はないわけですが，インストールした時期によってバージョンがまちまちになるのを避けるのと，
-バージョン指定の面倒とライブラリの更新の手間を省くためと，実行環境を統一する目的で，（推奨１）のGoogle Colaboratory で実行することを基本にすることにします．
+バージョン指定の面倒とライブラリの更新の手間を省くためと，環境が統一されていたら説明が楽だという理由で，（推奨１）のGoogle Colaboratory で実行することを基本にすることにします．
 
-GUIを使うプログラムを使う人は（推奨２）の Anaconda 環境もインストールすることになります．その場合は Google Colaboratory を使う必要はありませんが，Google の仮想マシンはたいていのPCより性能が上ですので，無駄ではないと思います．
+GUIを使うプログラムを使う人は（推奨２）の Anaconda 環境もインストールすることになります．その場合は Google Colaboratory を使う必要はありませんが，Google の仮想マシンはたいていのPCより性能が上ですので，GUIを使うとき以外は Colaboratory で処理し，GUIの必要な作業だけローカルPCの Anaconda で作業するとよいでしょう．
 
 ## Anaconda と OpenCV のインストール
 ### Anaconda のインストール
@@ -82,34 +76,10 @@ Google Colaboratory で実行する場合は，ノートブックをアップロ
 ### GUI を使うプログラムの実行
 - [Google Colaboratory を自分のマシンで走らせる]()
 
-====
-English Description and Instruction
-====
-## Requirement
-### python and jupyter notebook execution environment
-- (recomended 1) [**Anaconda**](https://www.anaconda.com/python) (python programming environment)
-
-  Any other python distribution may replace Anaconda if it contains libraries **jupyter notebook**,**numpy**, **matplotlib** and **opencv**.
-  
-  The easiest way to try RadishLab is to run it on [**Google Colaboratory**](https://colab.research.google.com/notebooks/welcome.ipynb?hl=ja). However, GUI programs cannot be used in colaboratory.
-
-
-## Install
-
-Download zip file of this repository and expand it to any directory.
-
-## Usage
-
-Open terminal and start the jupyter notebook in the directory where the notebook you want to try it, open the notebook in your browser and run the program. It's a good idea to run it on a duplicate of the notebook you want to try.
-
-If you want to run on Google Colaboratory, upload the notebook first and run it.
-
-## How to
-### 
 
 ## Author
-- Seiichiro Dan, Osaka Gakuin Univ.
-- Yasuko Yoshida, Kobe Univ.
+- Seiichiro Dan： Osaka Gakuin Univ.
+- Yumiko Dan, Yasuko Yoshida： Kobe Univ.
 
 ## Related Links
 - [SHAPE](http://lbm.ab.a.u-tokyo.ac.jp/~iwata/shape/index.html)
