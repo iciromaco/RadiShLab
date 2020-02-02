@@ -26,7 +26,7 @@ Radish Shape Analysis Laboratory
 [![](https://img.youtube.com/vi/geLT5e6Tkqg/0.jpg)](https://www.youtube.com/watch?v=geLT5e6Tkqg)
 
 ## Requirement
-## python と jupyter notebook が実行できる環境
+### python と jupyter notebook が実行できる環境
 -（推奨1） [**Anaconda**](https://www.anaconda.com/python) (python プログラミング開発環境)
 
   **jupyter notebook**,**numpy**, **matplotlib** and **opencv** などが含まれているなら他のディストリビューションでも構いません．
