@@ -38,7 +38,8 @@ python や Anaconda，そして 画像処理ライブラリ OpenCV は非常に�
 GUIを使うプログラムを使う人は（推奨２）の Anaconda 環境もインストールすることになります．その場合は Google Colaboratory を使う必要はありませんが，Google の仮想マシンはたいていのPCより性能が上ですので，GUIを使うとき以外は Colaboratory で処理し，GUIの必要な作業だけローカルPCの Anaconda で作業するとよいでしょう．
 
 ## Anaconda と OpenCV のインストール
-GUIを使わないなら Google Colaboratory を使用するのをお勧めします．その場合，Anacondaのインストールは不要です．
+ほとんどの処理は，Google Colaboratory でできますので，特に何もインストールする必要はありませんが，GUIを使ったインタラクティブな処理がしたい場合は，ローカルPCに Anaconda と OpenCV をインストールしてください．
+
 ### 1. Anaconda のインストール
 上記サイトから自分のOS（Windows，macOS, Linux）に合ったインストーラをダウンロードしてインストールしてください．
 
