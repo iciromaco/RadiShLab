@@ -5,11 +5,18 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
+# OpenCV バージョン３とバージョン４の輪郭抽出関数の違いを吸収する関数
+import cv2
+def cv2findContours34(image, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_NONE):
+    v = list(cv2.__version__)
+    if v[0] == '3':
+        _img, cont, hier = cv2.findContours(image=image, mode=mode, method=method)
+    else : # if v[0] == '4':å
+        cont, hier = cv2.findContours(image=image.copy(), mode=mode, method=method)
+    return cont, hier
+
 # (1)画像のリストアップ
 # 指定フォルダ内の画像の収集
-from glob import glob
-import os
-from PIL import Image
 # 画像パスの収集
 def collectimagepaths(path, imgexts=['jpg','jpge','png']):
     allfiles = glob(path+'/*')
@@ -104,3 +111,29 @@ def makemargin(img,mr=2):
         img2 = np.zeros((h2,w2,img.shape[2]),np.uint8)
     img2[y1:y1+h,x1:x1+w] = img
     return img2
+
+# (4) 最大白領域の取り出し
+def getMajorWhiteArea(img):
+    if img.ndim == 3:
+        img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY) # カラーの場合はグレイ化する
+    _ret,bwimg = cv2.threshold(img,128,255,cv2.THRESH_BINARY) # ２値化
+    _lnum, labelimg, cnt, _cog =cv2.connectedComponentsWithStats(bwimg) # ラベリング
+    areamax = np.argmax(cnt[1:,4])+1 # ０番を除く面積最大値のインデックス
+    labelimg[labelimg != areamax] = 0
+    labelimg[labelimg == areamax] = 255
+    return labelimg.astype(np.uint8)
+
+# (5) 処理結果画像（fimg)に処理前画像（bimg)の輪郭を描く
+def draw2(bimg,fimg,thickness=2,color=(255,0,200)):
+    bimg2 = getMajorWhiteArea(bimg)
+    if len(fimg.shape)==3:
+        fimg2 = fimg.copy()
+    else:
+        fimg2 = cv2.cvtColor(fimg,cv2.COLOR_GRAY2BGR)
+    # 処理前画像の輪郭
+    # canvas = np.zeros_like(fimg2)
+    canvas = fimg2.copy()
+    _ret,bwimg = cv2.threshold(bimg2,128,255,cv2.THRESH_BINARY) # 白画素は255にする
+    cnt,_hierarchy = cv2findContours34(bwimg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    canvas = cv2.drawContours(canvas, cnt, -1, color, thickness)
+    return canvas # 
