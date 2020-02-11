@@ -46,9 +46,9 @@ def makethumbnail(path, imgexts=['jpg','jpge','png']):
 # (2)画像の表示
 # プロット用関数
 def plotimg(img,layout="111"):
-    if len(img.shape) == 2:
+    if img.ndim == 2:
         pltgry(img,layout)
-    elif len(img.shape) ==3:
+    elif img.ndim ==3:
         pltcol(img,layout)
 
 def pltgry(img,layout="111"):
@@ -62,7 +62,7 @@ def pltcol(img,layout="111"):
     plt.imshow(cv2.cvtColor(img,cv2.COLOR_BGR2RGB))
 
 # (3) mkparaimage で２枚並べた画像を表示
-def mkparaimage(img1,img2):
+def mkparaimage2(img1,img2):
     h1,w1 = img1.shape[:2]
     h2,w2 = img2.shape[:2]
     if img1.ndim == 2:
@@ -82,7 +82,16 @@ def mkparaimage(img1,img2):
     
     return paraimg
 
-# (4) マージンをつける
+def mkparaimage(imglist):
+    if len(imglist) == 0:
+        return
+    if len(imglist) == 1:
+        return imglist[0]
+    if len(imglist) == 2:
+        return mkparaimage2(imglist[0],imglist[1])
+    return mkparaimage2(imglist[0],mkparaimage(imglist[1:]))
+
+# (3) マージンをつける
 def makemargin(img,mr=2):
     h,w = img.shape[:2]
     w2 = int(mr*w)
