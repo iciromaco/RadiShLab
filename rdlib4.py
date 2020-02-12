@@ -9,33 +9,34 @@ def assertglobal(params,verbose=False):
     global CONTOURS_APPROX, HARRIS_PARA, CONTOURS_APPROX, SHRINK, \
             HARRIS_PARA, GAUSSIAN_RATE1, GAUSSIAN_RATE2, UNIT, RPARA
     for item in params:
-        if item == 'CONTOURS_APPROX':
-            CONTOURS_APPROX = params[item] # 輪郭近似精度
-        elif item == 'HARRIS_PARA':
-            HARRIS_PARA = params[item] # ハリスコーナー検出で、コーナーとみなすコーナーらしさの指標  1.0 なら最大値のみ
-        elif item == 'CONTOURS_APPROX' :
-            CONTOURS_APPROX = params[item] # 輪郭近似精度
+        if item == 'UNIT':
+            UNIT = params[item] # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
         elif item == 'SHRINK':
             SHRINK = params[item] # 0.75 # 収縮膨張で形状を整える時のパラメータ
-        elif item == 'GAUSSIAN_RATE1':
+        # elif item == 'CONTOURS_APPROX':
+            CONTOURS_APPROX = params[item] # 輪郭近似精度
+        # elif item == 'HARRIS_PARA':
+            HARRIS_PARA = params[item] # ハリスコーナー検出で、コーナーとみなすコーナーらしさの指標  1.0 なら最大値のみ
+        # elif item == 'CONTOURS_APPROX' :
+            CONTOURS_APPROX = params[item] # 輪郭近似精度
+
+        # elif item == 'GAUSSIAN_RATE1':
             GAUSSIAN_RATE1= params[item] # 先端位置を決める際に使うガウスぼかしの程度を決める係数
-        elif item == 'GAUSSIAN_RATE2':
+        # elif item == 'GAUSSIAN_RATE2':
             GAUSSIAN_RATE2 = params[item] # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
-        elif item == 'UNIT':
-            UNIT = params[item] # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
-        elif item == 'RPARA':
+        # elif item == 'RPARA':
             RPARA = params[item]# 見込みでサーチ候補から外す割合
-        if verbose:
-            print(item, "=", params[item])
+        # if verbose:
+        #     print(item, "=", params[item])
 
 assertglobal(params = {
-    'HARRIS_PARA':1.0, # ハリスコーナー検出で、コーナーとみなすコーナーらしさの指標  1.0 なら最大値のみ
-    'CONTOURS_APPROX':0.0002, # 輪郭近似精度
+    # 'HARRIS_PARA':1.0, # ハリスコーナー検出で、コーナーとみなすコーナーらしさの指標  1.0 なら最大値のみ
+    # 'CONTOURS_APPROX':0.0002, # 輪郭近似精度
     'SHRINK':0.8, # 0.75 # 収縮膨張で形状を整える時のパラメータ
-    'GAUSSIAN_RATE1':0.2, # 先端位置を決める際に使うガウスぼかしの程度を決める係数
-    'GAUSSIAN_RATE2':0.1, # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
+    # 'GAUSSIAN_RATE1':0.2, # 先端位置を決める際に使うガウスぼかしの程度を決める係数
+    # 'GAUSSIAN_RATE2':0.1, # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
     'UNIT':256, # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
-    'RPARA':1.0 # 見込みサーチのサーチ幅全体に対する割合 ３０なら左に３０％右に３０％の幅を初期探索範囲とする
+    # 'RPARA':1.0 # 見込みサーチのサーチ幅全体に対する割合 ３０なら左に３０％右に３０％の幅を初期探索範囲とする
 })
 
 
@@ -67,7 +68,7 @@ def collectimages(path, imgexts=['jpg','jpge','png']):
     return imgs
 
 # サムネイルの作成
-def makethumbnail(path, imgexts=['jpg','jpge','png']):
+def makethumbnail(path, savedir='.',imgexts=['jpg','jpge','png']):
     imgfiles = collectimagepaths(path, imgexts)
     i = 0
     sam = Image.new('RGB', (500,100*((len(imgfiles)+4)//5)),(0,0,0))
@@ -81,7 +82,7 @@ def makethumbnail(path, imgexts=['jpg','jpge','png']):
             col = 0
             row += 100
     dirname = os.path.splitext(os.path.basename(path))[0]
-    sam.save('{}THUM.PNG'.format(dirname), 'PNG')
+    sam.save(savedir+os.sep+'{}THUM.PNG'.format(dirname), 'PNG')
     return sam
 
 # (2)画像の表示
