@@ -147,8 +147,9 @@ def makemargin(img,mr=2):
     img2[y1:y1+h,x1:x1+w] = img
     return img2
 
-# (4) 最大白領域の取り出し
+# (4) 指定した順位の面積の白領域の取り出し
 def getMajorWhiteArea(img, order=1):
+    # 白領域を面積順に並べたときの order 番目に大きな領域を取り出す
     if img.ndim == 3:
         img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY) # カラーの場合はグレイ化する
     _ret,bwimg = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU) # ２値化
@@ -216,9 +217,10 @@ def calcksize(img):
 def RDreform(img,ksize=0,shrink=SHRINK,order=1):
     # ksize : ガウスぼかしの量、shrink 膨張収縮による平滑化のパラメータ
     # order : 取り出したい白領域の順位
-    # カラー画像が与えられた場合はグレイ化
-    if img.ndim == 3:
-        img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    
+    # 面積が指定された順位の白領域を取り出す
+    img = getMajorWhiteArea(img, order
+    
     # ガウスぼかしのカーネルサイズの決定
     if ksize == 0:  # ぼかしのサイズが指定されていないときは最大白領域の面積を基準に定める
         ksize = calcksize(img)
@@ -253,18 +255,16 @@ def RDreform(img,ksize=0,shrink=SHRINK,order=1):
     return outimg
 
 # (9) Grabcut による大根領域の抜き出し
-def getRadish(img,order=1):
-    # 白領域の面積が order で指定した順位の領域を抜き出す
-
-    height, width =  img.shape[0],img.shape[1]
+def mkGCmask(img,thickness=5):
+    # カラー画像の場合はまずグレー画像に変換
     if img.ndim == 3:
         gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     else:
-        gray = img.copy()
+        gray = img.copy() # 副作用はないと思うが、念のため
 
     # 大きめのガウシアンフィルタでぼかした後に大津の方法で２階調化
     ksize = calcksize(gray) # RDForm で使う平滑化のカーネルサイズ
-    bsize = ksize # その４倍+5 (根拠はない)
+    bsize = ksize # 
     blur = cv2.GaussianBlur(gray,(bsize,bsize),0)  # ガウスぼかし                        
     coreimg = getMajorWhiteArea(blur,order) # ２値化して一番大きな領域だけ抽出
     
@@ -274,6 +274,13 @@ def getRadish(img,order=1):
     
     # 収縮処理で確実に内部である領域をマスク
     mask2 = cv2.erode(coreimg,kernel,iterations = ksize+5)
+
+    return mask1,mask2
+
+def getRadish(img,order=1):
+    # 白領域の面積が order で指定した順位の領域を抜き出す
+
+    mask1,mask2 = mkGCmask(img)
 
     # grabcut　用のマスクを用意 
     grabmask = np.ones(img.shape[:2],np.uint8)*2
