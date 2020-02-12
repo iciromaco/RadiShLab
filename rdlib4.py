@@ -13,7 +13,7 @@ def assertglobal(params,verbose=False):
             UNIT = params[item] # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
         elif item == 'SHRINK':
             SHRINK = params[item] # 0.75 # 収縮膨張で形状を整える時のパラメータ
-        # elif item == 'CONTOURS_APPROX':
+        elif item == 'CONTOURS_APPROX':
             CONTOURS_APPROX = params[item] # 輪郭近似精度
         # elif item == 'HARRIS_PARA':
             HARRIS_PARA = params[item] # ハリスコーナー検出で、コーナーとみなすコーナーらしさの指標  1.0 なら最大値のみ
@@ -31,7 +31,7 @@ def assertglobal(params,verbose=False):
 
 assertglobal(params = {
     # 'HARRIS_PARA':1.0, # ハリスコーナー検出で、コーナーとみなすコーナーらしさの指標  1.0 なら最大値のみ
-    # 'CONTOURS_APPROX':0.0002, # 輪郭近似精度
+    'CONTOURS_APPROX':0.0002, # 輪郭近似精度
     'SHRINK':0.8, # 0.75 # 収縮膨張で形状を整える時のパラメータ
     # 'GAUSSIAN_RATE1':0.2, # 先端位置を決める際に使うガウスぼかしの程度を決める係数
     # 'GAUSSIAN_RATE2':0.1, # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
@@ -147,18 +147,28 @@ def makemargin(img,mr=2):
     img2[y1:y1+h,x1:x1+w] = img
     return img2
 
-# (4) 指定した順位の面積の白領域の取り出し
-def getMajorWhiteArea(img, order=1):
-    # 白領域を面積順に並べたときの order 番目に大きな領域を取り出す
+# (4) 最大白領域の取り出し
+def getMajorWhiteArea(img, order=1, dilation=0):
+    # dilation 取り出す白領域をどれだけ多めにするか
     if img.ndim == 3:
         img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY) # カラーの場合はグレイ化する
     _ret,bwimg = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU) # ２値化
     _lnum, labelimg, cnt, _cog =cv2.connectedComponentsWithStats(bwimg) # ラベリング
-
     areaindex = np.argsort(-cnt[:,4])[order] # order 番目に大きい白領域のインデックス
     labelimg[labelimg != areaindex] = 0
     labelimg[labelimg == areaindex] = 255
-    return labelimg.astype(np.uint8)
+    labelimg = labelimg.astype(np.uint8)
+
+    fatlabelimg = labelimg
+    if dilation > 0:
+        k = calcksize(labelimg)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(k,k))
+        fatlabelimg = cv2.dilate(labelimg,kernel,iterations = dilation)
+        img[fatlabelimg == 0 ] = 0
+    else:
+        img[labelimg == 0 ] = 0
+    return img
+
 
 # (5) 処理結果画像（fimg)に処理前画像（bimg)の輪郭を描く
 def draw2(bimg,fimg,thickness=2,color=(255,0,200)):
@@ -203,6 +213,7 @@ def getTerminalPsOnLine(x1,y1,x2,y2):
 # (8) ガウスぼかし、膨張収縮、輪郭近似で形状を整える関数 RDreform()
 # 形状の細かな変化をガウスぼかし等でなくして大まかな形状にする関数
 
+# ガウスぼかしの程度を決めるカーネルサイズの自動決定
 def calcksize(img):
     if img.ndim == 3:
         img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)        
@@ -214,19 +225,17 @@ def calcksize(img):
     ksize = int(np.sqrt(maxarea)/60)*2+1
     return ksize
 
-def RDreform(img,ksize=0,shrink=SHRINK,order=1):
+def RDreform(img,order=1,ksize=0,shrink=SHRINK):
     # ksize : ガウスぼかしの量、shrink 膨張収縮による平滑化のパラメータ
     # order : 取り出したい白領域の順位
-    
-    # 面積が指定された順位の白領域を取り出す
-    img = getMajorWhiteArea(img, order
-    
+
+    # ガウスぼかしを適用してシルエットを滑らかにする
     # ガウスぼかしのカーネルサイズの決定
     if ksize == 0:  # ぼかしのサイズが指定されていないときは最大白領域の面積を基準に定める
         ksize = calcksize(img)
-
-    # ガウスぼかしを適用してシルエットを滑らかにする
     img2 = cv2.GaussianBlur(img,(ksize,ksize),0) # ガウスぼかしを適用
+    img2 = getMajorWhiteArea(img2,order=order,dilation=2) # 指定白領域を少しだけ大きめに取り出す
+
     _ret,img2 = cv2.threshold(img2, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU) # ２値化
     
     # 収縮・膨張によりヒゲ根を除去する
@@ -241,8 +250,6 @@ def RDreform(img,ksize=0,shrink=SHRINK,order=1):
         n += 1
     img3 = cv2.dilate(tmpimg,kernel,iterations = n) # 同じ回数膨張させる
     # あらためて輪郭を求め直す
-    # まず最大の領域を取り出す
-    img3 = getMajorWhiteArea(img3,order)
 
     cnt,_hierarchy = cv2findContours34(img3, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE) #  あらためて輪郭を抽出
     outimg = np.zeros_like(img3)
@@ -250,23 +257,22 @@ def RDreform(img,ksize=0,shrink=SHRINK,order=1):
     epsilon = CONTOURS_APPROX*perimeter # 周囲長をもとに精度パラメータを決定
     # 概形抽出
     approx = cv2.approxPolyDP(cnt[0],epsilon,True)
+
     outimg = cv2.drawContours(outimg, [approx], 0, 255, thickness=-1) 
     
     return outimg
 
 # (9) Grabcut による大根領域の抜き出し
-def mkGCmask(img,thickness=5):
+def mkGCmask(img, order=1):
     # カラー画像の場合はまずグレー画像に変換
-    if img.ndim == 3:
-        gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-    else:
-        gray = img.copy() # 副作用はないと思うが、念のため
+    gray = RDreform(img,order=order)
 
     # 大きめのガウシアンフィルタでぼかした後に大津の方法で２階調化
     ksize = calcksize(gray) # RDForm で使う平滑化のカーネルサイズ
     bsize = ksize # 
     blur = cv2.GaussianBlur(gray,(bsize,bsize),0)  # ガウスぼかし                        
-    coreimg = getMajorWhiteArea(blur,order) # ２値化して一番大きな領域だけ抽出
+    coreimg = getMajorWhiteArea(blur) # ２値化して一番大きな白領域
+    coreimg[coreimg !=0 ] = 255
     
     # 膨張処理で確実に背景である領域をマスク
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(ksize,ksize)) # 円形カーネル
@@ -280,7 +286,7 @@ def mkGCmask(img,thickness=5):
 def getRadish(img,order=1):
     # 白領域の面積が order で指定した順位の領域を抜き出す
 
-    mask1,mask2 = mkGCmask(img)
+    mask1,mask2 = mkGCmask(img,order=order)
 
     # grabcut　用のマスクを用意 
     grabmask = np.ones(img.shape[:2],np.uint8)*2
@@ -296,5 +302,8 @@ def getRadish(img,order=1):
     grabmask, bgdModel, fgdModel = cv2.grabCut(img,grabmask,None,bgdModel,fgdModel,20,cv2.GC_INIT_WITH_MASK)
     grabmask = np.where((grabmask==2)|(grabmask==0),0,1).astype('uint8')
     grabimg = img*grabmask[:,:,np.newaxis]
+    silimg = np.zeros(grabimg.shape[:2],np.uint8)
+    graygrabimg = cv2.cvtColor(grabimg,cv2.COLOR_BGR2GRAY)
+    silimg[graygrabimg != 0] = 255 
 
-    return grabimg
+    return grabimg, silimg
