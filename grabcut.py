@@ -117,18 +117,17 @@ def cv2kvtexture(img):
     return texture
 
 class CV2Canvas(threading.Thread):
-        key = -1
-        needRepaint = False
 
-        def __init__(self):
+        def __init__(self,daemon=True):
             super(CV2Canvas,self).__init__()
             self.srcimg = rd.loadPkl('Primrose.pkl')
             self.gryimg = self.makegray()
             self.outimg = self.srcimg.copy()
             self.canvas = self.makeCVcanvas(self.srcimg,self.outimg)
-            cv2.namedWindow("CVCanvas",cv2.WINDOW_KEEPRATIO | cv2.WINDOW_NORMAL)
+            cv2.namedWindow("CVCanvas",cv2.WINDOW_KEEPRATIO | cv2.WINDOW_AUTOSIZE)
             cv2.imshow("CVCanvas",self.canvas)
             cv2.moveWindow("CVCanvas", 100, 100)
+            self.setDaemon(daemon)
             
         def makeCVcanvas(self,srcimg,outimg):
             h,w = srcimg.shape[:2]
@@ -146,11 +145,7 @@ class CV2Canvas(threading.Thread):
             self.needRepaint = True
     
         def run(self):
-            self.key = cv2.waitKey(1)
-            while self.key != 27 : # ESC code = 27
-                pass
-            parent.quitflag = True
-            cv2.destroyAllWindows()
+            pass
 
         # ３または４チャネル画像をdsグレイ化
         def makegray(self):
@@ -167,17 +162,12 @@ class MyWidget(BoxLayout):
     mode = 'None'
     res = GRC_RES
     quitflag = False
-    def __init__(self,**kwargs):
+    def __init__(self,app,**kwargs):
         super(MyWidget,self).__init__(**kwargs)
-        self.cv2canvas = CV2Canvas()
+        self.app = app
+        self.cv2canvas = CV2Canvas(daemon=True)
         self.cv2canvas.start()
-        # Clock.schedule_interval(self.callback,0.01)
-    '''
-    def callback(self,dt):
-        self.cv2canvas.key = cv2.waitKey(1)
-        print("B",self.cv2canvas.key)
-        pass
-    '''
+
     # メニュー処理
     def do_menu(self):
         if self.ids['sp0'].text == 'File':
@@ -190,9 +180,7 @@ class MyWidget(BoxLayout):
         if self.mode == 'Save':
             self.show_save()
         if self.mode == 'Quit':
-            self.cv2canvas.key = 27
-            print("C",self.cv2canvas.key)
-            self.quitflag = True
+            sys.exit()
 
     def dismiss_popup(self):
         self._popup.dismiss()
@@ -208,9 +196,7 @@ class MyWidget(BoxLayout):
  
     def load(self, filepath):
         self.ids['path0'].text = filepath
-        print('SD-A')
         self.cv2canvas.loadimage(filepath)
-        print('SD-B')
         self.dismiss_popup()
  
     def show_save(self):
@@ -234,7 +220,7 @@ class MyApp(App):
     def build(self):
         Window.size = (300,200)
         Window.Pos = (0,0)
-        mywidget = MyWidget()
+        mywidget = MyWidget(self)
         mywidget.ids['sp0'].values = ('Open','Save','Quit')
         self.title = u'GrabCut'
         return mywidget
