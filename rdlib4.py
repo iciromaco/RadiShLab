@@ -331,3 +331,18 @@ def getRadish(img,order=1,shrink=SHRINK):
     silimg = RDreform_D(silimg,ksize=calcksize(silimg),shrink=shrink)
 
     return grabimg, silimg
+
+import pickle
+# 変数内データを pickle 形式で保存
+def storePkl(val, fname, folder = "."):
+    os.makedirs(folder, exist_ok=True)
+    f = open(folder+"/"+fname,'wb')
+    pickle.dump(cat,f)
+    f.close
+    
+# pickle 形式で保存されたデータを変数に復元
+def loadPkl(fname, folder = "."):
+    f = open(folder+"/"+fname,'rb')
+    cat = pickle.load(f)
+    f.close
+    return cat

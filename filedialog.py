@@ -6,7 +6,7 @@ from kivy.uix.popup import Popup
  
 import os
 
-import japanize_kivy
+# import japanize_kivy
 from kivy.lang import Builder
 from kivy.core.window import Window
 from kivy.uix.boxlayout import BoxLayout
