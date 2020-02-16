@@ -1,0 +1,72 @@
+BoxLayout:
+    orientation: 'vertical'
+    size:300,300
+    BoxLayout:
+        orientation: 'horizontal'
+        size_hint_y: 1
+        Spinner:
+            size_hint_x: 0.25
+            id: sp0
+            text: 'File'
+            on_text: root.do_menu()
+        Label:
+            size_hint_x: 0.75
+            id: path0
+            text: './primrose.png'
+    BoxLayout:
+        orientation: 'vertical'
+        size_hint_y: 7
+        # ラベル
+        Label:
+            id: label1
+            text_size: self.size
+            text: 'ABC' # root.res['GRC_TEXT'][0]
+            halign: 'center'
+            valign: 'center'
+        BoxLayout:
+            Button:
+                id: allclear
+                text: "AC"
+                size_hint: (.25, 1)
+            Button:
+                id: eraser
+                text: "Eraser"
+                size_hint: (.25, 1)
+            Button:
+                id: framing
+                text: "Framing"
+                size_hint: (.5, 1)
+        BoxLayout:
+            Button:
+                id: background0
+                text: "0"
+            Button:
+                id: foreground1
+                text: "1"
+            Button:
+                id: background2
+                text: "2"
+            Button:
+                id: foreground3
+                text: "3"
+        BoxLayout:
+            Button:
+                id: rot90
+                text: "Rot+90"
+            Button:
+                id: rot270
+                text: "Rot-90"
+            Button:
+                Image:
+                    source: "./grabcut.png"
+                    center_x: self.parent.center_x
+                    center_y: self.parent.center_y
+                    allow_stretch: False
+            Button:
+                id: plus
+                text: "+"
+                font_size: 30
+            Button:
+                id: minus
+                text: "-"
+                font_size: 40

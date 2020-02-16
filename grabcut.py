@@ -19,103 +19,85 @@ import threading
  
 import filedialog
 import rdlib4 as rd
- 
+
+GRC_RES ={'GRC_TEXT':['File メニューで画像を開いてください']}
+
+
+dummy = rd.loadPkl('Primrose.pkl')
+print(dummy.shape)
+
 Builder.load_string('''
-<MyWidget>
+<MyWidget>:
+    orientation: 'vertical'
+    BoxLayout:
+        orientation: 'horizontal'
+        size_hint_y: 1
+        Spinner:
+            size_hint_x: 0.25
+            id: sp0
+            text: 'File'
+            on_text: root.do_menu()
+        Label:
+            size_hint_x: 0.75
+            id: path0
+            text: './primrose.png'
     BoxLayout:
         orientation: 'vertical'
+        size_hint_y: 7
+        # ラベル
+        Label:
+            id: label1
+            text_size: self.size
+            text: root.res['GRC_TEXT'][0]
+            halign: 'center'
+            valign: 'center'
         BoxLayout:
-            orientation: 'horizontal'
-            size_hint_y: 1
-            height: 32
-            Spinner:
-                size_hint_x: None
-                width:100
-                id: sp0
-                text: 'File'
-                on_text: root.do_menu()
-            Label:
-                id: path0
-                text: './primrose.png'
+            Button:
+                id: allclear
+                text: "AC"
+                size_hint: (.25, 1)
+            Button:
+                id: eraser
+                text: "Eraser"
+                size_hint: (.25, 1)
+            Button:
+                id: framing
+                text: "Framing"
+                size_hint: (.5, 1)
         BoxLayout:
-            orientation: 'vertical'
-            size_hint_y: 8
-            # ラベル
-            Label:
-                id: label1
-                text_size: self.size
-                font_size: 20
-                text: 'File メニューで画像を開いてください'
-                halign: 'center'
-                valign: 'center'
-            BoxLayout:
-                Button:
-                    id: allclear
-                    text: "AC"
-                    font_size: 25
-                    size_hint: (.25, 1)
-                Button:
-                    id: eraser
-                    text: "Eraser"
-                    font_size: 25
-                    size_hint: (.25, 1)
-                Button:
-                    id: framing
-                    text: "Framing"
-                    font_size: 25
-                    size_hint: (.5, 1)
-            BoxLayout:
-                Button:
-                    id: background0
-                    text: "0 - Sure Background"
-                    font_size: 20
-                Button:
-                    id: foreground1
-                    text: "1 - Sure Foreground"
-                    font_size: 20
-            BoxLayout:
-                Button:
-                    id: background2
-                    text: "2 - Possibly Background"
-                    font_size: 20
-                Button:
-                    id: foreground3
-                    text: "3 - Possibly Foreground"
-                    font_size: 20
-            BoxLayout:
-                Button:
-                    id: number0
-                    text: "0"
-                    font_size: 25
-                Button:
-                    id: number1
-                    text: "1"
-                    font_size: 25
-                Button:
-                    id: number2
-                    text: "2"
-                    font_size: 25
-                Button:
-                    id: number3
-                    text: "3"
-                    font_size: 25
-            BoxLayout:
-                Button:
-                    id: rot90
-                    text: "Rot+90"
-                    font_size: 25
-                Button:
-                    id: rot270
-                    text: "Rot-90"
-                    font_size: 25
-                Button:
-                    id: plus
-                    text: "+"
-                    font_size: 30
-                Button:
-                    id: minus
-                    text: "-"
-                    font_size: 40
+            Button:
+                id: background0
+                text: "0"
+            Button:
+                id: foreground1
+                text: "1"
+            Button:
+                id: background2
+                text: "2"
+            Button:
+                id: foreground3
+                text: "3"
+        BoxLayout:
+            Button:
+                id: rot90
+                text: "Rot+90"
+            Button:
+                id: rot270
+                text: "Rot-90"
+            Button:
+                Image:
+                    source: "./grabcut.png"
+                    center_x: self.parent.center_x
+                    center_y: self.parent.center_y
+                    allow_stretch: False
+            Button:
+                id: plus
+                text: "+"
+                font_size: 30
+            Button:
+                id: minus
+                text: "-"
+                font_size: 40
 ''')
  
 dummy = cv2.imread('.'+os.sep+'grabcut.png',-1)
@@ -133,59 +115,69 @@ def cv2kvtexture(img):
     texture = Texture.create(size=(width,height))
     texture.blit_buffer(img2.tostring())
     return texture
- 
 
-class CanvasThread(threading.Thread):
-    def __init__(self, key, srcimg):
-        super(CanvasThread,self).__init__()
-        self.daemon = True
-        self.key = key
-        self.srcimg = srcimg
-        self.gryimg = self.makegray()
-        self.outimg = self.srcimg.copy()
+class CV2Canvas(threading.Thread):
+        key = -1
+        needRepaint = False
 
-    def loadimage(self,filepath):
-        print('SD')
-        self.srcimg = cv2.imread(filepath)
-        self.outimg = self.srcimg.copy()
-        self.gryimg = self.makegray()        
-        print(filepath)
+        def __init__(self):
+            super(CV2Canvas,self).__init__()
+            self.srcimg = rd.loadPkl('Primrose.pkl')
+            self.gryimg = self.makegray()
+            self.outimg = self.srcimg.copy()
+            self.canvas = self.makeCVcanvas(self.srcimg,self.outimg)
+            cv2.namedWindow("CVCanvas",cv2.WINDOW_KEEPRATIO | cv2.WINDOW_NORMAL)
+            cv2.imshow("CVCanvas",self.canvas)
+            cv2.moveWindow("CVCanvas", 100, 100)
+            
+        def makeCVcanvas(self,srcimg,outimg):
+            h,w = srcimg.shape[:2]
+            canvas = np.zeros((h,2*w,3),np.uint8)
+            canvas[:,0:w] = srcimg
+            canvas[:,w:] = outimg
+            return canvas
 
- 
-    def run(self):
-        cv2.imshow("Input Image",self.srcimg)
-        cv2.moveWindow("Input Image", 400, 400)
-        cv2.imshow("GrabCut Image",self.outimg)
-        cv2.moveWindow("GrabCut Image", 400+self.srcimg.shape[1], 400)
-        key = cv2.waitKey(1)
-        while key != 27: # ESC code = 27
-            cv2.imshow("Input Image",self.srcimg)
-            cv2.imshow("GrabCut Image",self.outimg)
-            (x1,y1,w,h)=cv2.getWindowImageRect("Input Image")
-            cv2.moveWindow("GrabCut Image",x1+w,y1-72)
-            key = cv2.waitKey(1)
-        cv2.destroyWindow("Input Image")
+        def loadimage(self,filepath):
+            self.srcimg = cv2.imread(filepath)
+            self.outimg = self.srcimg.copy()
+            self.gryimg = self.makegray()
+            self.canvas = self.makeCVcanvas(self.srcimg,self.outimg)       
+            cv2.imshow("CVCanvas",self.canvas)
+            self.needRepaint = True
+    
+        def run(self):
+            self.key = cv2.waitKey(1)
+            while self.key != 27 : # ESC code = 27
+                pass
+            parent.quitflag = True
+            cv2.destroyAllWindows()
 
         # ３または４チャネル画像をdsグレイ化
-    def makegray(self):
-        img = self.srcimg
-        if len(img.shape) == 3 :
-            if img.shape[2] == 4: # Alpha チャネル付き
-                img = cv2.cvtColor(img,cv2.COLOR_BGRA2GRAY)
-            else:
-                img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-        return img
+        def makegray(self):
+            img = self.srcimg
+            if len(img.shape) == 3 :
+                if img.shape[2] == 4: # Alpha チャネル付き
+                    gray = cv2.cvtColor(img,cv2.COLOR_BGRA2GRAY)
+                else:
+                    gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+            return gray
 
 from kivy.graphics.texture import Texture
 class MyWidget(BoxLayout):
     mode = 'None'
+    res = GRC_RES
+    quitflag = False
     def __init__(self,**kwargs):
         super(MyWidget,self).__init__(**kwargs)
-        self.srcimg = rd.loadPkl('Primrose.pkl')
-        self.key = -1
-        self.canvasthread = CanvasThread(self.key,self.srcimg)
-        self.canvasthread.start()
- 
+        self.cv2canvas = CV2Canvas()
+        self.cv2canvas.start()
+        # Clock.schedule_interval(self.callback,0.01)
+    '''
+    def callback(self,dt):
+        self.cv2canvas.key = cv2.waitKey(1)
+        print("B",self.cv2canvas.key)
+        pass
+    '''
     # メニュー処理
     def do_menu(self):
         if self.ids['sp0'].text == 'File':
@@ -198,7 +190,9 @@ class MyWidget(BoxLayout):
         if self.mode == 'Save':
             self.show_save()
         if self.mode == 'Quit':
-            self.canvasthread.key = 27
+            self.cv2canvas.key = 27
+            print("C",self.cv2canvas.key)
+            self.quitflag = True
 
     def dismiss_popup(self):
         self._popup.dismiss()
@@ -215,7 +209,7 @@ class MyWidget(BoxLayout):
     def load(self, filepath):
         self.ids['path0'].text = filepath
         print('SD-A')
-        self.canvasthread.loadimage(filepath)
+        self.cv2canvas.loadimage(filepath)
         print('SD-B')
         self.dismiss_popup()
  
@@ -238,14 +232,13 @@ class MyWidget(BoxLayout):
  
 class MyApp(App):
     def build(self):
-        Window.size = (450,450)
+        Window.size = (300,200)
         Window.Pos = (0,0)
         mywidget = MyWidget()
         mywidget.ids['sp0'].values = ('Open','Save','Quit')
         self.title = u'GrabCut'
-
         return mywidget
-    
+
 MyApp().run()
 
 
