@@ -337,7 +337,7 @@ import pickle
 def storePkl(val, fname, folder = "."):
     os.makedirs(folder, exist_ok=True)
     f = open(folder+"/"+fname,'wb')
-    pickle.dump(cat,f)
+    pickle.dump(val,f)
     f.close
     
 # pickle 形式で保存されたデータを変数に復元

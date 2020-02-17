@@ -10,6 +10,7 @@ from kivy.factory import Factory
 from kivy.core.text import LabelBase, DEFAULT_FONT 
 from kivy.utils import get_color_from_hex
 from kivy.properties import BooleanProperty
+from kivy.graphics.texture import Texture
 # LabelBase.register(DEFAULT_FONT, "ipaexg.ttf") 
 from kivy.clock import Clock
 import cv2
@@ -20,81 +21,8 @@ import threading
 import filedialog
 import rdlib4 as rd
 
-GRC_RES ={'GRC_TEXT':['File メニューで画像を開いてください']}
-DUMMYPATH = './Primrose.png'
-PRIMROSE = './res/Primrose.pkl'
-dummy = rd.loadPkl(PRIMROSE)
+Window.size = (1024,544)
 
-Builder.load_string('''
-<MyWidget>:
-    orientation: 'vertical'
-    BoxLayout:
-        orientation: 'horizontal'
-        size_hint_y: 1
-        Spinner:
-            size_hint_x: 0.25
-            id: sp0
-            text: 'File'
-            on_text: root.do_menu()
-        Label:
-            size_hint_x: 0.75
-            id: path0
-            text: root.imgpath
-    BoxLayout:
-        orientation: 'vertical'
-        size_hint_y: 7
-        # ラベル
-        Label:
-            id: label1
-            text_size: self.size
-            text: root.res['GRC_TEXT'][0]
-            halign: 'center'
-            valign: 'center'
-        BoxLayout:
-            Button:
-                id: allclear
-                text: "AC"
-                size_hint: (.25, 1)
-            Button:
-                id: eraser
-                text: "Eraser"
-                size_hint: (.25, 1)
-            Button:
-                id: framing
-                text: "Framing"
-                size_hint: (.5, 1)
-        BoxLayout:
-            Button:
-                id: background0
-                text: "0"
-            Button:
-                id: foreground1
-                text: "1"
-            Button:
-                id: background2
-                text: "2"
-            Button:
-                id: foreground3
-                text: "3"
-        BoxLayout:
-            Button:
-                id: rot90
-                text: "Rot+90"
-            Button:
-                id: rot270
-                text: "Rot-90"
-            Button:
-                id: circleS
-            Button:
-                id: plus
-                text: "+"
-                font_size: 30
-            Button:
-                id: minus
-                text: "-"
-                font_size: 40
-''')
- 
 # opencv のカラー画像を kivy テキスチャに変換
 def cv2kvtexture(img):
     if len(img.shape) == 2:
@@ -106,6 +34,132 @@ def cv2kvtexture(img):
     texture = Texture.create(size=(width,height))
     texture.blit_buffer(img2.tostring())
     return texture
+
+GRC_RES ={'GRC_TEXT':['File メニューで画像を開いてください']}
+DUMMYPATH = './Primrose.png'
+PRIMROSE = './res/Primrose.pkl'
+MARGINHEIGHT = 32
+dummy = rd.loadPkl(PRIMROSE)
+picdic = rd.loadPkl('./res/picdic.pkl')
+
+Builder.load_string('''
+<MyWidget>:
+    FloatLayout:
+        size_hint: None,None
+        size: self.parent.size[0],root.m_size
+        BoxLayout:
+            orientation: 'horizontal'
+            pos: 0,root.size[1]-root.m_size
+            Spinner:
+                size_hint_x:0.2
+                id: sp0
+                text: 'File'
+                on_text: root.do_menu()
+            Label:
+                id: message
+                text: root.res['GRC_TEXT'][0]
+                halign: 'center'
+                valign: 'center'
+    FloatLayout:
+        size_hint: None,None
+        size: self.parent.size[0],self.parent.size[1]-2*root.m_size
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: None,None
+            size: self.parent.size
+            pos: 0,root.m_size
+            Image:
+                id: srcimg
+                size: self.texture_size
+                # texture: root.srctexture
+            Image:
+                id: outimg
+                size: self.texture_size
+                # texture: root.outtexture
+    FloatLayout
+        size_hint: None,None
+        size: self.parent.size[0],root.m_size
+        pos: 0,0
+        BoxLayout:
+            orientation: 'horizontal'
+            Label:
+                id: path0
+                text: root.imgpath
+                font_size: 12
+                size_hint_x: 0.8
+            BoxLayout:
+                Button:
+                    id: allclear
+                    text: "AC"
+                Button:
+                    id: eraser
+                    text: "ER"
+                Button:
+                    id: framing
+                    text: "FR"
+                    Image:
+                        center_x: self.parent.center_x
+                        center_y: self.parent.center_y
+                        texture: root.pictexture['frame']
+                Button:
+                    id: background0
+                    text: "0"
+                    Image:
+                        center_x: self.parent.center_x
+                        center_y: self.parent.center_y
+                        texture: root.pictexture['zero']
+                Button:
+                    id: foreground1
+                    text: "1"
+                    Image:
+                        center_x: self.parent.center_x
+                        center_y: self.parent.center_y
+                        texture: root.pictexture['one']
+                Button:
+                    id: background2
+                    text: "2"
+                    Image:
+                        center_x: self.parent.center_x
+                        center_y: self.parent.center_y
+                        texture: root.pictexture['two']
+                Button:
+                    id: foreground3
+                    text: "3"
+                    Image:
+                        center_x: self.parent.center_x
+                        center_y: self.parent.center_y
+                        texture: root.pictexture['three']
+                Button:
+                    id: rot90
+                    text: "R+90"
+                    Image:
+                        center_x: self.parent.center_x
+                        center_y: self.parent.center_y
+                        texture: root.pictexture['rot90']
+                Button:
+                    id: rot270
+                    text: "R-90"
+                    Image:
+                        center_x: self.parent.center_x
+                        center_y: self.parent.center_y
+                        texture: root.pictexture['rot270']
+                #Button:
+                #    id: circleS
+                Button:
+                    id: plus
+                    text: "+"
+                    Image:
+                        center_x: self.parent.center_x
+                        center_y: self.parent.center_y
+                        texture: root.pictexture['plus']
+                Button:
+                    id: minus
+                    text: "-"
+                    Image:
+                        center_x: self.parent.center_x
+                        center_y: self.parent.center_y
+                        texture: root.pictexture['minus']
+''')
 
 # OpenCV を用いたウィンドウ
 class CV2Canvas(threading.Thread):
@@ -139,6 +193,7 @@ class CV2Canvas(threading.Thread):
         def run(self):
             global img, rorig,imgbackup,output,value,mask, rect,frame_or_mask, mouseCallBacker,filename,quitflag,framed
             framed = False
+        '''
             # キーイベントループ
             while(1):
                 if k == ord('0'): # 背景領域の指定
@@ -234,19 +289,27 @@ class CV2Canvas(threading.Thread):
                 else:
                     gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
             return gray
+            '''
 
 # インタフェースパレット
-from kivy.graphics.texture import Texture
+
 class MyWidget(BoxLayout):
     mode = 'None'
     res = GRC_RES
     imgpath = DUMMYPATH
-    quitflag = False
+    srcimg = dummy
+    srctexture = cv2kvtexture(srcimg)
+    pictexture = {key:cv2kvtexture(picdic[key]) for key in picdic}
+    m_size = MARGINHEIGHT
+    windowsize = (dummy.shape[1]*2,dummy.shape[0]+2*m_size)
     def __init__(self,app,**kwargs):
         super(MyWidget,self).__init__(**kwargs)
-        self.app = app
-        self.cv2canvas = CV2Canvas(daemon=True)
-        self.cv2canvas.start()
+        self.ids['srcimg'].texture = cv2kvtexture(self.srcimg)
+        self.outtexture = self.afterload()
+        Window.size = self.windowsize
+        # self.app = app
+        # self.cv2canvas = CV2Canvas(daemon=True)
+        # self.cv2canvas.start()
 
     # メニュー処理
     def do_menu(self):
@@ -276,9 +339,17 @@ class MyWidget(BoxLayout):
  
     def load(self, filepath):
         self.ids['path0'].text = filepath
-        self.cv2canvas.loadimage(filepath)
+        self.srcimg = cv2.imread(filepath)
+        self.ids['srcimg'].texture = cv2kvtexture(self.srcimg)
+        self.afterload()
         self.dismiss_popup()
- 
+
+    def afterload(self):
+        self.outimg = self.srcimg.copy()
+        self.gryimg = self.makegray()
+        self.ids['outimg'].texture = cv2kvtexture(self.gryimg)
+        # self.cv2canvas.loadimage(filepath)
+
     def show_save(self):
         self.keepsize = Window.size
         Window.size = (600,600)
@@ -296,6 +367,15 @@ class MyWidget(BoxLayout):
         cv2.imwrite(path,self.outimg)
         self.dismiss_popup()
 
+    def makegray(self):
+        img = self.srcimg
+        if len(img.shape) == 3 :
+            if img.shape[2] == 4: # Alpha チャネル付き
+                gray = cv2.cvtColor(img,cv2.COLOR_BGRA2GRAY)
+            else:
+                gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+        return gray
+
 PENSIZE = 5
 BLUE = [255,0,0]        # rectangle color
 RED = [0,0,255]         # PR BG
@@ -306,7 +386,7 @@ WHITE = [255,255,255]   # sure FG
 MINRECTSIZE = 400 # 領域指定とそうでない操作の切り分けのための矩形面積の下限
 
 MAXIMAGESIZE = 1024 # 強制的に画像サイズをの数字以下に縮小する。
-WINDOWSSIZE = IMAGESIZE//2 # 表示ウィンドウサイズ
+WINDOWSSIZE = MAXIMAGESIZE//2 # 表示ウィンドウサイズ
 NEEDSIZE =256 # 対象に要求するサイズ。矩形がこれ以下であればこの値以上になるように解像度を上げて GrabCut する
 
 DRAW_BG = {'color' : MAGENTA, 'val' : 0}
@@ -446,11 +526,8 @@ class myMouse:
 # アプリケーションメイン 
 class MyApp(App):
     def build(self):
-        Window.size = (300,200)
-        Window.Pos = (0,0)
         mywidget = MyWidget(self)
         mywidget.ids['sp0'].values = ('Open','Save','Quit')
-        mywidget.ids['circleS']
         self.title = 'GrabCut'
         return mywidget
 
