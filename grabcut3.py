@@ -32,6 +32,8 @@ picdic = rd.loadPkl('./res/picdic.pkl')
 
 Builder.load_string('''
 <MyWidget>:
+    size_hint: None,None
+    size: root.windowsize
     FloatLayout:
         size_hint: None,None
         size: self.parent.size[0],root.m_size
@@ -59,6 +61,7 @@ Builder.load_string('''
             Image:
                 id: srcimg
                 size: self.texture_size
+                # allow_stretch:True
                 # texture: root.srctexture
             Image:
                 id: outimg
@@ -157,6 +160,7 @@ Builder.load_string('''
                         center_y: self.parent.center_y
                         texture: root.pictexture['cut']
 ''')
+
 
 # OpenCV を用いたウィンドウ
 class CV2Canvas(threading.Thread):
@@ -385,6 +389,9 @@ class MyWidget(BoxLayout):
             else:
                 gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
         return gray
+
+    def on_touch_down(self, touch):
+        print(touch)
 
 PENSIZE = 5
 BLUE = [255,0,0]        # rectangle color
