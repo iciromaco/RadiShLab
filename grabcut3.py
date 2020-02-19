@@ -1,18 +1,19 @@
 import japanize_kivy
+
 from kivy.app import App
 from kivy.lang import Builder 
 from kivy.core.window import Window
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.popup import Popup
-from kivy.properties import ObjectProperty,StringProperty 
+from kivy.properties import ObjectProperty,StringProperty, NumericProperty
 from kivy.uix.widget import Widget
 from kivy.factory import Factory
 from kivy.core.text import LabelBase, DEFAULT_FONT 
 from kivy.utils import get_color_from_hex
 from kivy.properties import BooleanProperty
 from kivy.graphics.texture import Texture
-# LabelBase.register(DEFAULT_FONT, "ipaexg.ttf") 
 from kivy.clock import Clock
+
 import cv2
 import numpy as np
 import os, sys
@@ -21,22 +22,62 @@ import threading
 import filedialog
 import rdlib4 as rd
 
-Window.size = (1024,544)
+from kivy.uix.label import Label
+from kivy.uix.floatlayout import FloatLayout
+from kivy.graphics import Color, Rectangle, Point, GraphicException
+from math import sqrt
+import time
+
+# 右クリックで表示される赤丸を禁止
+from kivy.config import Config
+Config.set('input', 'mouse', 'mouse,disable_multitouch') 
 
 GRC_RES ={'GRC_TEXT':['File メニューで画像を開いてください']}
 DUMMYPATH = './Primrose.png'
 PRIMROSE = './res/Primrose.pkl'
-MARGINHEIGHT = 32
-dummy = rd.loadPkl(PRIMROSE)
+IWINSIZE = (854,704)
+DUMMYIMG = rd.loadPkl(PRIMROSE)
 picdic = rd.loadPkl('./res/picdic.pkl')
 
 Builder.load_string('''
+#:set BH 32
+#:set WINW 854
+#:set WINH 704
+#:set IMGH 640
+#:set IMGW 427
 <MyWidget>:
     size_hint: None,None
-    size: root.windowsize
+    size: WINW, WINH
+    CanvasFloatLayout:
+        id: rdcanvas
+        size_hint: None,None
+        size: self.parent.size
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: None,None
+            size: root.windowsize[0],root.srctexture.size[1]
+            pos: 0,root.m_size
+            canvas:
+                Color:
+                    rgb: 0, 0, 0
+                Rectangle:
+                    size: self.size
+            Image:
+                id: srcimg
+                size_hint: None,None
+                size: root.windowsize[0]/2,root.windowsize[1]
+                texture: root.srctexture
+                allow_stretch:True
+                # texture: root.srctexture
+            Image:
+                id: outimg
+                size_hint: None,None
+                # size: self.texture_size
+                size: root.windowsize[0]/2,root.windowsize[1]
+                # texture: root.outtexture
     FloatLayout:
         size_hint: None,None
-        size: self.parent.size[0],root.m_size
+        size: root.windowsize[0],root.m_size
         BoxLayout:
             orientation: 'horizontal'
             pos: 0,root.size[1]-root.m_size
@@ -49,36 +90,21 @@ Builder.load_string('''
                 id: message
                 text: root.res['GRC_TEXT'][0]
                 halign: 'center'
-                valign: 'center'
-    FloatLayout:
-        size_hint: None,None
-        size: self.parent.size[0],self.parent.size[1]-2*root.m_size
-        BoxLayout:
-            orientation: 'horizontal'
-            size_hint: None,None
-            size: self.parent.size
-            pos: 0,root.m_size
-            Image:
-                id: srcimg
-                size: self.texture_size
-                # allow_stretch:True
-                # texture: root.srctexture
-            Image:
-                id: outimg
-                size: self.texture_size
-                # texture: root.outtexture
+                valign: 'center'                
     FloatLayout
         size_hint: None,None
-        size: self.parent.size[0],root.m_size
+        size: root.windowsize[0],MARGINHEIGHT
         pos: 0,0
         BoxLayout:
             orientation: 'horizontal'
-            Label:
+            TextInput:
                 id: path0
                 text: root.imgpath
                 font_size: 12
                 size_hint_x: 0.8
             BoxLayout:
+                size_hint_x: 1.0
+                orientation: 'horizontal'
                 Button:
                     id: allclear
                     text: "AC"
@@ -162,136 +188,102 @@ Builder.load_string('''
 ''')
 
 
-# OpenCV を用いたウィンドウ
-class CV2Canvas(threading.Thread):
+def calculate_points(x1, y1, x2, y2, steps=5):
+    dx = x2 - x1
+    dy = y2 - y1
+    dist = sqrt(dx * dx + dy * dy)
+    if dist < steps:
+        return
+    o = []
+    m = dist / steps
+    for i in range(1, int(m)):
+        mi = i / m
+        lastx = x1 + dx * mi
+        lasty = y1 + dy * mi
+        o.extend([lastx, lasty])
+    return o
 
-        def __init__(self,daemon=True):
-            super(CV2Canvas,self).__init__()
-            self.srcimg = rd.loadPkl(PRIMROSE)
-            self.gryimg = self.makegray()
-            self.outimg = self.srcimg.copy()
-            self.canvas = self.makeCVcanvas(self.srcimg,self.outimg)
-            cv2.namedWindow("CVCanvas",cv2.WINDOW_KEEPRATIO | cv2.WINDOW_AUTOSIZE)
-            cv2.imshow("CVCanvas",self.canvas)
-            cv2.moveWindow("CVCanvas", 100, 400)
-            self.setDaemon(daemon)
-            
-        def makeCVcanvas(self,srcimg,outimg):
-            h,w = srcimg.shape[:2]
-            canvas = np.zeros((h,2*w,3),np.uint8)
-            canvas[:,0:w] = srcimg
-            canvas[:,w:] = outimg
-            return canvas
 
-        def loadimage(self,filepath):
-            self.srcimg = cv2.imread(filepath)
-            self.outimg = self.srcimg.copy()
-            self.gryimg = self.makegray()
-            self.canvas = self.makeCVcanvas(self.srcimg,self.outimg)       
-            cv2.imshow("CVCanvas",self.canvas)
-            self.needRepaint = True
+class CanvasFloatLayout(FloatLayout):
     
-        def run(self):
-            global img, rorig,imgbackup,output,value,mask, rect,frame_or_mask, mouseCallBacker,filename,quitflag,framed
-            framed = False
-        '''
-            # キーイベントループ
-            while(1):
-                if k == ord('0'): # 背景領域の指定
-            # print(" 背景領域を指定 \n")
-            value = DRAW_BG
-        elif k == ord('1'): # 対象の指定
-            # print(" 切り出し対象領域を指定 \n")
-            value = DRAW_FG
-        elif k == ord('2'): # 背景かも知れない領域の指定
-            # print(" 背景かも知れない領域の指定 \n")
-            value = DRAW_PR_BG
-        elif k == ord('3'): # 前景かもしれない領域の指定
-            # print(" 前景かもしれない領域の指定 \n")
-            value = DRAW_PR_FG
-            
-        elif k == ord('+'):
-            mouseCallBacker.thicknessUp()
+    def on_touch_down(self, touch):
+        if Widget.on_touch_down(self, touch):
+            return
 
-        elif k == ord('-'):
-            mouseCallBacker.thicknessDown()
-            
-        elif k == ord('9'): # 90度回転
-            if not mouseCallBacker.framed:
-                print(" 回転します\n")
-                                
-                rorig = rorig.transpose(1,0,2)[::-1,:,:]
-                img = rorig.copy() 
-                img, imgbackup,halfimg,output,halfoutput,mask= prepareimg(img,size = IMAGESIZE)                    
-                # rect= (rect[1],rect[0],rect[3],rect[2]) 
-                makeupAndShowImage() 
-            else:
-                print(" フレーム確定後は回転できません。リセットしてください。\n")            
-            
-            
-        elif k == ord('s'): # 画像の保存
-            bar = np.zeros((img.shape[0],5,3),np.uint8)
-            res = np.hstack(( imgbackup,bar,img,bar,output))
-            
-            print("抽出結果を保存するパスを選んで下さい（拡張子は不要）")
-            savepath = saveFilePath(filename)
-            
-            _ret,bw = cv2.threshold(cv2.cvtColor(output,cv2.COLOR_BGR2GRAY),1,255,cv2.THRESH_BINARY)
+        print(self.collide_widget)
+        print("down",touch.pos,self.to_window(touch.pos[0],touch.pos[1]))
+        win = self.get_parent_window()
+        ud = touch.ud
+        ud['group'] = g = str(touch.uid)
+        pointsize = 5
+        ud['color'] = 1
 
-            savedir, ext = os.path.splitext(savepath)
-            resultimg, (x0,y0,w0,h0),m = cutmargin(bw,margin=5)
-            cv2.imwrite(savepath,resultimg)
-            timg = np.zeros((h0+2*m,w0+2*m,3),np.uint8)
-            timg[m:m+h0,m:m+w0]=img[y0:y0+h0,x0:x0+w0]
-            cv2.imwrite(savedir+"Color.png",timg)
-            print(savepath,"に保存しました。")
-            
-            cv2.imwrite('grabcut_output.png',res)
-            print("抽出結果は保存先:{}に、\n, それとは別に合成画像を grabcut_output.png に結果を保存しました.\n".format(savepath+".png"))
-            quitflag = False
-            break
-            
-        elif k == ord('r'): # reset everything
-            print("リセット \n")
-            mouseCallBacker.init()
-            rorig = orig.copy()
-            img, imgbackup,halfimg,output,halfoutput,mask,ratio = prepareimg(orig,size = IMAGESIZE)
-            makeupAndShowImage()
-            
-        elif k == 13 : #  Enter キー  セグメンテーションの実行
-            print("セグメンテーションの実行中。新しいメッセージが表示されるまでお待ち下さい。 \n")
-            if (frame_or_mask == 0):         # grabcut with rect
-                bgdmodel = np.zeros((1,65),np.float64)
-                fgdmodel = np.zeros((1,65),np.float64)
-                mask = mask.copy()
-                cv2.grabCut( imgbackup,mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
-                frame_or_mask = 1
-            elif frame_or_mask == 1:         # grabcut with mask
-                bgdmodel = np.zeros((1,65),np.float64)
-                fgdmodel = np.zeros((1,65),np.float64)
-                cv2.grabCut( imgbackup,mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_MASK)
-            print(" 抽出がうまくいっていない場合は、手動でタッチアップしてから再度 Enter  を押して下さい。\n ０、２　背景領域の指定、１，３ 抽出対象領域の指定 \n")
-            framed = True
-            
-        mask2 = np.where((mask==1) + (mask==3),255,0).astype('uint8')
-        output = cv2.bitwise_and( imgbackup, imgbackup,mask=mask2)
-        if gusecolor == False:
-            _ret,bw = cv2.threshold(cv2.cvtColor(output,cv2.COLOR_BGR2GRAY),1,255,cv2.THRESH_BINARY)
-            output =  cv2.cvtColor(bw,cv2.COLOR_GRAY2BGR)
-        makeupAndShowImage()
+        with self.canvas:
+            Color(ud['color'], 1, 1, mode='hsv', group=g)
+            ud['lines'] = [
+                Rectangle(pos=(touch.x, 0), size=(1, win.height), group=g), # クロスカーソル 縦
+                Rectangle(pos=(0, touch.y), size=(win.width, 1), group=g), # クロスカーソル　横
+                Point(points=(touch.x, touch.y), source='res/picdicpics/particle.png',
+                                       pointsize=pointsize, group=g)
+                ]
 
+        ud['label'] = Label(size_hint=(None, None))
+        self.update_touch_label(ud['label'], touch)
+        self.add_widget(ud['label'])
+        touch.grab(self)
+        return True
 
-        # ３または４チャネル画像をdsグレイ化
-        def makegray(self):
-            img = self.srcimg
-            if len(img.shape) == 3 :
-                if img.shape[2] == 4: # Alpha チャネル付き
-                    gray = cv2.cvtColor(img,cv2.COLOR_BGRA2GRAY)
-                else:
-                    gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-            return gray
-            '''
+    def on_touch_move(self, touch):
+        if touch.grab_current is not self:
+            return
+        ud = touch.ud
+        ud['lines'][0].pos = touch.x, 0
+        ud['lines'][1].pos = 0, touch.y
 
+        index = -1
+
+        while True:
+            try:
+                points = ud['lines'][index].points
+                oldx, oldy = points[-2], points[-1]
+                break
+            except:
+                index -= 1
+
+        points = calculate_points(oldx, oldy, touch.x, touch.y)
+
+        if points:
+            try:
+                lp = ud['lines'][-1].add_point
+                for idx in range(0, len(points), 2):
+                    lp(points[idx], points[idx + 1])
+            except GraphicException:
+                pass
+
+        ud['label'].pos = touch.pos
+
+        t = int(time.time())
+        if t not in ud:
+            ud[t] = 1
+        else:
+            ud[t] += 1
+        self.update_touch_label(ud['label'], touch)
+
+    def on_touch_up(self, touch):
+        if touch.grab_current is not self:
+            return    
+        touch.ungrab(self)
+        ud = touch.ud
+        self.canvas.remove_group(ud['group'])
+        self.remove_widget(ud['label'])
+    
+    def update_touch_label(self, label, touch):
+        label.text = 'ID: %s\nPos: (%d, %d)\nClass: %s' % (
+            touch.id, touch.x, touch.y, touch.__class__.__name__)
+        label.texture_update()
+        label.pos = touch.pos
+        label.size = label.texture_size[0] + 20, label.texture_size[1] + 20
+    
 # インタフェースパレット
 
 # opencv のカラー画像を kivy テキスチャに変換
@@ -308,22 +300,31 @@ def cv2kvtexture(img):
     return texture
 
 class MyWidget(BoxLayout):
-    mode = 'None'
+    windowsize = DUMMYIMG.shape[1]*2, DUMMYIMG.shape[0]+2*MARGINHEIGHT
+    srctexture = cv2kvtexture(DUMMYIMG)
     res = GRC_RES
     imgpath = DUMMYPATH
-    srcimg = dummy
-    srctexture = cv2kvtexture(srcimg)
-    pictexture = {key:cv2kvtexture(picdic[key]) for key in picdic}
     m_size = MARGINHEIGHT
-    windowsize = (dummy.shape[1]*2,dummy.shape[0]+2*m_size)
-    def __init__(self,app,**kwargs):
+    pictexture = {key:cv2kvtexture(picdic[key]) for key in picdic}
+    def __init__(self,**kwargs):
         super(MyWidget,self).__init__(**kwargs)
-        self.ids['srcimg'].texture = cv2kvtexture(self.srcimg)
-        self.outtexture = self.afterload()
+        self.setsrcimg(DUMMYIMG)
+        self.rdcanvas = CanvasFloatLayout()
+        self.ids['rdcanvas'] = self.rdcanvas
+        Clock.schedule_interval(self.update, 1)
+
+    def update(self, dt):
+        print(self.srcimg.shape,self.windowsize)
         Window.size = self.windowsize
-        # self.app = app
-        # self.cv2canvas = CV2Canvas(daemon=True)
-        # self.cv2canvas.start()
+
+    def setsrcimg(self,srcimg):
+        self.srcimg = srcimg
+        self.srctexture = cv2kvtexture(srcimg)
+        self.ids['srcimg'].texture = self.srctexture
+        self.outtexture = self.afterload()
+        self.windowsize = self.srcimg.shape[1]*2, self.srcimg.shape[0]+2*MARGINHEIGHT
+        
+        Window.size = self.windowsize
 
     # メニュー処理
     def do_menu(self):
@@ -353,9 +354,10 @@ class MyWidget(BoxLayout):
  
     def load(self, filepath):
         self.ids['path0'].text = filepath
-        self.srcimg = cv2.imread(filepath)
-        self.ids['srcimg'].texture = cv2kvtexture(self.srcimg)
-        self.afterload()
+        srcimg = cv2.imread(filepath)
+        self.setsrcimg(srcimg)
+        # self.ids['srcimg'].texture = cv2kvtexture(self.srcimg)
+        # self.afterload()
         self.dismiss_popup()
 
     def afterload(self):
@@ -389,9 +391,6 @@ class MyWidget(BoxLayout):
             else:
                 gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
         return gray
-
-    def on_touch_down(self, touch):
-        print(touch)
 
 PENSIZE = 5
 BLUE = [255,0,0]        # rectangle color
@@ -540,6 +539,7 @@ class myMouse:
         
         makeupAndShowImage()
 
+'''
 # アプリケーションメイン 
 class MyApp(App):
     def build(self):
@@ -548,6 +548,20 @@ class MyApp(App):
         self.title = 'GrabCut'
         return mywidget
 
-MyApp().run()
+if __name__ == '__main__':
+    MyApp().run()
+'''
+class MyApp(App):
+    title = 'Touchtracer'
 
+    def build(self):
+        mywidget = MyWidget()
+        mywidget.ids['sp0'].values = ('Open','Save','Quit')
+        self.title = 'GrabCut'
+        return mywidget
 
+    def on_pause(self):
+        return True
+
+if __name__ == '__main__':
+   MyApp().run()

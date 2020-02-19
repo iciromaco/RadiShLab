@@ -110,123 +110,123 @@ def cv2kvtexture(img):
 # OpenCV を用いたウィンドウ
 class CV2Canvas(threading.Thread):
 
-        def __init__(self,daemon=True):
-            super(CV2Canvas,self).__init__()
-            self.srcimg = rd.loadPkl(PRIMROSE)
-            self.gryimg = self.makegray()
-            self.outimg = self.srcimg.copy()
-            self.canvas = self.makeCVcanvas(self.srcimg,self.outimg)
-            cv2.namedWindow("CVCanvas",cv2.WINDOW_KEEPRATIO | cv2.WINDOW_AUTOSIZE)
-            cv2.imshow("CVCanvas",self.canvas)
-            cv2.moveWindow("CVCanvas", 100, 400)
-            self.setDaemon(daemon)
-            
-        def makeCVcanvas(self,srcimg,outimg):
-            h,w = srcimg.shape[:2]
-            canvas = np.zeros((h,2*w,3),np.uint8)
-            canvas[:,0:w] = srcimg
-            canvas[:,w:] = outimg
-            return canvas
+    def __init__(self,daemon=True):
+        super(CV2Canvas,self).__init__()
+        self.srcimg = rd.loadPkl(PRIMROSE)
+        self.gryimg = self.makegray()
+        self.outimg = self.srcimg.copy()
+        self.canvas = self.makeCVcanvas(self.srcimg,self.outimg)
+        cv2.namedWindow("CVCanvas",cv2.WINDOW_KEEPRATIO | cv2.WINDOW_AUTOSIZE)
+        cv2.imshow("CVCanvas",self.canvas)
+        cv2.moveWindow("CVCanvas", 100, 400)
+        self.setDaemon(daemon)
+        
+    def makeCVcanvas(self,srcimg,outimg):
+        h,w = srcimg.shape[:2]
+        canvas = np.zeros((h,2*w,3),np.uint8)
+        canvas[:,0:w] = srcimg
+        canvas[:,w:] = outimg
+        return canvas
 
-        def loadimage(self,filepath):
-            self.srcimg = cv2.imread(filepath)
-            self.outimg = self.srcimg.copy()
-            self.gryimg = self.makegray()
-            self.canvas = self.makeCVcanvas(self.srcimg,self.outimg)       
-            cv2.imshow("CVCanvas",self.canvas)
-            self.needRepaint = True
-    
-        def run(self):
-            global img, rorig,imgbackup,output,value,mask, rect,frame_or_mask, mouseCallBacker,filename,quitflag,framed
-            framed = False
-            # キーイベントループ
-            while(1):
-                if k == ord('0'): # 背景領域の指定
+    def loadimage(self,filepath):
+        self.srcimg = cv2.imread(filepath)
+        self.outimg = self.srcimg.copy()
+        self.gryimg = self.makegray()
+        self.canvas = self.makeCVcanvas(self.srcimg,self.outimg)       
+        cv2.imshow("CVCanvas",self.canvas)
+        self.needRepaint = True
+
+    def run(self):
+        global img, rorig,imgbackup,output,value,mask, rect,frame_or_mask, mouseCallBacker,filename,quitflag,framed
+        framed = False
+        # キーイベントループ
+        while(1):
+            if k == ord('0'): # 背景領域の指定
             # print(" 背景領域を指定 \n")
-            value = DRAW_BG
-        elif k == ord('1'): # 対象の指定
-            # print(" 切り出し対象領域を指定 \n")
-            value = DRAW_FG
-        elif k == ord('2'): # 背景かも知れない領域の指定
-            # print(" 背景かも知れない領域の指定 \n")
-            value = DRAW_PR_BG
-        elif k == ord('3'): # 前景かもしれない領域の指定
-            # print(" 前景かもしれない領域の指定 \n")
-            value = DRAW_PR_FG
-            
-        elif k == ord('+'):
-            mouseCallBacker.thicknessUp()
+                value = DRAW_BG
+            elif k == ord('1'): # 対象の指定
+                # print(" 切り出し対象領域を指定 \n")
+                value = DRAW_FG
+            elif k == ord('2'): # 背景かも知れない領域の指定
+                # print(" 背景かも知れない領域の指定 \n")
+                value = DRAW_PR_BG
+            elif k == ord('3'): # 前景かもしれない領域の指定
+                # print(" 前景かもしれない領域の指定 \n")
+                value = DRAW_PR_FG
+        
+            elif k == ord('+'):
+                mouseCallBacker.thicknessUp()
 
-        elif k == ord('-'):
-            mouseCallBacker.thicknessDown()
+            elif k == ord('-'):
+                mouseCallBacker.thicknessDown()
+                
+            elif k == ord('9'): # 90度回転
+                    if not mouseCallBacker.framed:
+                        print(" 回転します\n")
+                                        
+                        rorig = rorig.transpose(1,0,2)[::-1,:,:]
+                        img = rorig.copy() 
+                        img, imgbackup,halfimg,output,halfoutput,mask= prepareimg(img,size = IMAGESIZE)                    
+                        # rect= (rect[1],rect[0],rect[3],rect[2]) 
+                        makeupAndShowImage() 
+                    else:
+                        print(" フレーム確定後は回転できません。リセットしてください。\n")            
+                    
             
-        elif k == ord('9'): # 90度回転
-            if not mouseCallBacker.framed:
-                print(" 回転します\n")
-                                
-                rorig = rorig.transpose(1,0,2)[::-1,:,:]
-                img = rorig.copy() 
-                img, imgbackup,halfimg,output,halfoutput,mask= prepareimg(img,size = IMAGESIZE)                    
-                # rect= (rect[1],rect[0],rect[3],rect[2]) 
-                makeupAndShowImage() 
-            else:
-                print(" フレーム確定後は回転できません。リセットしてください。\n")            
-            
-            
-        elif k == ord('s'): # 画像の保存
-            bar = np.zeros((img.shape[0],5,3),np.uint8)
-            res = np.hstack(( imgbackup,bar,img,bar,output))
-            
-            print("抽出結果を保存するパスを選んで下さい（拡張子は不要）")
-            savepath = saveFilePath(filename)
-            
-            _ret,bw = cv2.threshold(cv2.cvtColor(output,cv2.COLOR_BGR2GRAY),1,255,cv2.THRESH_BINARY)
+            elif k == ord('s'): # 画像の保存
+                bar = np.zeros((img.shape[0],5,3),np.uint8)
+                res = np.hstack(( imgbackup,bar,img,bar,output))
+                
+                print("抽出結果を保存するパスを選んで下さい（拡張子は不要）")
+                savepath = saveFilePath(filename)
+                
+                _ret,bw = cv2.threshold(cv2.cvtColor(output,cv2.COLOR_BGR2GRAY),1,255,cv2.THRESH_BINARY)
 
-            savedir, ext = os.path.splitext(savepath)
-            resultimg, (x0,y0,w0,h0),m = cutmargin(bw,margin=5)
-            cv2.imwrite(savepath,resultimg)
-            timg = np.zeros((h0+2*m,w0+2*m,3),np.uint8)
-            timg[m:m+h0,m:m+w0]=img[y0:y0+h0,x0:x0+w0]
-            cv2.imwrite(savedir+"Color.png",timg)
-            print(savepath,"に保存しました。")
-            
-            cv2.imwrite('grabcut_output.png',res)
-            print("抽出結果は保存先:{}に、\n, それとは別に合成画像を grabcut_output.png に結果を保存しました.\n".format(savepath+".png"))
-            quitflag = False
-            break
-            
-        elif k == ord('r'): # reset everything
-            print("リセット \n")
-            mouseCallBacker.init()
-            rorig = orig.copy()
-            img, imgbackup,halfimg,output,halfoutput,mask,ratio = prepareimg(orig,size = IMAGESIZE)
+                savedir, ext = os.path.splitext(savepath)
+                resultimg, (x0,y0,w0,h0),m = cutmargin(bw,margin=5)
+                cv2.imwrite(savepath,resultimg)
+                timg = np.zeros((h0+2*m,w0+2*m,3),np.uint8)
+                timg[m:m+h0,m:m+w0]=img[y0:y0+h0,x0:x0+w0]
+                cv2.imwrite(savedir+"Color.png",timg)
+                print(savepath,"に保存しました。")
+                
+                cv2.imwrite('grabcut_output.png',res)
+                print("抽出結果は保存先:{}に、\n, それとは別に合成画像を grabcut_output.png に結果を保存しました.\n".format(savepath+".png"))
+                quitflag = False
+                break
+                
+            elif k == ord('r'): # reset everything
+                print("リセット \n")
+                mouseCallBacker.init()
+                rorig = orig.copy()
+                img, imgbackup,halfimg,output,halfoutput,mask,ratio = prepareimg(orig,size = IMAGESIZE)
+                makeupAndShowImage()
+                
+            elif k == 13 : #  Enter キー  セグメンテーションの実行
+                print("セグメンテーションの実行中。新しいメッセージが表示されるまでお待ち下さい。 \n")
+                if (frame_or_mask == 0):         # grabcut with rect
+                    bgdmodel = np.zeros((1,65),np.float64)
+                    fgdmodel = np.zeros((1,65),np.float64)
+                    mask = mask.copy()
+                    cv2.grabCut( imgbackup,mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
+                    frame_or_mask = 1
+                elif frame_or_mask == 1:         # grabcut with mask
+                    bgdmodel = np.zeros((1,65),np.float64)
+                    fgdmodel = np.zeros((1,65),np.float64)
+                    cv2.grabCut( imgbackup,mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_MASK)
+                print(" 抽出がうまくいっていない場合は、手動でタッチアップしてから再度 Enter  を押して下さい。\n ０、２　背景領域の指定、１，３ 抽出対象領域の指定 \n")
+                framed = True
+                
+            mask2 = np.where((mask==1) + (mask==3),255,0).astype('uint8')
+            output = cv2.bitwise_and( imgbackup, imgbackup,mask=mask2)
+            if gusecolor == False:
+                _ret,bw = cv2.threshold(cv2.cvtColor(output,cv2.COLOR_BGR2GRAY),1,255,cv2.THRESH_BINARY)
+                output =  cv2.cvtColor(bw,cv2.COLOR_GRAY2BGR)
             makeupAndShowImage()
-            
-        elif k == 13 : #  Enter キー  セグメンテーションの実行
-            print("セグメンテーションの実行中。新しいメッセージが表示されるまでお待ち下さい。 \n")
-            if (frame_or_mask == 0):         # grabcut with rect
-                bgdmodel = np.zeros((1,65),np.float64)
-                fgdmodel = np.zeros((1,65),np.float64)
-                mask = mask.copy()
-                cv2.grabCut( imgbackup,mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
-                frame_or_mask = 1
-            elif frame_or_mask == 1:         # grabcut with mask
-                bgdmodel = np.zeros((1,65),np.float64)
-                fgdmodel = np.zeros((1,65),np.float64)
-                cv2.grabCut( imgbackup,mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_MASK)
-            print(" 抽出がうまくいっていない場合は、手動でタッチアップしてから再度 Enter  を押して下さい。\n ０、２　背景領域の指定、１，３ 抽出対象領域の指定 \n")
-            framed = True
-            
-        mask2 = np.where((mask==1) + (mask==3),255,0).astype('uint8')
-        output = cv2.bitwise_and( imgbackup, imgbackup,mask=mask2)
-        if gusecolor == False:
-            _ret,bw = cv2.threshold(cv2.cvtColor(output,cv2.COLOR_BGR2GRAY),1,255,cv2.THRESH_BINARY)
-            output =  cv2.cvtColor(bw,cv2.COLOR_GRAY2BGR)
-        makeupAndShowImage()
 
 
         # ３または４チャネル画像をdsグレイ化
-        def makegray(self):
+    def makegray(self):
             img = self.srcimg
             if len(img.shape) == 3 :
                 if img.shape[2] == 4: # Alpha チャネル付き
@@ -306,7 +306,7 @@ WHITE = [255,255,255]   # sure FG
 MINRECTSIZE = 400 # 領域指定とそうでない操作の切り分けのための矩形面積の下限
 
 MAXIMAGESIZE = 1024 # 強制的に画像サイズをの数字以下に縮小する。
-WINDOWSSIZE = IMAGESIZE//2 # 表示ウィンドウサイズ
+WINDOWSSIZE = MAXIMAGESIZE//2 # 表示ウィンドウサイズ
 NEEDSIZE =256 # 対象に要求するサイズ。矩形がこれ以下であればこの値以上になるように解像度を上げて GrabCut する
 
 DRAW_BG = {'color' : MAGENTA, 'val' : 0}

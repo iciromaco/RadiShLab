@@ -11,6 +11,8 @@ from math import sqrt
 
 from kivy.lang import Builder 
 
+import time
+
 Builder.load_string('''
 #:kivy 1.0
 #:import kivy kivy
@@ -52,6 +54,7 @@ def calculate_points(x1, y1, x2, y2, steps=5):
 class Touchtracer(FloatLayout):
 
     def on_touch_down(self, touch):
+        print(touch)
         win = self.get_parent_window()
         ud = touch.ud
         ud['group'] = g = str(touch.uid)
@@ -63,7 +66,7 @@ class Touchtracer(FloatLayout):
             ud['lines'] = [
                 Rectangle(pos=(touch.x, 0), size=(1, win.height), group=g), # クロスカーソル 縦
                 Rectangle(pos=(0, touch.y), size=(win.width, 1), group=g), # クロスカーソル　横
-                Point(points=(touch.x, touch.y), source='res/particle.png',
+                Point(points=(touch.x, touch.y), source='res/picdicpics/particle.png',
                                        pointsize=pointsize, group=g)]
 
         ud['label'] = Label(size_hint=(None, None))
@@ -73,8 +76,6 @@ class Touchtracer(FloatLayout):
         return True
 
     def on_touch_move(self, touch):
-        if touch.grab_current is not self:
-            return
         ud = touch.ud
         ud['lines'][0].pos = touch.x, 0
         ud['lines'][1].pos = 0, touch.y
@@ -91,17 +92,6 @@ class Touchtracer(FloatLayout):
 
         points = calculate_points(oldx, oldy, touch.x, touch.y)
 
-        # if pressure changed create a new point instruction
-        if 'pressure' in ud:
-            if not .95 < (touch.pressure / ud['pressure']) < 1.05:
-                g = ud['group']
-                pointsize = (touch.pressure * 100000) ** 2
-                with self.canvas:
-                    Color(ud['color'], 1, 1, mode='hsv', group=g)
-                    ud['lines'].append(
-                        Point(points=(), source='particle.png',
-                              pointsize=pointsize, group=g))
-
         if points:
             try:
                 lp = ud['lines'][-1].add_point
@@ -111,7 +101,7 @@ class Touchtracer(FloatLayout):
                 pass
 
         ud['label'].pos = touch.pos
-        import time
+
         t = int(time.time())
         if t not in ud:
             ud[t] = 1
