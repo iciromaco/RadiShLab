@@ -9,6 +9,7 @@ from kivy.lang import Builder
 from kivy.core.window import Window
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
+from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.image import Image
 from kivy.uix.popup import Popup
 from kivy.graphics.texture import Texture
@@ -35,7 +36,6 @@ Config.set('input', 'mouse', 'mouse,disable_multitouch')
 GRC_RES ={'GRC_TEXT':['File メニューで画像を開いてください']}
 DUMMYPATH = './Primrose.png'
 PRIMROSE = './res/Primrose.pkl'
-IWINSIZE = (854,704)
 BUTTONH = 32
 DUMMYIMG = rd.loadPkl(PRIMROSE)
 picdic = rd.loadPkl('./res/picdic.pkl')
@@ -62,40 +62,46 @@ IF_H = 32 #  ボタンやメニューの高さ
 
 Builder.load_string('''
 #:set BH 32
-#:set WINW 854
-#:set WINH 704
-#:set IMGH 640
-#:set IMGW 427
 <MyWidget>:
-    size_hint: None,None
-    size: root.windowsize
     FloatLayout:
-        id: rdcanvas
-        size_hint: None,None
-        size: WINW,IMGH
-        pos: 0,BH        
         BoxLayout:
+            size_hint: None,None
+            size: root.width,BH
+            pos_hint: {"x":0, "top":1}
+            BoxLayout:
+                id: topmenu
+                orientation: 'horizontal'
+                pos: 0, root.top
+                Spinner:
+                    size_hint_x: 0.2
+                    id: sp0
+                    text: 'File'
+                    on_text: root.do_menu()
+                Label:
+                    size_hint_x: 1
+                    id: message
+                    text: root.textres['GRC_TEXT'][0]
+                    halign: 'center'
+                    valign: 'center'
+        BoxLayout:
+            id: rdcanvas
             orientation: 'horizontal'
             size_hint: None,None
-            size: WINW,IMGH
+            size: root.width,root.height-2*BH
             pos: 0,BH
             Image:
                 id: srcimg
                 size_hint: None,None
-                size: IMGW,IMGH
-                # texture: root.srctexture
-                # allow_stretch:True
+                size: self.parent.width/2,self.parent.height
             Image:
                 id: outimg
                 size_hint: None,None
-                size: IMGW,IMGH
-                # texture: root.outtexture
-    FloatLayout
-        size_hint: None,None
-        size: WINW,BH
-        pos: 0,0
+                size: self.parent.width/2,self.parent.height
         BoxLayout:
             id: buttonmenu
+            size_hint: None,None
+            size: root.width,BH
+            pos: 0,0
             orientation: 'horizontal'
             TextInput:
                 id: path0
@@ -111,7 +117,6 @@ Builder.load_string('''
                 ToggleButton:
                     id: eraser
                     text: "ER"
-
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
@@ -159,14 +164,14 @@ Builder.load_string('''
                         texture: root.pictexture['three']
                 Button:
                     id: rot90
-                    text: "R+90"
+                    text: "R+"
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
                         texture: root.pictexture['rot90']
                 Button:
                     id: rot270
-                    text: "R-90"
+                    text: "R-"
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
@@ -192,26 +197,7 @@ Builder.load_string('''
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
                         texture: root.pictexture['cut']
-    FloatLayout:
-        size_hint: None,None
-        size: WINW,BH
-        pos: 0, WINH+BH
-        BoxLayout:
-            id: topmenu
-            orientation: 'horizontal'
-            top: root.top
-            x: 0
-            Spinner:
-                size_hint_x: 0.2
-                id: sp0
-                text: 'File'
-                on_text: root.do_menu()
-            Label:
-                size_hint_x: 1
-                id: message
-                text: root.res['GRC_TEXT'][0]
-                halign: 'center'
-                valign: 'center'  
+
 ''')
 
 # 2点を結ぶ線分を、間隔 step で分割した、両端以外の点列[x1,y1,x2,y2,...]を返す 
@@ -229,8 +215,7 @@ def calculate_points(x1, y1, x2, y2, steps=5):
         lasty = y1 + dy * mi
         o.extend([lastx, lasty])
     return o
-  
-# インタフェースパレット
+
 # opencv のカラー画像を kivy テキスチャに変換
 def cv2kvtexture(img):
     if len(img.shape) == 2:
@@ -244,51 +229,33 @@ def cv2kvtexture(img):
     texture.blit_buffer(img2.tostring())
     return texture
 
+# インタフェースパレット
 class MyWidget(BoxLayout):
-    windowsize = DUMMYIMG.shape[1]*2, DUMMYIMG.shape[0]+2*BUTTONH
-    # srctexture = cv2kvtexture(DUMMYIMG)
-    # outtexture = srctexture
-    res = GRC_RES
-    imgpath = DUMMYPATH
+    windowsize = DUMMYIMG.shape[1]*2, DUMMYIMG.shape[0]+2*BUTTONH # 初期ウィンドウサイズ
+    textres = GRC_RES # テキストリソース
+    imgpath = DUMMYPATH # 入力画像のパス　初期は仮
     pictexture = {key:cv2kvtexture(picdic[key]) for key in picdic}
-
     framed = False # 枠指定完了のフラグ
+    fState = 0 # 0: 枠指定開始前　1: 左上確定
+    drawing = False # 描画中
     touchud = None # touc.ud の保存場所
-
+    pointsize = 5 # ペンサイズ
     def __init__(self,**kwargs):
         super(MyWidget,self).__init__(**kwargs)
         self.setsrcimg(DUMMYIMG)
-        Clock.schedule_interval(self.update, 1)
-   
-    def makegray(self):
-        img = self.srcimg
-        if len(img.shape) == 3 :
-            if img.shape[2] == 4: # Alpha チャネル付き
-                gray = cv2.cvtColor(img,cv2.COLOR_BGRA2GRAY)
-            else:
-                gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-        return gray
+        Clock.schedule_interval(self.update, 0.1) # ウィンドウサイズの監視固定化
 
+    # 入力画像をセット
     def setsrcimg(self,srcimg):
         self.srcimg = srcimg
         h,w = srcimg.shape[:2]
         self.srctexture = cv2kvtexture(srcimg)
         self.ids['srcimg'].texture = self.srctexture
-        self.gryimg = self.makegray()
-        self.ids['rdcanvas'].size = (2*w,h)
+        self.gryimg = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2GRAY)
+        self.outimg = self.gryimg.copy()
         self.ids['outimg'].texture = cv2kvtexture(self.gryimg)
-        self.ids['srcimg'].size = self.ids['outimg'].size = (w,h)
-        self.ids['topmenu'].pos = (0,h+IF_H)
-        
-    def makegray(self):
-        img = self.srcimg
-        if len(img.shape) == 3 :
-            if img.shape[2] == 4: # Alpha チャネル付き
-                gray = cv2.cvtColor(img,cv2.COLOR_BGRA2GRAY)
-            else:
-                gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-        return gray
 
+    # ウィンドウサイズを固定化
     def update(self, dt):
         h,w = self.srcimg.shape[:2]
         Window.size = (2*w,h+2*IF_H)
@@ -307,62 +274,87 @@ class MyWidget(BoxLayout):
         if self.mode == 'Quit':
             sys.exit()
 
+    # ファイルウィンドウをポップした状態からの復帰
     def dismiss_popup(self):
         self._popup.dismiss()
         Window.size = self.keepsize
  
+    # ファイルの選択と読み込み
     def show_load(self):
+
+        def load(filepath):
+            self.ids['path0'].text = filepath
+            srcimg = cv2.imread(filepath)
+            self.setsrcimg(srcimg)
+            self.dismiss_popup()
+
         self.keepsize = Window.size
         Window.size = (600,600)
-        content = Factory.LoadDialog(load=self.load, cancel=self.dismiss_popup)
+        content = Factory.LoadDialog(load=load, cancel=self.dismiss_popup)
         self._popup = Popup(title="Load file", content=content,
                             size_hint=(0.9,0.9))
         self._popup.open()
- 
-    def load(self, filepath):
-        self.ids['path0'].text = filepath
-        srcimg = cv2.imread(filepath)
-        self.setsrcimg(srcimg)
-        self.dismiss_popup()
 
     def show_save(self):
+
+        def save(path, filename):
+            path = os.path.join(path, filename)
+            path1 = os.path.splitext(path)
+            if not path1[1].lower() in ['.png','.jpg']:
+                path = path1[0]+'.png'
+            self.ids['path0'].text = path
+            cv2.imwrite(path,self.outimg)
+            self.dismiss_popup()
+
         self.keepsize = Window.size
         Window.size = (600,600)
-        content = Factory.SaveDialog(save=self.save, cancel=self.dismiss_popup)
+        content = Factory.SaveDialog(save=save, cancel=self.dismiss_popup)
         self._popup = Popup(title="Save file", content=content,
                             size_hint=(0.9, 0.9))
         self._popup.open()
- 
-    def save(self, path, filename):
-        path = os.path.join(path, filename)
-        path1 = os.path.splitext(path)
-        if not path1[1].lower() in ['.png','.jpg']:
-            path = path1[0]+'.png'
-        self.ids['path0'].text = path
-        cv2.imwrite(path,self.outimg)
-        self.dismiss_popup()
 
-
-
+    # マウスカーソルが入力画像内にあるかどうかのテスト
     def isInCanvas(self,touch):
         x = touch.x
         y = touch.y
         h,w = self.srcimg.shape[:2]
+        print(h,w,x,y)
         return y >= BUTTONH and y < h + BUTTONH and x < w
+
+    # 枠付け中であるかどうかの判定
+    def onFraming(self):
+        return not self.framed and self.ids['framing'].state == "down" 
 
     # マウスイベントの処理
     def on_touch_down(self, touch):
         if Widget.on_touch_down(self, touch) or not self.isInCanvas(touch): 
-            # ボタンなどのウィジット上でタッチした場合
+            # ボタンなどのウィジット上でタッチした場合は処理をスルー
             return
-
+        
         h,w = self.srcimg.shape[:2]
 
         ud = touch.ud
-        ud['group'] = g = str(touch.uid)
-        pointsize = 5
+        ud['group'] = g = str(touch.uid) # ドラッグ単位のグループ名をつける
         ud['color'] = 1
+        
+        if self.onFraming(): # 枠設定中
+            if self.fState == 0:
+                with self.canvas:
+                    Color(ud['color'], 1, 1, mode='hsv', group=g)
+                    ud['lines'] = [
+                        Rectangle(pos=(touch.x, BUTTONH), size=(1, h), group=g), # クロスカーソル 縦
+                        Rectangle(pos=(0, touch.y), size=(2*w, 1), group=g), # クロスカーソル　横
+                        Rectangle(pos=(touch.x+w, BUTTONH), size=(1, h), group=g)]
+        
 
+        ud['label'] = Label(size_hint=(None, None))
+        self.update_touch_label(ud['label'], touch)
+        self.add_widget(ud['label'])
+
+        touch.grab(self) # ドラッグの追跡を指定
+        return True
+
+        '''
         with self.canvas:
             Color(ud['color'], 1, 1, mode='hsv', group=g)
 
@@ -375,7 +367,7 @@ class MyWidget(BoxLayout):
                     Rectangle(pos=(0, touch.y), size=(2*w, 1), group=g), # クロスカーソル　横
                     Rectangle(pos=(touch.x+w, BUTTONH), size=(1, h), group=g),
                     Point(points=(touch.x, touch.y), source='res/picdicpics/particle.png',
-                                       pointsize=pointsize, group=g)
+                                       pointsize=self.pointsize, group=g)
                     ]
             else:
                 ud = self.touchud
@@ -388,13 +380,24 @@ class MyWidget(BoxLayout):
         self.add_widget(ud['label'])
         touch.grab(self)
         return True
-
+        '''
     def on_touch_move(self,touch):
-        if touch.grab_current is not self or not self.isInCanvas(touch):
+        # 入力画像内でドラッグが開始されて、継続して画像内でドラッグが続いているかどうかのチェック
+        if (touch.grab_current is not self) or (not self.isInCanvas(touch)):
             return
+
         h,w = self.srcimg.shape[:2]
         ud = touch.ud
-        
+
+        if self.onFraming(): # 枠設定中
+            if self.fState == 0:
+                ud['lines'][0].pos = touch.x, BUTTONH
+                ud['lines'][1].pos = 0, touch.y
+                ud['lines'][2].pos = touch.x + w, BUTTONH                
+
+        self.update_touch_label(ud['label'], touch)
+
+        '''
         if self.ids['framing'].state == "down" and not self.framed:
             ud['lines'][0].pos = touch.x, BUTTONH
             ud['lines'][1].pos = 0, touch.y
@@ -430,20 +433,25 @@ class MyWidget(BoxLayout):
         ud['label'].pos = touch.pos
         self.update_touch_label(ud['label'], touch)
 
+        '''
+
     def on_touch_up(self, touch):
-        if touch.grab_current is not self:
+        if touch.grab_current is not self or (not self.isInCanvas(touch)):
             return    
-        
-        if not self.framed:
-            self.framed = True
 
-        self.touchud = touch.ud
-
-        touch.ungrab(self)
-        print("\nafter ungrab",touch.ud)
-        ud = touch.ud
-        self.canvas.remove_group(ud['group'])
-        print("\nafter removegroup",touch.ud)
+        if self.onFraming(): # 枠設定中
+            ud = touch.ud
+            x = ud['lines'][0].pos[0]
+            y = ud['lines'][1].pos[1]
+            print("座標１確定",x,y)
+            '''
+            with self.canvas:
+                Color(ud['color'], 1, 1, mode='hsv', group=g)
+                ud['lines'] = [
+                    Rectangle(pos=(touch.x, BUTTONH), size=(1, h), group=g), # クロスカーソル 縦
+                    Rectangle(pos=(0, touch.y), size=(2*w, 1), group=g), # クロスカーソル　横
+                    Rectangle(pos=(touch.x+w, BUTTONH), size=(1, h), group=g)]        
+            '''
 
         # self.remove_widget(ud['label'])
     
