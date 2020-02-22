@@ -33,7 +33,15 @@ import rdlib4 as rd
 from kivy.config import Config
 Config.set('input', 'mouse', 'mouse,disable_multitouch') 
 
-GRC_RES ={'GRC_TEXT':['File メニューで画像を開いてください']}
+GRC_RES ={
+'OpenImage':'File メニューで画像を開いてください',
+'TopLeft':'対象を枠で囲み指定します。左上の点を指定してください',
+'BottomRight':'対象を枠で囲み指定します。右下の点を指定してください',
+'Confirm':'これでよければ、Cutボタンを押してください',
+'OnCutting':'カット中です。しばらくお待ちください',
+'Finished':'うまくいかない場合は、手動でタッチアップして再Cutしてください'
+}
+
 DUMMYPATH = './Primrose.png'
 PRIMROSE = './res/Primrose.pkl'
 BUTTONH = 32
@@ -80,7 +88,6 @@ Builder.load_string('''
                 Label:
                     size_hint_x: 1
                     id: message
-                    text: root.textres['GRC_TEXT'][0]
                     halign: 'center'
                     valign: 'center'
         BoxLayout:
@@ -193,6 +200,7 @@ Builder.load_string('''
                 Button:
                     id: cut
                     text: "-"
+                    on_press: root.grabcut()
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
@@ -232,7 +240,6 @@ def cv2kvtexture(img):
 # インタフェースパレット
 class MyWidget(BoxLayout):
     windowsize = DUMMYIMG.shape[1]*2, DUMMYIMG.shape[0]+2*BUTTONH # 初期ウィンドウサイズ
-    textres = GRC_RES # テキストリソース
     imgpath = DUMMYPATH # 入力画像のパス　初期は仮
     pictexture = {key:cv2kvtexture(picdic[key]) for key in picdic}
     framed = False # 枠指定完了のフラグ
@@ -240,9 +247,14 @@ class MyWidget(BoxLayout):
     drawing = False # 描画中
     touchud = None # touc.ud の保存場所
     pointsize = 5 # ペンサイズ
+    rect = [0,0,1,1] # 切り出し枠
+    fp1 = rect[:2] # 切り出し枠枠の1点目の座標
+    frame_or_mask = 0 # 0 -> mask は初期状態 1 -> セット済み
+    mask = None # grabcut 用のmask  
     def __init__(self,**kwargs):
         super(MyWidget,self).__init__(**kwargs)
         self.setsrcimg(DUMMYIMG)
+        self.ids['message'].text = GRC_RES['OpenImage']
         Clock.schedule_interval(self.update, 0.1) # ウィンドウサイズの監視固定化
 
     # 入力画像をセット
@@ -254,6 +266,7 @@ class MyWidget(BoxLayout):
         self.gryimg = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2GRAY)
         self.outimg = self.gryimg.copy()
         self.ids['outimg'].texture = cv2kvtexture(self.gryimg)
+        self.ids['message'].text =  GRC_RES['TopLeft']
 
     # ウィンドウサイズを固定化
     def update(self, dt):
@@ -284,7 +297,7 @@ class MyWidget(BoxLayout):
 
         def load(filepath):
             self.ids['path0'].text = filepath
-            srcimg = cv2.imread(filepath)
+            srcimg = rd.imread(filepath)
             self.setsrcimg(srcimg)
             self.dismiss_popup()
 
@@ -303,7 +316,7 @@ class MyWidget(BoxLayout):
             if not path1[1].lower() in ['.png','.jpg']:
                 path = path1[0]+'.png'
             self.ids['path0'].text = path
-            cv2.imwrite(path,self.outimg)
+            rd.imwrite(path,self.outimg)
             self.dismiss_popup()
 
         self.keepsize = Window.size
@@ -318,7 +331,6 @@ class MyWidget(BoxLayout):
         x = touch.x
         y = touch.y
         h,w = self.srcimg.shape[:2]
-        print(h,w,x,y)
         return y >= BUTTONH and y < h + BUTTONH and x < w
 
     # 枠付け中であるかどうかの判定
@@ -338,6 +350,8 @@ class MyWidget(BoxLayout):
         ud['color'] = 1
         
         if self.onFraming(): # 枠設定中
+            if self.fState == 0:
+                self.ids['message'].text = GRC_RES['TopLeft']
             with self.canvas:
                 Color(ud['color'], 1, 1, mode='hsv', group=g)
                 ud['lines'] = [
@@ -367,16 +381,6 @@ class MyWidget(BoxLayout):
         self.update_touch_label(ud['label'], touch)
 
         '''
-        if self.ids['framing'].state == "down" and not self.framed:
-            ud['lines'][0].pos = touch.x, BUTTONH
-            ud['lines'][1].pos = 0, touch.y
-            ud['lines'][2].pos = touch.x + w, BUTTONH
-        else:
-            ud = self.touchud
-            ud['lines'][3].pos = touch.x, BUTTONH
-            ud['lines'][4].pos = 0, touch.y
-            ud['lines'][5].pos = touch.x + w, BUTTONH
-
         index = -1
 
         while True:
@@ -402,7 +406,8 @@ class MyWidget(BoxLayout):
 
 
         '''
-        ud['label'].pos = touch.pos
+        ud['label'].pos = touch.pos[0],self.srcimg.shape[1]+BUTTONH-touch.pos[1]
+
         self.update_touch_label(ud['label'], touch)
 
     def on_touch_up(self, touch):
@@ -410,18 +415,24 @@ class MyWidget(BoxLayout):
             return    
 
         ud = touch.ud
+        h,w = self.srcimg.shape[:2]
 
         if self.onFraming(): # 枠設定中
             if self.fState == 0: # １点目未設定
-                x = self.fx1 = ud['lines'][0].pos[0]
-                y = self.fy1 = ud['lines'][1].pos[1]
-                self.fState = 1
+                self.fp1[0] = x = ud['lines'][0].pos[0]
+                self.fp1[1] = y = (h+BUTTONH)-ud['lines'][1].pos[1]
+                self.fState = 1 # 1点目確定
+                self.ids['message'].text =  GRC_RES['BottomRight']
             elif self.fState == 1:
-                x = self.fx2 = ud['lines'][0].pos[0]
-                y = self.fy2 = ud['lines'][1].pos[1]
+                x = ud['lines'][0].pos[0]
+                y = (h+BUTTONH)-ud['lines'][1].pos[1]
+                self.rect = (min(self.fp1[0],x),min(self.fp1[1],y),abs(self.fp1[0]-x),abs(self.fp1[1]-y))
                 self.fState = 2
                 self.framed = True
             print("座標 %d 確定" % (self.fState),x,y)
+        if self.framed:
+            print("Rect確定", self.rect)
+            self.ids['message'].text =  GRC_RES['Confirm']
 
         touch.ungrab(self)
         ud = touch.ud
@@ -435,6 +446,23 @@ class MyWidget(BoxLayout):
         label.texture_update()
         label.pos = touch.pos
         label.size = label.texture_size[0] + 20, label.texture_size[1] + 20
+
+    def grabcut(self):
+        self.ids['message'].text =  GRC_RES['OnCutting']
+        rect = [int(item) for item in self.rect]
+        img = self.srcimg.copy()
+        bgdmodel = np.zeros((1,65),np.float64)
+        fgdmodel = np.zeros((1,65),np.float64)
+        if (self.frame_or_mask == 0): 
+            self.mask = np.zeros(self.srcimg.shape[:2],np.uint8)  # for mask initialized to PR_BG
+            cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
+            self.frame_or_mask = 1
+        elif (self.frame_or_mask == 1):         
+            cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_MASK)
+        mask2 = np.where((self.mask==1) + (self.mask==3),255,0).astype('uint8')
+        self.outimg = cv2.bitwise_and( img, img,mask=mask2)
+        self.ids['outimg'].texture = cv2kvtexture(self.outimg)
+        self.ids['message'].text =  GRC_RES['Finished']
 
 def mkpensizeSample(size=5):
     pensizeCanvas = np.zeros((32,32),np.uint8)
