@@ -16,8 +16,11 @@ from kivy.graphics.texture import Texture
 from kivy.clock import Clock
 from kivy.uix.widget import Widget
 from kivy.factory import Factory
-from kivy.graphics import Color, Rectangle, Point, GraphicException
+from kivy.graphics import Color, Rectangle, Point, Ellipse,GraphicException
 from kivy.uix.label import Label
+
+from kivy.utils import get_color_from_hex
+
 '''
 from kivy.uix.floatlayout import FloatLayout
 from kivy.properties import ObjectProperty,StringProperty, NumericProperty, BooleanProperty
@@ -59,6 +62,20 @@ GREEN = [0,255,0]       # PR FG
 MAGENTA = [255,0,255]    # sure BG
 BLACK = [0,0,0]
 WHITE = [255,255,255]   # sure FG
+
+C4 = [
+    get_color_from_hex('#FF00FF80'), # MAGENDA for BG
+    get_color_from_hex('#FFFFFF81'), # WHITE for FG
+    get_color_from_hex('#FF000082'), # RED for FG
+    get_color_from_hex('#00FF0083'), # GREEN for BG
+]
+
+COLORS = []
+for i in range(4):
+    cc = C4[i]
+    item = 'Color({},{},{},{},group="{}")'.format(cc[0],cc[1],cc[2],cc[3],str(i))
+    COLORS.append(item)
+
 MINRECTSIZE = 400 # 領域指定とそうでない操作の切り分けのための矩形面積の下限
 
 MAXIMAGESIZE = 1024 # 強制的に画像サイズをの数字以下に縮小する。
@@ -67,8 +84,8 @@ NEEDSIZE =256 # 対象に要求するサイズ。矩形がこれ以下であれ�
 
 DRAW_BG = {'color' : MAGENTA, 'val' : 0}
 DRAW_FG = {'color' : WHITE, 'val' : 1}
-DRAW_PR_FG = {'color' : GREEN, 'val' : 3}
 DRAW_PR_BG = {'color' : RED, 'val' : 2}
+DRAW_PR_FG = {'color' : GREEN, 'val' : 3}
 
 IF_H = 32 #  ボタンやメニューの高さ
 
@@ -260,6 +277,7 @@ def cv2kvtexture(img,force3 = True):
 class MyWidget(BoxLayout):
     windowsize = DUMMYIMG.shape[1]*2, DUMMYIMG.shape[0]+2*BUTTONH # 初期ウィンドウサイズ
     pictexture = {key:cv2kvtexture(picdic[key]) for key in picdic}
+    touchud = [] # touch.ud の記憶場所
 
     def __init__(self,**kwargs):
         super(MyWidget,self).__init__(**kwargs)
@@ -296,6 +314,9 @@ class MyWidget(BoxLayout):
         self.fState = 0 # 枠指定の状態初期化
         self.frame_or_mask = 0 # 0 -> mask は初期状態 1 -> セット済み
         self.ids['framing'].state = "down"
+
+        self.canvas.remove_group('0')
+        self.canvas.remove_group('1')
 
     # ウィンドウサイズを固定化
     def update(self, dt):
@@ -381,11 +402,11 @@ class MyWidget(BoxLayout):
             self.ids['message'].text = GRC_RES['Marking%d' % (ret)]
 
     # マーキング中であるかどうかの判定
-    def nowmarking(self):
-        ret = False
+    def nowMarking(self):
+        ret = -1
         for n in range(4):
             if self.ids['mark%d' % n].state == 'down':
-                ret = True
+                ret = n
         return ret
 
     # マウスイベントの処理
@@ -396,25 +417,34 @@ class MyWidget(BoxLayout):
         
         h,w = self.srcimg.shape[:2]
 
-        ud = touch.ud
-        ud['group'] = g = str(self.fState) # ドラッグ単位のグループ名をつける
+        ud = touch.ud     
         ud['color'] = 1
         
         if self.nowFraming(): # 枠設定中
-            if self.fState == 0:
-                self.ids['message'].text = GRC_RES['TopLeft']
+            g = str(self.fState) 
             with self.canvas:
-                Color(ud['color'], 1, 1, mode='hsv', group=g)
+                # Color(ud['color'], 1, 1, mode='hsv', group=g)
+                Color(0, 1, 0, group=g)
                 ud['lines'] = [
                     Rectangle(pos=(touch.x, BUTTONH), size=(1, h), group=g), # クロスカーソル 縦
                     Rectangle(pos=(0, touch.y), size=(2*w, 1), group=g), # クロスカーソル　横
                     Rectangle(pos=(touch.x+w, BUTTONH), size=(1, h), group=g)]
-
             ud['label'] = Label(size_hint=(None, None))
-            self.update_touch_label(ud['label'], touch)
             self.add_widget(ud['label'])
+            self.update_touch_label(ud['label'], touch)
+        else:
+            mark = self.nowMarking()
+            if mark < 0: # not on marking
+                return
+            pointsize = 15 
+            ud['group'] = g = str(mark) 
 
-            touch.grab(self) # ドラッグの追跡を指定
+            with self.canvas:
+                ps = self.pointsize
+                print(mark,COLORS[mark])
+                exec(COLORS[mark])
+                ud['lines'] = [Point(points=(touch.x, touch.y),pointsize=ps,group=g)]
+        touch.grab(self) # ドラッグの追跡を指定            
         return True
 
     def on_touch_move(self,touch):
@@ -430,35 +460,30 @@ class MyWidget(BoxLayout):
             ud['lines'][1].pos = 0, touch.y
             ud['lines'][2].pos = touch.x + w, BUTTONH                
             self.update_touch_label(ud['label'], touch)
-        
+        else:
+            mark = self.nowMarking()
+            if mark < 0:
+                return
+            index = -1
 
-        '''
-        index = -1
+            while True:
+                try:
+                    points = ud['lines'][index].points
+                    oldx, oldy = points[-2], points[-1]
+                    break
+                except:
+                    index -= 1
 
-        while True:
-            try:
-                points = ud['lines'][index].points
-                oldx, oldy = points[-2], points[-1]
-                break
-            except:
-                print('non')
-                index -= 1
-
-        # カーソル移動が早すぎて間が飛んだ時のための補間処理        
-        points = calculate_points(oldx, oldy, touch.x, touch.y)
-
-
-        if points:
-            try:
-                lp = ud['lines'][-1].add_point # add_point関数 を lp と alias している
-                for idx in range(0, len(points), 2):
-                    lp(points[idx], points[idx + 1])
-            except GraphicException:
-                pass
-        '''
-        ud['label'].pos = touch.pos[0],self.srcimg.shape[1]+BUTTONH-touch.pos[1]
-
-        self.update_touch_label(ud['label'], touch)
+            # カーソル移動が早すぎて間が飛んだ時のための補間処理        
+            points = calculate_points(oldx, oldy, touch.x, touch.y)
+            if points:
+                try:
+                    lp = ud['lines'][-1].add_point # add_point関数 を lp と alias している
+                    for idx in range(0, len(points), 2):
+                        lp(points[idx], points[idx + 1])
+                except GraphicException:
+                    pass
+            
 
     def on_touch_up(self, touch):
         if touch.grab_current is not self or (not self.isInCanvas(touch)):
@@ -471,24 +496,32 @@ class MyWidget(BoxLayout):
             if self.fState == 0: # １点目未設定
                 self.fp1[0] = x = ud['lines'][0].pos[0]
                 self.fp1[1] = y = (h+BUTTONH)-ud['lines'][1].pos[1]
-                self.fState = 1 # 1点目確定
                 self.ids['message'].text =  GRC_RES['BottomRight']
+                self.fState = 1 # 1点目確定
             elif self.fState == 1:
                 x = ud['lines'][0].pos[0]
                 y = (h+BUTTONH)-ud['lines'][1].pos[1]
                 self.rect = (min(self.fp1[0],x),min(self.fp1[1],y),abs(self.fp1[0]-x),abs(self.fp1[1]-y))
+                print("Rect確定", self.rect)
+                self.ids['message'].text =  GRC_RES['Confirm']
+                self.ids['framing'].state = "normal"
                 self.fState = 2
-            print("座標 %d 確定" % (self.fState),x,y)
-        if self.fState == 2:
-            print("Rect確定", self.rect)
-            self.ids['message'].text =  GRC_RES['Confirm']
-            self.ids['framing'].state = "normal"
+            self.remove_widget(ud['label'])    
+        else:
+            touch.ungrab(self)
+        
+        testimg = self.export_to_png("__tmp.png")
+        img = cv2.imread("__tmp.png",-1)
+        h,w = self.srcimg.shape[:2]
+        img = img[BUTTONH:h,0:w]
+        img2 = np.zeros((h,w),np.uint8)
+        img3 = img[:,:,3]
+        img3 = img3 - 127
+        img3[img3==128]=0
+        img3 = img3*60
+        print(img.shape)
+        cv2.imwrite("__tmp.png",img3)
 
-        touch.ungrab(self)
-        ud = touch.ud
-        # self.canvas.remove_group(ud['group'])
-        self.remove_widget(ud['label'])
-    
     def update_touch_label(self, label, touch):
         h,w = self.srcimg.shape[:2]
         y = (h + BUTTONH) - touch.y
@@ -519,7 +552,7 @@ class MyWidget(BoxLayout):
             mask2 = rd.getMajorWhiteArea(mask2) # 最大白領域のみ抽出
         img4 = cv2.cvtColor(img,cv2.COLOR_BGR2BGRA)
         img4[:,:,3] = (127*(mask2//255))+128
-        img4 = rd.draw2(mask2,img4,thickness=1,color=(0,00,250,255))
+        img4 = rd.draw2(mask2,img4,thickness=1,color=(0,0,250,255))
         self.ids['outimg'].texture = cv2kvtexture(img4,force3=False)
         self.silhouette = mask2
         self.ids['message'].text =  GRC_RES['Finished']

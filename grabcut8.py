@@ -417,7 +417,6 @@ class MyWidget(BoxLayout):
             except GraphicException:
                 pass
         '''
-        ud['label'].pos = touch.pos[0],self.srcimg.shape[1]+BUTTONH-touch.pos[1]
 
         self.update_touch_label(ud['label'], touch)
 
