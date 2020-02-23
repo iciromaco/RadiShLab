@@ -39,7 +39,11 @@ GRC_RES ={
 'BottomRight':'対象を枠で囲み指定します。右下の点を指定してください',
 'Confirm':'選択できたらCutボタンを押してください',
 'OnCutting':'カット中です。しばらくお待ちください',
-'Finished':'満足できるまだ再度Cutをクリック or ヒント情報を追加してCut'
+'Finished':'満足できるまだ再度Cutをクリック or ヒント情報を追加してCut',
+'Marking0':'Mark sure BG 確実に背景となる領域をマーク',
+'Marking1':'Mark sure FG 確実に対象である領域をマーク',
+'Marking2':'Mark probably BG 背景画素の多い領域をマーク',
+'Marking3':'Mark probably FG 前景がその多い領域ををマーク'
 }
 
 DUMMYPATH = './Primrose.png'
@@ -70,6 +74,7 @@ IF_H = 32 #  ボタンやメニューの高さ
 
 Builder.load_string('''
 #:set BH 32
+#:set dummypath './Primrose.png'
 <MyWidget>:
     FloatLayout:
         BoxLayout:
@@ -112,7 +117,7 @@ Builder.load_string('''
             orientation: 'horizontal'
             TextInput:
                 id: path0
-                text: root.imgpath
+                text: dummypath
                 font_size: 12
                 size_hint_x: 0.8
             BoxLayout:
@@ -121,6 +126,7 @@ Builder.load_string('''
                 Button:
                     id: allclear
                     text: "AC"
+                    on_press: root.resetAll()
                 ToggleButton:
                     id: eraser
                     text: "ER"
@@ -133,38 +139,43 @@ Builder.load_string('''
                     text: "FR"
                     group: "mode"
                     state : "down"
+                    on_press: root.startFraming()
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
                         texture: root.pictexture['frame']
                 ToggleButton:
-                    id: background0
+                    id: mark0 # Sure Background
                     text: "0"
                     group: "mode"
+                    on_press: root.on_markup(0)
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
                         texture: root.pictexture['zero']
                 ToggleButton:
-                    id: foreground1
+                    id: mark1 # Sure Foreground
                     text: "1"
                     group: "mode"
+                    on_press: root.on_markup(1)
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
                         texture: root.pictexture['one']
                 ToggleButton:
-                    id: background2
+                    id: mark2 # Probably Background
                     text: "2"
                     group: "mode"
+                    on_press: root.on_markup(2)
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
                         texture: root.pictexture['two']
                 ToggleButton:
-                    id: foreground3
+                    id: mark3 # Probably Foreground
                     text: "3"
                     group: "mode"
+                    on_press: root.on_markup(3)
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
@@ -248,20 +259,16 @@ def cv2kvtexture(img,force3 = True):
 # インタフェースパレット
 class MyWidget(BoxLayout):
     windowsize = DUMMYIMG.shape[1]*2, DUMMYIMG.shape[0]+2*BUTTONH # 初期ウィンドウサイズ
-    imgpath = DUMMYPATH # 入力画像のパス　初期は仮
     pictexture = {key:cv2kvtexture(picdic[key]) for key in picdic}
-    framed = False # 枠指定完了のフラグ
-    fState = 0 # 0: 枠指定開始前　1: 左上確定
-    drawing = False # 描画中
-    touchud = None # touc.ud の保存場所
-    pointsize = 5 # ペンサイズ
-    rect = [0,0,1,1] # 切り出し枠
-    fp1 = rect[:2] # 切り出し枠枠の1点目の座標
-    frame_or_mask = 0 # 0 -> mask は初期状態 1 -> セット済み
-    mask = None # grabcut 用のmask  
+
     def __init__(self,**kwargs):
         super(MyWidget,self).__init__(**kwargs)
+        self.fState = 0 # 枠指定の状態 0:初期、1:1点指定済み、2:指定完了
         self.setsrcimg(DUMMYIMG)
+        self.rect = [0,0,1,1] # 切り出し枠
+        self.fp1 = [0,0] # 切り出し枠枠の1点目の座標
+        self.pointsize = 5 # ペンサイズ
+        self.mask = None # grabcut 用のmask
         self.ids['message'].text = GRC_RES['OpenImage']
         Clock.schedule_interval(self.update, 0.1) # ウィンドウサイズの監視固定化
 
@@ -271,14 +278,24 @@ class MyWidget(BoxLayout):
         h,w = srcimg.shape[:2]
         self.srctexture = cv2kvtexture(srcimg)
         self.ids['srcimg'].texture = self.srctexture
-        gryimg = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2GRAY)
-        self.silhouette = mask = rd.getMajorWhiteArea(gryimg,binary=True)
-        img4 = cv2.cvtColor(srcimg,cv2.COLOR_BGR2BGRA)
-        img4[:,:,3] = (127*(mask//255)) +128
-        self.outimg = rd.draw2(mask,img4,thickness=1,color=(0,0,200,255))
-        self.ids['outimg'].texture = cv2kvtexture(img4,force3=False)
-        self.ids['message'].text =  GRC_RES['TopLeft']
-        print(self.outimg)
+        self.resetAll()
+
+    # 画像読み込み後の初期化
+    def resetAll(self):
+        for i in range(self.fState):
+            self.canvas.remove_group(str(i))  # 枠線消去
+
+        gryimg = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2GRAY) # グレイ画像作成
+        self.silhouette = mask = rd.getMajorWhiteArea(gryimg,binary=True) # シルエット画像作成
+        img4 = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2BGRA) # アルファチャネル追加
+        img4[:,:,3] = (127*(mask//255)) +128 # 黒領域の透明化
+        self.outimg = rd.draw2(mask,img4,thickness=1,color=(0,0,200,255)) # 輪郭描画
+        self.ids['outimg'].texture = cv2kvtexture(self.outimg,force3=False) # 仮結果画像
+        self.ids['message'].text =  GRC_RES['TopLeft'] # メッセージ表示
+
+        self.fState = 0 # 枠指定の状態初期化
+        self.frame_or_mask = 0 # 0 -> mask は初期状態 1 -> セット済み
+        self.ids['framing'].state = "down"
 
     # ウィンドウサイズを固定化
     def update(self, dt):
@@ -329,7 +346,7 @@ class MyWidget(BoxLayout):
                 path = path1[0]+'.png'
             self.ids['path0'].text = path
             rd.imwrite(path,self.silhouette)
-            print('max',np.max(self.silhouette))
+
             self.dismiss_popup()
 
         self.keepsize = Window.size
@@ -346,9 +363,30 @@ class MyWidget(BoxLayout):
         h,w = self.srcimg.shape[:2]
         return y >= BUTTONH and y < h + BUTTONH and x < w
 
+    # 枠付けの開始
+    def startFraming(self):
+        if self.fState == 2:
+            self.ids['framing'].state = "normal"
+
     # 枠付け中であるかどうかの判定
-    def onFraming(self):
-        return not self.framed and self.ids['framing'].state == "down" 
+    def nowFraming(self):
+        return self.fState < 2 and self.ids['framing'].state == "down" 
+
+    # マーキング
+    def on_markup(self,ret):
+        if self.fState < 2:
+            self.ids['mark%d' % ret].state = "normal"
+            self.ids['framing'].state = "down"
+        else:
+            self.ids['message'].text = GRC_RES['Marking%d' % (ret)]
+
+    # マーキング中であるかどうかの判定
+    def nowmarking(self):
+        ret = False
+        for n in range(4):
+            if self.ids['mark%d' % n].state == 'down':
+                ret = True
+        return ret
 
     # マウスイベントの処理
     def on_touch_down(self, touch):
@@ -359,10 +397,10 @@ class MyWidget(BoxLayout):
         h,w = self.srcimg.shape[:2]
 
         ud = touch.ud
-        ud['group'] = g = str(touch.uid) # ドラッグ単位のグループ名をつける
+        ud['group'] = g = str(self.fState) # ドラッグ単位のグループ名をつける
         ud['color'] = 1
         
-        if self.onFraming(): # 枠設定中
+        if self.nowFraming(): # 枠設定中
             if self.fState == 0:
                 self.ids['message'].text = GRC_RES['TopLeft']
             with self.canvas:
@@ -387,11 +425,12 @@ class MyWidget(BoxLayout):
         h,w = self.srcimg.shape[:2]
         ud = touch.ud
 
-        if self.onFraming(): # 枠設定中
+        if self.nowFraming(): # 枠設定中
             ud['lines'][0].pos = touch.x, BUTTONH
             ud['lines'][1].pos = 0, touch.y
             ud['lines'][2].pos = touch.x + w, BUTTONH                
-        self.update_touch_label(ud['label'], touch)
+            self.update_touch_label(ud['label'], touch)
+        
 
         '''
         index = -1
@@ -428,7 +467,7 @@ class MyWidget(BoxLayout):
         ud = touch.ud
         h,w = self.srcimg.shape[:2]
 
-        if self.onFraming(): # 枠設定中
+        if self.nowFraming(): # 枠設定中
             if self.fState == 0: # １点目未設定
                 self.fp1[0] = x = ud['lines'][0].pos[0]
                 self.fp1[1] = y = (h+BUTTONH)-ud['lines'][1].pos[1]
@@ -439,11 +478,11 @@ class MyWidget(BoxLayout):
                 y = (h+BUTTONH)-ud['lines'][1].pos[1]
                 self.rect = (min(self.fp1[0],x),min(self.fp1[1],y),abs(self.fp1[0]-x),abs(self.fp1[1]-y))
                 self.fState = 2
-                self.framed = True
             print("座標 %d 確定" % (self.fState),x,y)
-        if self.framed:
+        if self.fState == 2:
             print("Rect確定", self.rect)
             self.ids['message'].text =  GRC_RES['Confirm']
+            self.ids['framing'].state = "normal"
 
         touch.ungrab(self)
         ud = touch.ud
@@ -459,6 +498,9 @@ class MyWidget(BoxLayout):
         label.size = label.texture_size[0] + 20, label.texture_size[1] + 20
 
     def grabcut(self):
+        if self.fState < 2:
+            return
+
         self.ids['message'].text =  GRC_RES['OnCutting']
         rect = [int(item) for item in self.rect]
         img = self.srcimg.copy()
