@@ -174,8 +174,10 @@ def makemargin(img,mr=2):
     return img2
 
 # (4) 最大白領域の取り出し
-def getMajorWhiteArea(img, order=1, dilation=0):
+def getMajorWhiteArea(img, order=1, dilation=0, binary=False):
+    # order 何番目に大きい領域を取り出したいか
     # dilation 取り出す白領域をどれだけ多めにするか
+    # binary 返す画像を２値化するかどうか
     if img.ndim == 3:
         img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY) # カラーの場合はグレイ化する
     _ret,bwimg = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU) # ２値化
@@ -185,7 +187,7 @@ def getMajorWhiteArea(img, order=1, dilation=0):
     labelimg[labelimg == areaindex] = 255
     labelimg = labelimg.astype(np.uint8)
 
-    fatlabelimg = labelimg
+    # fatlabelimg = labelimg.copy()
     if dilation > 0:
         k = calcksize(labelimg)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(k,k))
@@ -193,6 +195,8 @@ def getMajorWhiteArea(img, order=1, dilation=0):
         img[fatlabelimg == 0 ] = 0
     else:
         img[labelimg == 0 ] = 0
+    if binary:
+        img[img>0] = 255
     return img
 
 
