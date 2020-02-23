@@ -38,7 +38,7 @@ def assertglobal(params,verbose=False):
         if item == 'UNIT':
             UNIT = params[item] # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
         elif item == 'SHRINK':
-            SHRINK = params[item] # 0.75 # 収縮膨張で形状を整える時のパラメータ
+            SHRINK = params[item] # 収縮膨張で形状を整える時のパラメータ
         elif item == 'CONTOURS_APPROX':
             CONTOURS_APPROX = params[item] # 輪郭近似精度
         # elif item == 'HARRIS_PARA':
@@ -199,7 +199,7 @@ def getMajorWhiteArea(img, order=1, dilation=0):
 # (5) 処理結果画像（fimg)に処理前画像（bimg)の輪郭を描く
 def draw2(bimg,fimg,thickness=2,color=(255,0,200)):
     bimg2 = getMajorWhiteArea(bimg)
-    if len(fimg.shape)==3:
+    if len(fimg.shape)>2:
         fimg2 = fimg.copy()
     else:
         fimg2 = cv2.cvtColor(fimg,cv2.COLOR_GRAY2BGR)
@@ -254,6 +254,7 @@ def calcksize(img):
 def RDreform(img,order=1,ksize=0,shrink=SHRINK):
     # ksize : ガウスぼかしの量、shrink 膨張収縮による平滑化のパラメータ
     # order : 取り出したい白領域の順位
+    # shrink : 膨張収縮による平滑化のパラメータ　
 
     # ガウスぼかしを適用してシルエットを滑らかにする
     # ガウスぼかしのカーネルサイズの決定

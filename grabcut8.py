@@ -37,9 +37,9 @@ GRC_RES ={
 'OpenImage':'File メニューで画像を開いてください',
 'TopLeft':'対象を枠で囲み指定します。左上の点を指定してください',
 'BottomRight':'対象を枠で囲み指定します。右下の点を指定してください',
-'Confirm':'これでよければ、Cutボタンを押してください',
+'Confirm':'選択できたらCutボタンを押してください',
 'OnCutting':'カット中です。しばらくお待ちください',
-'Finished':'うまくいかない場合は、手動でタッチアップして再Cutしてください'
+'Finished':'満足できるまだ再度Cutをクリック or ヒント情報を追加してCut'
 }
 
 DUMMYPATH = './Primrose.png'
@@ -197,6 +197,11 @@ Builder.load_string('''
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
                         texture: root.pictexture['minus']
+                ToggleButton:
+                    id: rdreform # reform flag
+                    text: "RF"
+                    group: "rdreform"
+                    state: "down"
                 Button:
                     id: cut
                     text: "-"
@@ -225,16 +230,19 @@ def calculate_points(x1, y1, x2, y2, steps=5):
     return o
 
 # opencv のカラー画像を kivy テキスチャに変換
-def cv2kvtexture(img):
+def cv2kvtexture(img,force3 = True):
     if len(img.shape) == 2:
         img2 = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)
-    else:
+    elif img.shape[2] == 3 or force3:
         img2 = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # BGRからRGBへ
+    else : # with alpha
+        img2 = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA) # BGRAからRGBAへ
     img2 = cv2.flip(img2,0)   # 上下反転
     height = img2.shape[0]
     width = img2.shape[1]
     texture = Texture.create(size=(width,height))
-    texture.blit_buffer(img2.tostring())
+    colorfmt = 'rgb' if img2.shape[2]==3 else 'rgba'
+    texture.blit_buffer(img2.tostring(), colorfmt=colorfmt)
     return texture
 
 # インタフェースパレット
@@ -263,9 +271,11 @@ class MyWidget(BoxLayout):
         h,w = srcimg.shape[:2]
         self.srctexture = cv2kvtexture(srcimg)
         self.ids['srcimg'].texture = self.srctexture
-        self.gryimg = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2GRAY)
-        self.outimg = self.gryimg.copy()
-        self.ids['outimg'].texture = cv2kvtexture(self.gryimg)
+        gryimg = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2GRAY)
+        self.silhouette = rd.getMajorWhiteArea(gryimg)
+        # self.silhouette = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2GRAY)
+        self.outimg = self.silhouette.copy() # gryimg.copy()
+        self.ids['outimg'].texture = cv2kvtexture(self.outimg)
         self.ids['message'].text =  GRC_RES['TopLeft']
 
     # ウィンドウサイズを固定化
@@ -460,8 +470,15 @@ class MyWidget(BoxLayout):
         elif (self.frame_or_mask == 1):         
             cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_MASK)
         mask2 = np.where((self.mask==1) + (self.mask==3),255,0).astype('uint8')
-        self.outimg = cv2.bitwise_and( img, img,mask=mask2)
-        self.ids['outimg'].texture = cv2kvtexture(self.outimg)
+        if self.ids['rdreform'].state == 'down':
+            mask2 = rd.RDreform(mask2) # デフォルトで平滑化　詳細は rdlib4.py参照
+        else:
+            mask2 = rd.getMajorWhiteArea(mask2) # 最大白領域のみ抽出
+        img4 = cv2.cvtColor(img,cv2.COLOR_BGR2BGRA)
+        img4[:,:,3] = (127*(mask2//255))+128
+        img4 = rd.draw2(mask2,img4,thickness=1,color=(0,00,250,255))
+        self.ids['outimg'].texture = cv2kvtexture(img4,force3=False)
+        self.silhouette = mask2
         self.ids['message'].text =  GRC_RES['Finished']
 
 def mkpensizeSample(size=5):
