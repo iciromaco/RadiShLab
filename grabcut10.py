@@ -18,8 +18,8 @@ from kivy.uix.widget import Widget
 from kivy.factory import Factory
 from kivy.graphics import Color, Rectangle, Point, Ellipse,GraphicException
 from kivy.uix.label import Label
+from kivy.graphics.vertex_instructions import Line
 
-from kivy.utils import get_color_from_hex
 
 '''
 from kivy.uix.floatlayout import FloatLayout
@@ -62,12 +62,12 @@ GREEN = [0,255,0]       # PR FG
 MAGENTA = [255,0,255]    # sure BG
 BLACK = [0,0,0]
 WHITE = [255,255,255]   # sure FG
-
+from kivy.utils import get_color_from_hex
 C4 = [
     get_color_from_hex('#FF00FF'), # MAGENDA for BG
     get_color_from_hex('#FFFFFF'), # WHITE for FG
     get_color_from_hex('#FF0000'), # RED for FG
-    get_color_from_hex('#00FF00'), # GREEN for BG
+    get_color_from_hex('#00FF00')  # GREEN for BG 
 ]
 COLORS = []
 for i in range(4):
@@ -85,7 +85,7 @@ DRAW_BG = {'color' : MAGENTA, 'val' : 0}
 DRAW_FG = {'color' : WHITE, 'val' : 1}
 DRAW_PR_BG = {'color' : RED, 'val' : 2}
 DRAW_PR_FG = {'color' : GREEN, 'val' : 3}
-COLORS = [DRAW_BG,DRAW_FG,DRAW_PR_BG,DRAW_PR_FG]
+DRAW_COLORS = [DRAW_BG,DRAW_FG,DRAW_PR_BG,DRAW_PR_FG]
 
 IF_H = 32 #  ボタンやメニューの高さ
 
@@ -214,13 +214,23 @@ Builder.load_string('''
                 Button:
                     id: plus
                     text: "+"
+                    on_press: root.thicknessUpDown(1)
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
                         texture: root.pictexture['plus']
+                BoxLayout:
+                    size_hint: None,None
+                    size: BH,BH
+                    Image:
+                        id: dotsize
+                        center_x: self.parent.center_x
+                        center_y: self.parent.center_y
+                        texture: 
                 Button:
                     id: minus
-                    text: "+"
+                    text: "-"
+                    on_press: root.thicknessUpDown(-1)
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
@@ -286,6 +296,7 @@ class MyWidget(BoxLayout):
         self.rect = [0,0,1,1] # 切り出し枠
         self.fp1 = [0,0] # 切り出し枠枠の1点目の座標
         self.pointsize = 5 # ペンサイズ
+        self.pensizeimage()
         self.mask = None # grabcut 用のmask
         self.ids['message'].text = GRC_RES['OpenImage']
         Clock.schedule_interval(self.update, 0.1) # ウィンドウサイズの監視固定化
@@ -293,7 +304,6 @@ class MyWidget(BoxLayout):
     # 入力画像をセット
     def setsrcimg(self,srcimg):
         self.srcimg = srcimg
-        self.srcorig = srcimg.copy()
         h,w = srcimg.shape[:2]
         self.srctexture = cv2kvtexture(srcimg)
         self.ids['srcimg'].texture = self.srctexture
@@ -301,9 +311,11 @@ class MyWidget(BoxLayout):
 
     # 画像読み込み後の初期化
     def resetAll(self):
-        for i in range(self.fState):
-            self.canvas.remove_group(str(i))  # 枠線消去
-        self.srcimg = self.srcorig.copy() 
+        srcimg = self.srcimg
+        for i in range(4):
+            self.canvas.remove_group(str(i))  # 枠線および描画線消去
+        self.workmg = srcimg.copy() # 作業用＝左ペインに表示
+        self.restoreimg = srcimg.copy() # １手戻る用
         gryimg = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2GRAY) # グレイ画像作成
         self.silhouette = mask = rd.getMajorWhiteArea(gryimg,binary=True) # シルエット画像作成
         img4 = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2BGRA) # アルファチャネル追加
@@ -318,6 +330,13 @@ class MyWidget(BoxLayout):
 
         self.canvas.remove_group('0')
         self.canvas.remove_group('1')
+
+    def pensizeimage(self):
+        pensize = self.pointsize
+        pimg = np.zeros((32,32,4),np.uint8)
+        cv2.circle(pimg,(16,16),pensize,(255,255,255,255),-1)
+        ptxt = cv2kvtexture(pimg,force3=False)
+        self.ids['dotsize'].texture = ptxt
 
     # ウィンドウサイズを固定化
     def update(self, dt):
@@ -345,7 +364,6 @@ class MyWidget(BoxLayout):
  
     # ファイルの選択と読み込み
     def show_load(self):
-
         def load(filepath):
             self.ids['path0'].text = filepath
             srcimg = rd.imread(filepath)
@@ -360,7 +378,6 @@ class MyWidget(BoxLayout):
         self._popup.open()
 
     def show_save(self):
-
         def save(path, filename):
             path = os.path.join(path, filename)
             path1 = os.path.splitext(path)
@@ -383,7 +400,7 @@ class MyWidget(BoxLayout):
         x = touch.x
         y = touch.y
         h,w = self.srcimg.shape[:2]
-        return y >= BUTTONH and y < h + BUTTONH and x < w
+        return y >= BUTTONH and y < h + BUTTONH # and x < w
 
     # 枠付けの開始
     def startFraming(self):
@@ -410,6 +427,22 @@ class MyWidget(BoxLayout):
                 ret = n
         return ret
 
+    # ヒント情報の描画
+    def drawPoint(self,points,colorvalue):
+        self.restoreimg = self.srcimg.copy()
+        for idx in range(0,len(points),2):
+            x = int(points[idx])
+            y = self.srcimg.shape[0]+BUTTONH-int(points[idx+1])
+            # cv2.circle(self.workimg,(x,y),self.pointsize,colorvalue['color'],-1)
+            cv2.circle(self.mask,(x,y),self.pointsize,colorvalue['val'],-1)
+
+    # ペンサイズの増減
+    def thicknessUpDown(self, diff):
+        pointsize = self.pointsize + diff
+        if pointsize > 0 and pointsize < 31: 
+            self.pointsize = pointsize
+        self.pensizeimage()
+
     # マウスイベントの処理
     def on_touch_down(self, touch):
         if Widget.on_touch_down(self, touch) or not self.isInCanvas(touch): 
@@ -417,19 +450,18 @@ class MyWidget(BoxLayout):
             return
         
         h,w = self.srcimg.shape[:2]
-
-        ud = touch.ud     
-        ud['color'] = 1
+        ud = touch.ud
+        x = touch.x if touch.x < w else touch.x - w
         
         if self.nowFraming(): # 枠設定中
             g = str(self.fState) 
             with self.canvas:
                 # Color(ud['color'], 1, 1, mode='hsv', group=g)
                 Color(0, 1, 0, mode='rgba',group=g)
-                ud['lines'] = [
-                    Rectangle(pos=(touch.x, BUTTONH), size=(1, h), group=g), # クロスカーソル 縦
+                ud['cross'] = [
+                    Rectangle(pos=(x, BUTTONH), size=(1, h), group=g), # クロスカーソル 縦
                     Rectangle(pos=(0, touch.y), size=(2*w, 1), group=g), # クロスカーソル　横
-                    Rectangle(pos=(touch.x+w, BUTTONH), size=(1, h), group=g)]
+                    Rectangle(pos=(x+w, BUTTONH), size=(1, h), group=g)]
             ud['label'] = Label(size_hint=(None, None))
             self.add_widget(ud['label'])
             self.update_touch_label(ud['label'], touch)
@@ -437,13 +469,17 @@ class MyWidget(BoxLayout):
             mark = self.nowMarking()
             if mark < 0: # not on marking
                 return
-            pointsize = 30 
+
             ud['group'] = g = str(mark) 
+            ps = self.pointsize 
 
             with self.canvas:
-                ps = self.pointsize
                 exec(COLORS[mark])
-                ud['lines'] = [Point(points=(touch.x, touch.y),pointsize=ps,source='res/picdicpics/particle.png',group=g)]
+                # ud['drawings'] = Point(points=(touch.x, touch.y), source='res/picdicpics/particle.png',
+                ud['drawings'] = Point(points=(x, touch.y), source='res/picdicpics/pennib.png',
+                                      pointsize=ps, group=g) # # 
+                self.drawPoint(ud['drawings'].points,colorvalue=DRAW_COLORS[mark])
+
         touch.grab(self) # ドラッグの追跡を指定            
         return True
 
@@ -454,63 +490,59 @@ class MyWidget(BoxLayout):
 
         h,w = self.srcimg.shape[:2]
         ud = touch.ud
+        x = touch.x if touch.x < w else touch.x - w
 
         if self.nowFraming(): # 枠設定中
-            ud['lines'][0].pos = touch.x, BUTTONH
-            ud['lines'][1].pos = 0, touch.y
-            ud['lines'][2].pos = touch.x + w, BUTTONH                
+            
+            ud['cross'][0].pos = x, BUTTONH
+            ud['cross'][1].pos = 0, touch.y
+            ud['cross'][2].pos = x + w, BUTTONH                
             self.update_touch_label(ud['label'], touch)
         else:
-            print("S")
             mark = self.nowMarking()
             if mark < 0:
                 return
-            index = -1
 
-            print("A")
+            ud['group'] = g = str(mark) 
+            ps = self.pointsize
+
             while True:
                 try:
-                    points = ud['lines'][index].points
-                    oldx, oldy = points[-2], points[-1]
-                    print("B",oldx,oldy,points)
+                    pts = ud['drawings'].points
+                    oldx, oldy = pts[-2], pts[-1]
                     break
                 except:
                     index -= 1
 
-            # カーソル移動が早すぎて間が飛んだ時のための補間処理        
-            points = calculate_points(oldx, oldy, touch.x, touch.y)
+            # カーソル移動が早すぎて間が飛んだ時のための補間処理
+            points = calculate_points(oldx, oldy, x, touch.y, steps=ps)
             if points:
                 try:
-                    lp = ud['lines'][-1].add_point # add_point関数 を lp と alias している
+                    lp = ud['drawings'].add_point # add_point関数 を lp と alias している
                     for idx in range(0, len(points), 2):
                         lp(points[idx], points[idx + 1])
                 except GraphicException:
                     pass
-                for pt in ud['lines']:
-                    x,y = pt.points
-                    mark = self.nowMarking()
-                    cv2.circle(self.srcimg,(x,y),self.pointsize,value['color'],-1)
-                    cv2.circle(maskroi,(x,y),self.thickness,value['val'],-1)
-            
 
+                self.drawPoint(ud['drawings'].points,colorvalue=DRAW_COLORS[mark])
+            
     def on_touch_up(self, touch):
         if touch.grab_current is not self or (not self.isInCanvas(touch)):
             return    
 
-        ud = touch.ud
         h,w = self.srcimg.shape[:2]
+        ud = touch.ud
 
         if self.nowFraming(): # 枠設定中
             if self.fState == 0: # １点目未設定
-                self.fp1[0] = x = ud['lines'][0].pos[0]
-                self.fp1[1] = y = (h+BUTTONH)-ud['lines'][1].pos[1]
+                self.fp1[0] = ud['cross'][0].pos[0]
+                self.fp1[1] = (h+BUTTONH)-ud['cross'][1].pos[1]
                 self.ids['message'].text =  GRC_RES['BottomRight']
                 self.fState = 1 # 1点目確定
             elif self.fState == 1:
-                x = ud['lines'][0].pos[0]
-                y = (h+BUTTONH)-ud['lines'][1].pos[1]
-                self.rect = (min(self.fp1[0],x),min(self.fp1[1],y),abs(self.fp1[0]-x),abs(self.fp1[1]-y))
-                print("Rect確定", self.rect)
+                p2x = ud['cross'][0].pos[0]
+                p2y = (h+BUTTONH)-ud['cross'][1].pos[1]
+                self.rect = (min(self.fp1[0],p2x),min(self.fp1[1],p2y),abs(self.fp1[0]-p2x),abs(self.fp1[1]-p2y))
                 self.ids['message'].text =  GRC_RES['Confirm']
                 self.ids['framing'].state = "normal"
                 self.fState = 2
@@ -519,22 +551,9 @@ class MyWidget(BoxLayout):
             touch.ungrab(self)
         
         testimg = self.export_to_png("__tmp.png")
-        img = cv2.imread("__tmp.png",-1)
-        h,w = self.srcimg.shape[:2]
-        img = img[BUTTONH:BUTTONH+h,0:w]
-        img2 = np.zeros((h,w),np.uint8)
-        for y in range(h):
-            for x in range(w):
-                if img[y,x,3] != 255:
-                    print(img[y,x,3] )
-                img2[y,x] = (img[y,x,3]-127)*40 if img[y,x,3] != 255 else 0
-        '''img3 = img[:,:,3]
-        img3 = img3 - 127
-        img3[img3==128]=0
-        img3 = img3*60
-        print(img.shape)'''
-        cv2.imwrite("__tmp2.png",img2)
+        cv2.imwrite("__cvimg.png",self.srcimg)
 
+    # 座標表示
     def update_touch_label(self, label, touch):
         h,w = self.srcimg.shape[:2]
         y = (h + BUTTONH) - touch.y
@@ -543,6 +562,7 @@ class MyWidget(BoxLayout):
         label.pos = touch.pos
         label.size = label.texture_size[0] + 20, label.texture_size[1] + 20
 
+    # セグメンテーション
     def grabcut(self):
         if self.fState < 2:
             return
@@ -556,7 +576,7 @@ class MyWidget(BoxLayout):
             self.mask = np.zeros(self.srcimg.shape[:2],np.uint8)  # for mask initialized to PR_BG
             cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
             self.frame_or_mask = 1
-        elif (self.frame_or_mask == 1):         
+        elif (self.frame_or_mask == 1):
             cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_MASK)
         mask2 = np.where((self.mask==1) + (self.mask==3),255,0).astype('uint8')
         if self.ids['rdreform'].state == 'down':
@@ -569,12 +589,6 @@ class MyWidget(BoxLayout):
         self.ids['outimg'].texture = cv2kvtexture(img4,force3=False)
         self.silhouette = mask2
         self.ids['message'].text =  GRC_RES['Finished']
-
-def mkpensizeSample(size=5):
-    pensizeCanvas = np.zeros((32,32),np.uint8)
-    cv2.circle(pensizeCanvas,(16,16),size,255,-1)
-    imagetexture = cv2kvtexture(pensizeCanvas)
-    return imagetexture
 
 # 画像が大きすぎる場合、IMAGESIZE以下になるように縮小する
 def prepareimg(img, limitsize = MAXIMAGESIZE):

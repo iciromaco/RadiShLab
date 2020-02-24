@@ -433,7 +433,7 @@ class myMouse:
             maskroi = mask[rect[1]-20:rect[1]+rect[3]+20,rect[0]-20:rect[0]+rect[2]+20]
             if drawing == True:
                 if event == cv2.EVENT_MOUSEMOVE:
-                    cv2.circle(imgroi,(x,y),self.thickness,value['color'],-1)
+                    cv2.circle(imgroi,(x,y),self.thickness,value['color'],-1)cv2
                     cv2.circle(maskroi,(x,y),self.thickness,value['val'],-1)
                 elif event == cv2.EVENT_LBUTTONUP:
                     drawing = False
