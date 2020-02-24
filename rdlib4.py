@@ -5,6 +5,32 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
+# OpenCV のファイル入出力が2バイト文字パス名に対応していないための対処
+# （参考）https://qiita.com/SKYS/items/cbde3775e2143cad7455
+def imread(filename, flags=cv2.IMREAD_COLOR, dtype=np.uint8):
+    try:
+        n = np.fromfile(filename, dtype)
+        img = cv2.imdecode(n, flags)
+        return img
+    except Exception as e:
+        print(e)
+        return None
+
+def imwrite(filename, img, params=None):
+    try:
+        ext = os.path.splitext(filename)[1]
+        result, n = cv2.imencode(ext, img, params)
+
+        if result:
+            with open(filename, mode='w+b') as f:
+                n.tofile(f)
+            return True
+        else:
+            return False
+    except Exception as e:
+        print(e)
+        return False
+
 def assertglobal(params,verbose=False):
     global CONTOURS_APPROX, HARRIS_PARA, CONTOURS_APPROX, SHRINK, \
             HARRIS_PARA, GAUSSIAN_RATE1, GAUSSIAN_RATE2, UNIT, RPARA
@@ -12,7 +38,7 @@ def assertglobal(params,verbose=False):
         if item == 'UNIT':
             UNIT = params[item] # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
         elif item == 'SHRINK':
-            SHRINK = params[item] # 0.75 # 収縮膨張で形状を整える時のパラメータ
+            SHRINK = params[item] # 収縮膨張で形状を整える時のパラメータ
         elif item == 'CONTOURS_APPROX':
             CONTOURS_APPROX = params[item] # 輪郭近似精度
         # elif item == 'HARRIS_PARA':
@@ -148,8 +174,10 @@ def makemargin(img,mr=2):
     return img2
 
 # (4) 最大白領域の取り出し
-def getMajorWhiteArea(img, order=1, dilation=0):
+def getMajorWhiteArea(img, order=1, dilation=0, binary=False):
+    # order 何番目に大きい領域を取り出したいか
     # dilation 取り出す白領域をどれだけ多めにするか
+    # binary 返す画像を２値化するかどうか
     if img.ndim == 3:
         img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY) # カラーの場合はグレイ化する
     _ret,bwimg = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU) # ２値化
@@ -159,7 +187,7 @@ def getMajorWhiteArea(img, order=1, dilation=0):
     labelimg[labelimg == areaindex] = 255
     labelimg = labelimg.astype(np.uint8)
 
-    fatlabelimg = labelimg
+    # fatlabelimg = labelimg.copy()
     if dilation > 0:
         k = calcksize(labelimg)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(k,k))
@@ -167,13 +195,15 @@ def getMajorWhiteArea(img, order=1, dilation=0):
         img[fatlabelimg == 0 ] = 0
     else:
         img[labelimg == 0 ] = 0
+    if binary:
+        img[img>0] = 255
     return img
 
 
 # (5) 処理結果画像（fimg)に処理前画像（bimg)の輪郭を描く
 def draw2(bimg,fimg,thickness=2,color=(255,0,200)):
     bimg2 = getMajorWhiteArea(bimg)
-    if len(fimg.shape)==3:
+    if len(fimg.shape)>2:
         fimg2 = fimg.copy()
     else:
         fimg2 = cv2.cvtColor(fimg,cv2.COLOR_GRAY2BGR)
@@ -228,6 +258,7 @@ def calcksize(img):
 def RDreform(img,order=1,ksize=0,shrink=SHRINK):
     # ksize : ガウスぼかしの量、shrink 膨張収縮による平滑化のパラメータ
     # order : 取り出したい白領域の順位
+    # shrink : 膨張収縮による平滑化のパラメータ　
 
     # ガウスぼかしを適用してシルエットを滑らかにする
     # ガウスぼかしのカーネルサイズの決定

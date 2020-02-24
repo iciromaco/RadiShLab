@@ -1,21 +1,11 @@
 
 
 '''
-SVM and KNearest digit recognition.
-Sample loads a dataset of handwritten digits from 'digits.png'.
-Then it trains a SVM and KNearest classifiers on it and evaluates
-their accuracy.
-Following preprocessing is applied to the dataset:
- - Moment-based image deskew (see deskew())
- - Digit images are split into 4 10x10 cells and 16-bin
-   histogram of oriented gradients is computed for each
-   cell
- - Transform histograms to space with Hellinger metric (see [1] (RootSIFT))
-[1] R. Arandjelovic, A. Zisserman
-    "Three things everyone should know to improve object retrieval"
-    http://www.robots.ox.ac.uk/~vgg/publications/2012/Arandjelovic12/arandjelovic12.pdf
+Interactive segmentation tool with grabCut
+
 Usage:
-   python iGrabit.py
+   python ./iGrabit.py
+
 '''
 import cv2
 import numpy as np
