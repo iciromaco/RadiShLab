@@ -147,6 +147,7 @@ Builder.load_string('''
                 ToggleButton:
                     id: eraser
                     text: "ER"
+                    on_press: root.undoDraw1()
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
@@ -200,6 +201,7 @@ Builder.load_string('''
                 Button:
                     id: rot90
                     text: "R+"
+                    on_press: root.rotateImage(90)
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
@@ -207,6 +209,7 @@ Builder.load_string('''
                 Button:
                     id: rot270
                     text: "R-"
+                    on_press: root.rotateImage(270)
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
@@ -292,12 +295,12 @@ class MyWidget(BoxLayout):
     def __init__(self,**kwargs):
         super(MyWidget,self).__init__(**kwargs)
         self.fState = 0 # 枠指定の状態 0:初期、1:1点指定済み、2:指定完了
+        self.canvasgroups = []
         self.setsrcimg(DUMMYIMG)
         self.rect = [0,0,1,1] # 切り出し枠
         self.fp1 = [0,0] # 切り出し枠枠の1点目の座標
         self.pointsize = 5 # ペンサイズ
         self.pensizeimage()
-        self.mask = None # grabcut 用のmask
         self.ids['message'].text = GRC_RES['OpenImage']
         Clock.schedule_interval(self.update, 0.1) # ウィンドウサイズの監視固定化
 
@@ -312,15 +315,16 @@ class MyWidget(BoxLayout):
     # 画像読み込み後の初期化
     def resetAll(self):
         srcimg = self.srcimg
-        for i in range(4):
-            self.canvas.remove_group(str(i))  # 枠線および描画線消去
-        self.workmg = srcimg.copy() # 作業用＝左ペインに表示
-        self.restoreimg = srcimg.copy() # １手戻る用
-        gryimg = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2GRAY) # グレイ画像作成
-        self.silhouette = mask = rd.getMajorWhiteArea(gryimg,binary=True) # シルエット画像作成
-        img4 = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2BGRA) # アルファチャネル追加
-        img4[:,:,3] = (127*(mask//255)) +128 # 黒領域の透明化
-        self.outimg = rd.draw2(mask,img4,thickness=1,color=(0,0,200,255)) # 輪郭描画
+        for ids in self.canvasgroups:
+            self.canvas.remove_group(ids)  # 登録された描画情報を除去
+        self.canvasgroups = []
+        gryimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2GRAY) # グレイ画像作成
+        self.mask = np.zeros(srcimg.shape[:2],np.uint8) # GrabCut 用マスクの初期化
+        self.maskStack = [self.mask.copy()] # マスクのバックアップ
+        self.silhouette = smask = rd.getMajorWhiteArea(gryimg,binary=True) # シルエット画像作成
+        img4 = cv2.cvtColor(srcimg,cv2.COLOR_BGR2BGRA) # アルファチャネル追加
+        img4[:,:,3] = (127*(smask//255)) +128 # 黒領域の透明化
+        self.outimg = rd.draw2(smask,img4,thickness=1,color=(0,0,200,255)) # 輪郭描画
         self.ids['outimg'].texture = cv2kvtexture(self.outimg,force3=False) # 仮結果画像
         self.ids['message'].text =  GRC_RES['TopLeft'] # メッセージ表示
 
@@ -328,9 +332,7 @@ class MyWidget(BoxLayout):
         self.frame_or_mask = 0 # 0 -> mask は初期状態 1 -> セット済み
         self.ids['framing'].state = "down"
 
-        self.canvas.remove_group('0')
-        self.canvas.remove_group('1')
-
+    # ペンサイズの増減
     def pensizeimage(self):
         pensize = self.pointsize
         pimg = np.zeros((32,32,4),np.uint8)
@@ -342,6 +344,15 @@ class MyWidget(BoxLayout):
     def update(self, dt):
         h,w = self.srcimg.shape[:2]
         Window.size = (2*w,h+2*IF_H)
+
+    # 画像を９０度回転
+    def rotateImage(self,rot=90):
+        img = self.srcimg
+        if rot == 90:
+            img = img.transpose(1,0,2)[::-1,:,:]
+        else:
+            img = img.transpose(1,0,2)[:,::-1,:]
+        self.setsrcimg(img)
 
     # メニュー処理
     def do_menu(self):
@@ -411,7 +422,7 @@ class MyWidget(BoxLayout):
     def nowFraming(self):
         return self.fState < 2 and self.ids['framing'].state == "down" 
 
-    # マーキング
+    # マーキングの切り替え
     def on_markup(self,ret):
         if self.fState < 2:
             self.ids['mark%d' % ret].state = "normal"
@@ -427,14 +438,29 @@ class MyWidget(BoxLayout):
                 ret = n
         return ret
 
-    # ヒント情報の描画
+    # マーキング　ヒント情報の描画
     def drawPoint(self,points,colorvalue):
-        self.restoreimg = self.srcimg.copy()
+        self.pushMask()  # マスクをプッシュ
         for idx in range(0,len(points),2):
             x = int(points[idx])
             y = self.srcimg.shape[0]+BUTTONH-int(points[idx+1])
             # cv2.circle(self.workimg,(x,y),self.pointsize,colorvalue['color'],-1)
             cv2.circle(self.mask,(x,y),self.pointsize,colorvalue['val'],-1)
+
+    # マーキングのアンドゥ
+    def undoDraw1(self):
+        lastid = self.popCV()
+        if lastid == False:
+            return
+        elif lastid == "0":
+            self.fState = 0
+            return
+        elif lastid == "1":
+            self.fState = 1
+            self.ids['framing'].state = "down"
+        else:
+            self.fState = 2
+            self.popMask()
 
     # ペンサイズの増減
     def thicknessUpDown(self, diff):
@@ -442,6 +468,26 @@ class MyWidget(BoxLayout):
         if pointsize > 0 and pointsize < 31: 
             self.pointsize = pointsize
         self.pensizeimage()
+
+    # 描画履歴情報のプッシュ・ポップ
+    def pushCV(self,id):
+        self.canvasgroups.append(id)
+
+    def popCV(self):
+        if len(self.canvasgroups) == 0:
+            return False
+        lastid = self.canvasgroups.pop()
+        self.canvas.remove_group(lastid)
+        return lastid  
+
+    # マスク情報のプッシュ・ポップ
+    def pushMask(self):
+        self.maskStack.append(self.mask)
+
+    def popMask(self):
+        if len(self.maskStack) == 1:
+            return self.maskStack[0]
+        self.mask = self.maskStack.pop()
 
     # マウスイベントの処理
     def on_touch_down(self, touch):
@@ -455,6 +501,7 @@ class MyWidget(BoxLayout):
         
         if self.nowFraming(): # 枠設定中
             g = str(self.fState) 
+            self.pushCV(g)
             with self.canvas:
                 # Color(ud['color'], 1, 1, mode='hsv', group=g)
                 Color(0, 1, 0, mode='rgba',group=g)
@@ -470,7 +517,8 @@ class MyWidget(BoxLayout):
             if mark < 0: # not on marking
                 return
 
-            ud['group'] = g = str(mark) 
+            ud['group'] = g = str(touch.uid)
+            self.pushCV(g)
             ps = self.pointsize 
 
             with self.canvas:
@@ -546,7 +594,8 @@ class MyWidget(BoxLayout):
                 self.ids['message'].text =  GRC_RES['Confirm']
                 self.ids['framing'].state = "normal"
                 self.fState = 2
-            self.remove_widget(ud['label'])    
+            self.remove_widget(ud['label'])
+            self.grabcut()    
         else:
             touch.ungrab(self)
         
@@ -573,7 +622,7 @@ class MyWidget(BoxLayout):
         bgdmodel = np.zeros((1,65),np.float64)
         fgdmodel = np.zeros((1,65),np.float64)
         if (self.frame_or_mask == 0): 
-            self.mask = np.zeros(self.srcimg.shape[:2],np.uint8)  # for mask initialized to PR_BG
+            # self.mask = np.zeros(self.srcimg.shape[:2],np.uint8)  # for mask initialized to PR_BG
             cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
             self.frame_or_mask = 1
         elif (self.frame_or_mask == 1):
