@@ -1,3 +1,12 @@
+
+
+'''
+Interactive segmentation tool with grabCut
+
+Usage:
+   python ./iGrabit.py
+
+'''
 import cv2
 import numpy as np
 import os, sys
@@ -5,34 +14,21 @@ import os, sys
 import japanize_kivy  #  pip install japanize_kivy
 
 from kivy.app import App
+from kivy.uix.widget import Widget
 from kivy.lang import Builder 
 from kivy.core.window import Window
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
-from kivy.uix.togglebutton import ToggleButton
-from kivy.uix.image import Image
+from kivy.uix.label import Label
+from kivy.factory import Factory
 from kivy.uix.popup import Popup
 from kivy.graphics.texture import Texture
 from kivy.clock import Clock
-from kivy.uix.widget import Widget
-from kivy.factory import Factory
-from kivy.graphics import Color, Rectangle, Point, Ellipse,GraphicException
-from kivy.uix.label import Label
-from kivy.graphics.vertex_instructions import Line
+from kivy.graphics import Color, Rectangle, Point, GraphicException
 
+import filedialog # self made library
+import rdlib4 as rd # self made library
 
-'''
-from kivy.uix.floatlayout import FloatLayout
-from kivy.properties import ObjectProperty,StringProperty, NumericProperty, BooleanProperty
-from kivy.core.text import LabelBase, DEFAULT_FONT 
-from kivy.utils import get_color_from_hex
-from kivy.properties import 
-'''
-
-import filedialog
-import rdlib4 as rd
-
-# 右クリックで表示される赤丸を禁止
+# Prohibit red circle displayed by right click
 from kivy.config import Config
 Config.set('input', 'mouse', 'mouse,disable_multitouch') 
 
@@ -55,13 +51,10 @@ BUTTONH = 32
 DUMMYIMG = rd.loadPkl(PRIMROSE)
 picdic = rd.loadPkl('./res/picdic.pkl')
 
-PENSIZE = 5
-BLUE = [255,0,0]        # rectangle color
-RED = [0,0,255]         # PR BG
-GREEN = [0,255,0]       # PR FG
-MAGENTA = [255,0,255]    # sure BG
-BLACK = [0,0,0]
-WHITE = [255,255,255]   # sure FG
+BUTTONH = 32 # hight of menu and buttons
+PENSIZE = 5 # size of drawing pen
+
+# Conversion from hexadecimal color representation to floating vector representation
 from kivy.utils import get_color_from_hex
 C4 = [
     get_color_from_hex('#FF00FF'), # MAGENDA for BG
@@ -75,11 +68,11 @@ for i in range(4):
     item = 'Color({},{},{},mode="rgb",group="{}")'.format(cc[0],cc[1],cc[2],str(i))
     COLORS.append(item)
 
-MINRECTSIZE = 400 # 領域指定とそうでない操作の切り分けのための矩形面積の下限
-
-MAXIMAGESIZE = 1024 # 強制的に画像サイズをの数字以下に縮小する。
-WINDOWSSIZE = MAXIMAGESIZE//2 # 表示ウィンドウサイズ
-NEEDSIZE =256 # 対象に要求するサイズ。矩形がこれ以下であればこの値以上になるように解像度を上げて GrabCut する
+RED = [0,0,255]         # PR BG
+GREEN = [0,255,0]       # PR FG
+MAGENTA = [255,0,255]    # sure BG
+BLACK = [0,0,0]
+WHITE = [255,255,255]   # sure FG
 
 DRAW_BG = {'color' : MAGENTA, 'val' : 0}
 DRAW_FG = {'color' : WHITE, 'val' : 1}
@@ -87,12 +80,11 @@ DRAW_PR_BG = {'color' : RED, 'val' : 2}
 DRAW_PR_FG = {'color' : GREEN, 'val' : 3}
 DRAW_COLORS = [DRAW_BG,DRAW_FG,DRAW_PR_BG,DRAW_PR_FG]
 
-IF_H = 32 #  ボタンやメニューの高さ
-
+# デザイン定義
 Builder.load_string('''
 #:set BH 32
 #:set dummypath './Primrose.png'
-<MyWidget>:
+<GrabCutConsole>:
     FloatLayout:
         BoxLayout:
             size_hint: None,None
@@ -251,10 +243,10 @@ Builder.load_string('''
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
                         texture: root.pictexture['cut']
-
 ''')
 
-# 2点を結ぶ線分を、間隔 step で分割した、両端以外の点列[x1,y1,x2,y2,...]を返す 
+# Returns a sequence of points [x1, y1, x2, y2, ...] other than both ends, 
+# 　　obtained by dividing the line segment connecting two points by the interval step
 def calculate_points(x1, y1, x2, y2, steps=5):
     dx = x2 - x1
     dy = y2 - y1
@@ -270,15 +262,16 @@ def calculate_points(x1, y1, x2, y2, steps=5):
         o.extend([lastx, lasty])
     return o
 
-# opencv のカラー画像を kivy テキスチャに変換
-def cv2kvtexture(img,force3 = True):
+# Convert opencv color image (numpy array) to kivy texture
+# If you need alpha channel, set face3 = False
+def cv2kvtexture(img, force3 = True):
     if len(img.shape) == 2:
         img2 = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)
     elif img.shape[2] == 3 or force3:
-        img2 = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # BGRからRGBへ
+        img2 = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # BGR to RGB
     else : # with alpha
-        img2 = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA) # BGRAからRGBAへ
-    img2 = cv2.flip(img2,0)   # 上下反転
+        img2 = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA) # BGRA to RGBA
+    img2 = cv2.flip(img2,0)   # flip upside down
     height = img2.shape[0]
     width = img2.shape[1]
     texture = Texture.create(size=(width,height))
@@ -286,20 +279,20 @@ def cv2kvtexture(img,force3 = True):
     texture.blit_buffer(img2.tostring(), colorfmt=colorfmt)
     return texture
 
-# インタフェースパレット
-class MyWidget(BoxLayout):
+# Main Widget
+class GrabCutConsole(BoxLayout):
     windowsize = DUMMYIMG.shape[1]*2, DUMMYIMG.shape[0]+2*BUTTONH # 初期ウィンドウサイズ
     pictexture = {key:cv2kvtexture(picdic[key]) for key in picdic}
     touchud = [] # touch.ud の記憶場所
 
     def __init__(self,**kwargs):
-        super(MyWidget,self).__init__(**kwargs)
+        super(GrabCutConsole,self).__init__(**kwargs)
         self.fState = 0 # 枠指定の状態 0:初期、1:1点指定済み、2:指定完了
         self.canvasgroups = []
         self.setsrcimg(DUMMYIMG)
         self.rect = [0,0,1,1] # 切り出し枠
         self.fp1 = [0,0] # 切り出し枠枠の1点目の座標
-        self.pointsize = 5 # ペンサイズ
+        self.pointsize = PENSIZE # ペンサイズ
         self.pensizeimage()
         self.ids['message'].text = GRC_RES['OpenImage']
         Clock.schedule_interval(self.update, 0.1) # ウィンドウサイズの監視固定化
@@ -326,7 +319,7 @@ class MyWidget(BoxLayout):
         img4[:,:,3] = (127*(smask//255)) +128 # 黒領域の透明化
         self.outimg = rd.draw2(smask,img4,thickness=1,color=(0,0,200,255)) # 輪郭描画
         self.ids['outimg'].texture = cv2kvtexture(self.outimg,force3=False) # 仮結果画像
-        self.ids['message'].text =  GRC_RES['TopLeft'] # メッセージ表示
+        # self.ids['message'].text =  GRC_RES['TopLeft'] # メッセージ表示
 
         self.fState = 0 # 枠指定の状態初期化
         self.frame_or_mask = 0 # 0 -> mask は初期状態 1 -> セット済み
@@ -343,7 +336,17 @@ class MyWidget(BoxLayout):
     # ウィンドウサイズを固定化
     def update(self, dt):
         h,w = self.srcimg.shape[:2]
-        Window.size = (2*w,h+2*IF_H)
+        Window.size = (2*w,h+2*BUTTONH)
+        if self.fState == 0:
+            self.ids['message'].text =  GRC_RES['TopLeft'] # メッセージ表示
+        elif self.fState == 1:
+            self.ids['message'].text =  GRC_RES['BottomRight'] # メッセージ表示            
+        else:
+            marking = self.nowMarking()
+            if marking < 0:
+                self.ids['message'].text =  GRC_RES['Finished'] # メッセージ表示
+            else:
+                self.ids['message'].text = GRC_RES['Marking%d' % (marking)]
 
     # 画像を９０度回転
     def rotateImage(self,rot=90):
@@ -428,7 +431,8 @@ class MyWidget(BoxLayout):
             self.ids['mark%d' % ret].state = "normal"
             self.ids['framing'].state = "down"
         else:
-            self.ids['message'].text = GRC_RES['Marking%d' % (ret)]
+            if self.ids['mark%d' % ret].state == "down":
+                self.ids['message'].text = GRC_RES['Marking%d' % (ret)]
 
     # マーキング中であるかどうかの判定
     def nowMarking(self):
@@ -454,13 +458,14 @@ class MyWidget(BoxLayout):
             return
         elif lastid == "0":
             self.fState = 0
-            return
         elif lastid == "1":
             self.fState = 1
-            self.ids['framing'].state = "down"
         else:
             self.fState = 2
-            self.popMask()
+        self.popMask()
+        if self.fState < 2: 
+            self.ids['framing'].state = "down"
+            self.frame_or_mask = 0
 
     # ペンサイズの増減
     def thicknessUpDown(self, diff):
@@ -486,8 +491,9 @@ class MyWidget(BoxLayout):
 
     def popMask(self):
         if len(self.maskStack) == 1:
-            return self.maskStack[0]
-        self.mask = self.maskStack.pop()
+            self.mask = self.maskStack[0]
+        else:
+            self.mask = self.maskStack.pop()
 
     # マウスイベントの処理
     def on_touch_down(self, touch):
@@ -501,7 +507,6 @@ class MyWidget(BoxLayout):
         
         if self.nowFraming(): # 枠設定中
             g = str(self.fState) 
-            self.pushCV(g)
             with self.canvas:
                 # Color(ud['color'], 1, 1, mode='hsv', group=g)
                 Color(0, 1, 0, mode='rgba',group=g)
@@ -518,7 +523,6 @@ class MyWidget(BoxLayout):
                 return
 
             ud['group'] = g = str(touch.uid)
-            self.pushCV(g)
             ps = self.pointsize 
 
             with self.canvas:
@@ -527,7 +531,7 @@ class MyWidget(BoxLayout):
                 ud['drawings'] = Point(points=(x, touch.y), source='res/picdicpics/pennib.png',
                                       pointsize=ps, group=g) # # 
                 self.drawPoint(ud['drawings'].points,colorvalue=DRAW_COLORS[mark])
-
+        self.pushCV(g)
         touch.grab(self) # ドラッグの追跡を指定            
         return True
 
@@ -541,7 +545,6 @@ class MyWidget(BoxLayout):
         x = touch.x if touch.x < w else touch.x - w
 
         if self.nowFraming(): # 枠設定中
-            
             ud['cross'][0].pos = x, BUTTONH
             ud['cross'][1].pos = 0, touch.y
             ud['cross'][2].pos = x + w, BUTTONH                
@@ -585,22 +588,19 @@ class MyWidget(BoxLayout):
             if self.fState == 0: # １点目未設定
                 self.fp1[0] = ud['cross'][0].pos[0]
                 self.fp1[1] = (h+BUTTONH)-ud['cross'][1].pos[1]
-                self.ids['message'].text =  GRC_RES['BottomRight']
+                # self.ids['message'].text =  GRC_RES['BottomRight']
                 self.fState = 1 # 1点目確定
             elif self.fState == 1:
                 p2x = ud['cross'][0].pos[0]
                 p2y = (h+BUTTONH)-ud['cross'][1].pos[1]
                 self.rect = (min(self.fp1[0],p2x),min(self.fp1[1],p2y),abs(self.fp1[0]-p2x),abs(self.fp1[1]-p2y))
-                self.ids['message'].text =  GRC_RES['Confirm']
+                # self.ids['message'].text =  GRC_RES['Confirm']
                 self.ids['framing'].state = "normal"
                 self.fState = 2
             self.remove_widget(ud['label'])
             self.grabcut()    
         else:
             touch.ungrab(self)
-        
-        testimg = self.export_to_png("__tmp.png")
-        cv2.imwrite("__cvimg.png",self.srcimg)
 
     # 座標表示
     def update_touch_label(self, label, touch):
@@ -639,52 +639,12 @@ class MyWidget(BoxLayout):
         self.silhouette = mask2
         self.ids['message'].text =  GRC_RES['Finished']
 
-# 画像が大きすぎる場合、IMAGESIZE以下になるように縮小する
-def prepareimg(img, limitsize = MAXIMAGESIZE):
-        img, halfimg = resize(img, limitsize=size)   # 縦横いずれもlimitsize以下になるよう縮小
-        imgbackup = img.copy()                        # a copy of resized image
-        mask = np.zeros(img.shape[:2],np.uint8)       # for mask initialized to PR_BG
-        output = np.zeros(img.shape,np.uint8)          # for output image to be shown
-        halfoutput = np.zeros(halfimg.shape,np.uint8)  # for halfsize output image 
-        return img, imgbackup,halfimg,output,halfoutput,mask
-
-# 画像が大きすぎる場合に、制限サイズ内に収まるよう縮小するとともに表示用ハーフサイズ画像を生成
-def resize(img, limitsize=MAXIMAGESIZE):
-    height,width = img.shape[:2]
-    maxsize = max(height,width)
-    if maxsize > limitsize:
-        heightN = limitsize*height//maxsize
-        width = limitsize*width//maxsize
-    # 切り出し対象が枠いっぱいだった時のために少しマージンをつける。
-    output = np.zeros((height+80, width+80,3),np.uint8) 
-    output[40:40+height,40:40+width]=cv2.resize(img,(width,height))
-    h2 = output.shape[0]//2
-    w2 = output.shape[1]//2
-    halfimg=cv2.resize(output,(w2,h2))
-    return output,halfimg
-
-# カット
-def cutImage(srcimg, usecolor=False):
-    global img, imgbackup,orig,rorig,output,value,mask,shrinkN,filename, mouseCallBacker,gusecolor
-    
-    gusecolor = usecolor
-    
-    orig = srcimg.copy() # オリジナルを複製
-    rorig = srcimg.copy() # 回転用のオリジナルの複製
-    img = orig.copy() # 操作用画像
-    # 操作用画像
-    img, imgbackup,halfimg,output,halfoutput,mask= prepareimg(img,limitsize = MAXIMAGESIZE)
-
-    mouseCallBacker = myMouse('input')
-
-    do_keyEventLoop()
-
 # アプリケーションメイン 
-class MyApp(App):
+class GrabCut(App):
     title = 'Touchtracer'
 
     def build(self):
-        mywidget = MyWidget()
+        mywidget = GrabCutConsole()
         mywidget.ids['sp0'].values = ('Open','Save','Quit')
         self.title = 'GrabCut'
         return mywidget
@@ -693,4 +653,4 @@ class MyApp(App):
         return True
 
 if __name__ == '__main__':
-   MyApp().run()
+   GrabCut().run()
