@@ -96,7 +96,7 @@ Google Colaboratory で実行する場合は，ノートブックをアップロ
 
 ## How to
 ### GUI を使うプログラムの実行
-- [Google Colaboratory を自分のマシンで走らせる]()
+- [Google Colaboratory を自分のマシンで走らせる](https://www.kabuku.co.jp/developers/run_google_colaboratory_notebooks_on_local_machine)
 
 
 ## Author
