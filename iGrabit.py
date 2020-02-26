@@ -138,7 +138,6 @@ Builder.load_string('''
                     on_press: root.resetAll()
                 ToggleButton:
                     id: eraser
-                    text: "ER"
                     on_press: root.undoDraw1()
                     Image:
                         center_x: self.parent.center_x
@@ -146,7 +145,6 @@ Builder.load_string('''
                         texture: root.pictexture['eraser']
                 ToggleButton:
                     id: framing
-                    text: "FR"
                     group: "mode"
                     state : "down"
                     on_press: root.startFraming()
@@ -156,7 +154,6 @@ Builder.load_string('''
                         texture: root.pictexture['frame']
                 ToggleButton:
                     id: mark0 # Sure Background
-                    text: "0"
                     group: "mode"
                     on_press: root.on_markup(0)
                     Image:
@@ -165,7 +162,6 @@ Builder.load_string('''
                         texture: root.pictexture['zero']
                 ToggleButton:
                     id: mark1 # Sure Foreground
-                    text: "1"
                     group: "mode"
                     on_press: root.on_markup(1)
                     Image:
@@ -174,7 +170,6 @@ Builder.load_string('''
                         texture: root.pictexture['one']
                 ToggleButton:
                     id: mark2 # Probably Background
-                    text: "2"
                     group: "mode"
                     on_press: root.on_markup(2)
                     Image:
@@ -183,7 +178,6 @@ Builder.load_string('''
                         texture: root.pictexture['two']
                 ToggleButton:
                     id: mark3 # Probably Foreground
-                    text: "3"
                     group: "mode"
                     on_press: root.on_markup(3)
                     Image:
@@ -192,7 +186,6 @@ Builder.load_string('''
                         texture: root.pictexture['three']
                 Button:
                     id: rot90
-                    text: "R+"
                     on_press: root.rotateImage(90)
                     Image:
                         center_x: self.parent.center_x
@@ -200,7 +193,6 @@ Builder.load_string('''
                         texture: root.pictexture['rot90']
                 Button:
                     id: rot270
-                    text: "R-"
                     on_press: root.rotateImage(270)
                     Image:
                         center_x: self.parent.center_x
@@ -208,7 +200,6 @@ Builder.load_string('''
                         texture: root.pictexture['rot270']
                 Button:
                     id: plus
-                    text: "+"
                     on_press: root.thicknessUpDown(1)
                     Image:
                         center_x: self.parent.center_x
@@ -224,7 +215,6 @@ Builder.load_string('''
                         texture: 
                 Button:
                     id: minus
-                    text: "-"
                     on_press: root.thicknessUpDown(-1)
                     Image:
                         center_x: self.parent.center_x
@@ -237,7 +227,6 @@ Builder.load_string('''
                     state: "down"
                 Button:
                     id: cut
-                    text: "-"
                     on_press: root.grabcut()
                     Image:
                         center_x: self.parent.center_x
@@ -282,7 +271,7 @@ def cv2kvtexture(img, force3 = True):
 # Main Widget
 class GrabCutConsole(BoxLayout):
     windowsize = DUMMYIMG.shape[1]*2, DUMMYIMG.shape[0]+2*BUTTONH # 初期ウィンドウサイズ
-    pictexture = {key:cv2kvtexture(picdic[key]) for key in picdic}
+    pictexture = {key:cv2kvtexture(picdic[key],force3 = False) for key in picdic}
     touchud = [] # touch.ud の記憶場所
 
     def __init__(self,**kwargs):
@@ -328,7 +317,8 @@ class GrabCutConsole(BoxLayout):
     # ペンサイズの増減
     def pensizeimage(self):
         pensize = self.pointsize
-        pimg = np.zeros((32,32,4),np.uint8)
+        pimg = np.ones((32,32,4),np.uint8)*200
+        pimg[:,:,3] = 100
         cv2.circle(pimg,(16,16),pensize,(255,255,255,255),-1)
         ptxt = cv2kvtexture(pimg,force3=False)
         self.ids['dotsize'].texture = ptxt
@@ -617,12 +607,11 @@ class GrabCutConsole(BoxLayout):
             return
 
         self.ids['message'].text =  GRC_RES['OnCutting']
-        rect = [int(item) for item in self.rect]
+        rect = tuple([int(item) for item in self.rect])
         img = self.srcimg.copy()
         bgdmodel = np.zeros((1,65),np.float64)
         fgdmodel = np.zeros((1,65),np.float64)
         if (self.frame_or_mask == 0): 
-            # self.mask = np.zeros(self.srcimg.shape[:2],np.uint8)  # for mask initialized to PR_BG
             cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
             self.frame_or_mask = 1
         elif (self.frame_or_mask == 1):

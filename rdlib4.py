@@ -134,7 +134,6 @@ def mkparaimage2(img1,img2):
     h1,w1 = img1.shape[:2]
     h2,w2 = img2.shape[:2]
     if img1.ndim == 2:
-        img11 = np.zeros((h1,w1,3))
         img11[:,:,0] = img11[:,:,1]=img11[:,:,2]=img1
     else:
         img11=img1
