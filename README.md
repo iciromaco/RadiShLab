@@ -57,7 +57,8 @@ python はライブラリ間の依存関係が複雑でしばしば最新でな�
 3. Nameを適当につけ，Python 3.7 を選んで Create
 4. Home > Jupyter Notebook > Install
 
-### 3. OpenCV の導入
+### 3. ライブラリのインストール
+#### OpenCV の導入
 
 画像処理には，画像処理ライブラリ OpenCV を使います．Google Colaboratory には，つねにその最新に近いバージョンがインストールされています．OpenCV は Anacondaの標準ライブラリではないので，Google Colaboratoryと同じバージョンをインストールしておきましょう．OpenCVは頻繁にバージョンアップされ，ときどき仕様が変わるので注意が必要です．
 
@@ -71,6 +72,38 @@ conda install -c conda-forge opencv=4.1.2
 
 Proceed ([y]/n)? y
 ```
+
+### kivy
+```
+conda install -c conda-forge kivy
+```
+日本語が使いたい場合は、
+```
+pip install japanize-kivy
+```
+
+このプロジェクトではGUIプログラムには [kivy](https://kivy.org) を使っています。
+python 用の GUI のライブラリにはまだこれこそがスタンダードだ、というものがありませんがので、今後もっと使いやすいものが出てきたら変更するかもしれません。
+
+#### core なライブラリ
+Anaconda で仮想環境を作った場合、ライブラリは最小限しか組み込まれていないので、次のライブラリも追加インストールしてください。
+- numpy
+- Pillw (PIL)
+- matplotlib
+- seaborn
+- jupyter
+- sympy 
+- scikit-learn 
+- pandas
+
+```
+conda install Pillow numpy jupyter matplotlib seaborn
+```
+
+#### その他
+予定
+- tensorflow
+- keras
 
 ## Anaconda の更新
 

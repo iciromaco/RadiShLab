@@ -136,13 +136,20 @@ Builder.load_string('''
                     id: allclear
                     text: "AC"
                     on_press: root.resetAll()
-                ToggleButton:
+                Button:
                     id: eraser
                     on_press: root.undoDraw1()
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
                         texture: root.pictexture['eraser']
+                Button:
+                    id: framing
+                    on_press: root.cropImage()
+                    Image:
+                        center_x: self.parent.center_x
+                        center_y: self.parent.center_y
+                        texture: root.pictexture['crop']
                 ToggleButton:
                     id: framing
                     group: "mode"
@@ -226,7 +233,7 @@ Builder.load_string('''
                     group: "rdreform"
                     state: "down"
                 Button:
-                    id: cut
+                    id: grabcut
                     on_press: root.grabcut()
                     Image:
                         center_x: self.parent.center_x
@@ -576,14 +583,14 @@ class GrabCutConsole(BoxLayout):
 
         if self.nowFraming(): # 枠設定中
             if self.fState == 0: # １点目未設定
-                self.fp1[0] = ud['cross'][0].pos[0]
-                self.fp1[1] = (h+BUTTONH)-ud['cross'][1].pos[1]
+                self.fp1[0] = int(ud['cross'][0].pos[0])
+                self.fp1[1] = int((h+BUTTONH)-ud['cross'][1].pos[1])
                 # self.ids['message'].text =  GRC_RES['BottomRight']
                 self.fState = 1 # 1点目確定
             elif self.fState == 1:
-                p2x = ud['cross'][0].pos[0]
-                p2y = (h+BUTTONH)-ud['cross'][1].pos[1]
-                self.rect = (min(self.fp1[0],p2x),min(self.fp1[1],p2y),abs(self.fp1[0]-p2x),abs(self.fp1[1]-p2y))
+                p2x = int(ud['cross'][0].pos[0])
+                p2y = int((h+BUTTONH)-ud['cross'][1].pos[1])
+                self.rect = [min(self.fp1[0],p2x),min(self.fp1[1],p2y),abs(self.fp1[0]-p2x),abs(self.fp1[1]-p2y)]
                 # self.ids['message'].text =  GRC_RES['Confirm']
                 self.ids['framing'].state = "normal"
                 self.fState = 2
@@ -607,7 +614,7 @@ class GrabCutConsole(BoxLayout):
             return
 
         self.ids['message'].text =  GRC_RES['OnCutting']
-        rect = tuple([int(item) for item in self.rect])
+        rect = self.rect
         img = self.srcimg.copy()
         bgdmodel = np.zeros((1,65),np.float64)
         fgdmodel = np.zeros((1,65),np.float64)
@@ -627,6 +634,17 @@ class GrabCutConsole(BoxLayout):
         self.ids['outimg'].texture = cv2kvtexture(img4,force3=False)
         self.silhouette = mask2
         self.ids['message'].text =  GRC_RES['Finished']
+
+    def cropImage(self):
+        if self.fState < 2:
+            return
+
+        [x,y,w,h] = self.rect
+        self.srcimg = self.srcimg[y:y+h,x:x+w]
+        self.setsrcimg(self.srcimg)
+        self.fState = 2
+        self.rect = [1,1,w-2,h-2]
+        self.grabcut() 
 
 # アプリケーションメイン 
 class GrabCut(App):
