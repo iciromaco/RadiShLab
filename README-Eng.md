@@ -70,7 +70,7 @@ Please update the local environment regularly so that the version of Google Cola
 - Update all libraries to the latest version
 
 ### Update Anaconda itself to the latest version
-``` $ conda update -n base cond```
+``` $ conda update -n base conda```
 ### Update all libraries to the latest version
 ``` $ conda update --all```
 

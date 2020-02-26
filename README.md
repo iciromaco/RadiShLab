@@ -80,7 +80,7 @@ Proceed ([y]/n)? y
 が必要です．
 
 ### Anaconda のベースを最新にバージョンアップ
-``` $ conda update -n base cond```
+``` $ conda update -n base conda```
 ### すべてのライブラリをバージョンアップ
 ``` $ conda update --all```
 
@@ -96,7 +96,7 @@ Google Colaboratory で実行する場合は，ノートブックをアップロ
 
 ## How to
 ### GUI を使うプログラムの実行
-- [Google Colaboratory を自分のマシンで走らせる](https://www.kabuku.co.jp/developers/run_google_colaboratory_notebooks_on_local_machine)
+- [Google Colaboratory を自分のマシンで走らせる]()
 
 
 ## Author
