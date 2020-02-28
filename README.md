@@ -24,7 +24,6 @@ Radish Shape Analysis Laboratory
 <img src="https://user-images.githubusercontent.com/24559785/75554908-28a5ae00-5a33-11ea-9b1e-ce737aa6d440.gif" width=512> </img>
 <video src="https://www.youtube.com/watch?v=geLT5e6Tkqg" width=512 align='center'><img src="https://img.youtube.com/vi/geLT5e6Tkqg/0.jpg" width=512></video>
 </div>
-[![](https://img.youtube.com/vi/geLT5e6Tkqg/0.jpg)](https://www.youtube.com/watch?v=geLT5e6Tkqg)
 
 ## Requirement
 - ### python と jupyter notebook が実行できる環境
