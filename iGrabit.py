@@ -1,10 +1,8 @@
-
-
 '''
 Interactive segmentation tool with grabCut
 
 Usage:
-   python ./iGrabit.py
+   python -m iGrabit
 
 '''
 import cv2
