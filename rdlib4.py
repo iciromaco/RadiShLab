@@ -181,7 +181,11 @@ def getMajorWhiteArea(img, order=1, dilation=0, binary=False):
         img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY) # カラーの場合はグレイ化する
     _ret,bwimg = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU) # ２値化
     _lnum, labelimg, cnt, _cog =cv2.connectedComponentsWithStats(bwimg) # ラベリング
-    areaindex = np.argsort(-cnt[:,4])[order] # order 番目に大きい白領域のインデックス
+    areaindexs = np.argsort(-cnt[:,4])
+    if len(areaindexs) > order:
+        areaindex = areaindexs[order] # order 番目に大きい白領域のインデックス
+    else:
+        areaindex = areaindexs[-1] # 指定した番号のインデックスが存在しないなら一番小さい領域番号
     labelimg[labelimg != areaindex] = 0
     labelimg[labelimg == areaindex] = 255
     labelimg = labelimg.astype(np.uint8)
@@ -249,9 +253,12 @@ def calcksize(img):
     gray = cv2.GaussianBlur(img,(7,7),0) # とりあえず (7,7)でぼかして2値化
     _ret,bwimg = cv2.threshold(gray,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU) # ２値化
     _lnum, labelimg, cnt, _cog =cv2.connectedComponentsWithStats(bwimg) # ラベリング
-    areamax = np.argmax(cnt[1:,4])+1 # ０番を除く面積最大値のインデックス
-    maxarea = np.max(cnt[1:,4])
-    ksize = int(np.sqrt(maxarea)/60)*2+1
+    if(len(cnt)<2):
+        ksize = 3
+    else:
+        areamax = np.argmax(cnt[1:,4])+1 # ０番を除く面積最大値のインデックス
+        maxarea = np.max(cnt[1:,4])
+        ksize = int(np.sqrt(maxarea)/60)*2+1
     return ksize
 
 def RDreform(img,order=1,ksize=0,shrink=SHRINK):
@@ -261,6 +268,9 @@ def RDreform(img,order=1,ksize=0,shrink=SHRINK):
 
     # ガウスぼかしを適用してシルエットを滑らかにする
     # ガウスぼかしのカーネルサイズの決定
+
+    if img.sum() == 0: # 白領域が存在しない
+        return img
     if ksize == 0:  # ぼかしのサイズが指定されていないときは最大白領域の面積を基準に定める
         ksize = calcksize(img)
     img2 = cv2.GaussianBlur(img,(ksize,ksize),0) # ガウスぼかしを適用
@@ -291,7 +301,7 @@ def RDreform_D(img,ksize=5,shrink=SHRINK):
 
     n = 1 # 収縮回数のカウンタ
 
-    while area1  > shrink*area0: # 面積が SHRINK倍以下になるまで繰り返す
+    while area0 > area1 and area1  > shrink*area0: # 面積が SHRINK倍以下になるまで繰り返す
         tmpimg = cv2.erode(tmpimg,kernel,iterations = 1)
         area1 = np.sum(tmpimg) 
         n += 1
@@ -299,16 +309,17 @@ def RDreform_D(img,ksize=5,shrink=SHRINK):
     # あらためて輪郭を求め直す
 
     cnt,_hierarchy = cv2findContours34(img3, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE) #  あらためて輪郭を抽出
-    
     outimg = np.zeros_like(img3)
-    perimeter = cv2.arcLength(cnt[0],True) # 周囲長
-    epsilon = CONTOURS_APPROX*perimeter # 周囲長をもとに精度パラメータを決定
-    # 概形抽出
-    approx = cv2.approxPolyDP(cnt[0],epsilon,True)
+    if len(cnt) > 0:
+        perimeter = cv2.arcLength(cnt[0],True) # 周囲長
+        epsilon = CONTOURS_APPROX*perimeter # 周囲長をもとに精度パラメータを決定
+        # 概形抽出
+        approx = cv2.approxPolyDP(cnt[0],epsilon,True)
 
-    # 輪郭を描いて埋める   
-    outimg = cv2.drawContours(outimg, [approx], 0, 255, thickness=-1) 
-
+        # 輪郭を描いて埋める   
+        outimg = cv2.drawContours(outimg, [approx], 0, 255, thickness=-1) 
+    else:
+        outimg = np.ones_like(img3)*255
     return outimg
 
 # (9) Grabcut による大根領域の抜き出し
