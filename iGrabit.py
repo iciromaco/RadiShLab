@@ -45,7 +45,7 @@ GRC_RES ={
 'ChangeThickness':'輪郭線の線の太さが変更。次の描画の際に反映されます'
 }
 
-MENUITEMS = {'Open':"開く",'Save':"保存",'ToggleThickness':"描線の太さ変更",'ScreenShot':"スクショ",'Quit':"終了"}
+MENUITEMS = {'Open':"開く",'Save':"保存",'ToggleThickness':"描線の太さ変更",'ScreenShot':"スクリーンショット",'Quit':"終了"}
 
 DUMMYPATH = './Primrose.png'
 DUMMYIMGBIN = '/res/paprika.pkl'
