@@ -8,6 +8,7 @@ Usage:
 import cv2
 import numpy as np
 import os, sys
+from PIL import ImageGrab
  
 import japanize_kivy  #  pip install japanize_kivy
 
@@ -39,11 +40,13 @@ GRC_RES ={
 'Finished':'満足できるまで何度かCutをクリック or 1234でヒント情報を追加してCut',
 'Marking0':'Mark sure BG 確実に背景となる領域をマーク',
 'Marking1':'Mark sure FG 確実に対象である領域をマーク',
-'Marking2':'Mark probably BG 背景画素の多い領域をマーク',
-'Marking3':'Mark probably FG 前景がその多い領域ををマーク'
+# 'Marking2':'Mark probably BG 背景画素の多い領域をマーク',
+# 'Marking3':'Mark probably FG 前景がその多い領域ををマーク',
+'ChangeThickness':'輪郭線の線の太さが変更。次の描画の際に反映されます'
 }
 
-DUMMYPATH = './Primrose.png'
+MENUITEMS = {'Open':"開く",'Save':"保存",'ToggleThickness':"描線の太さ変更",'ScreenShot':"スクリーンショット",'Quit':"終了"}
+
 DUMMYIMGBIN = '/res/paprika.pkl'
 # DUMMYIMGBIN = '/res/Primrose.pkl'
 BUTTONH = 32
@@ -75,13 +78,13 @@ DRAW_BG = {'color' : MAGENTA, 'val' : 0}
 DRAW_FG = {'color' : WHITE, 'val' : 1}
 DRAW_COLORS = [DRAW_BG,DRAW_FG]
 
-CON_THICK = 2 # 輪郭線描画線の太さ
+CON_THICK = 1 # 輪郭線描画線の太さ
 CON_COLOR = (100,255,200,255) # 輪郭線描画色
 
 # デザイン定義
 Builder.load_string('''
 #:set BH 32
-#:set dummypath './Primrose.png'
+#:set dummypath './res/testpics/demoimg.jpg'
 <GrabCutConsole>:
     FloatLayout:
         BoxLayout:
@@ -262,11 +265,12 @@ class GrabCutConsole(BoxLayout):
         self.fState = 0 # 枠指定の状態 0:初期、1:1点指定済み、2:指定完了
         self.canvasgroups = []
         self.setsrcimg(DUMMYIMG,setfState=0)
-        self.rect = [0,0,1,1] # 切り出し枠
+        self.rect = (0,0,1,1) # 切り出し枠
         self.fp1 = [0,0] # 切り出し枠枠の1点目の座標
         self.pointsize = PENSIZE # ペンサイズ
         self.pensizeimage()
         self.ids['message'].text = GRC_RES['OpenImage']
+        self.dialogflag = False # ファイルオープンダイアログを開いているというフラグ
         Clock.schedule_interval(self.update, 0.1) # ウィンドウサイズの監視固定化
 
     # サイズが大きすぎると画面表示できないので表面上リサイズ
@@ -336,6 +340,8 @@ class GrabCutConsole(BoxLayout):
 
     # ウィンドウサイズを固定化
     def update(self, dt):
+        if self.dialogflag == True:
+            return
         h,w = self.srcimg.shape[:2]
         Window.size = (2*w+4*self.margin,h+2*BUTTONH)
         if self.fState == 0:
@@ -362,21 +368,30 @@ class GrabCutConsole(BoxLayout):
 
     # メニュー処理
     def do_menu(self):
+        global CON_THICK
         if self.ids['sp0'].text == 'File':
             return
         else:
             self.mode = self.ids['sp0'].text
             self.ids['sp0'].text = 'File'
-        if self.mode == 'Open':
+        if self.mode == MENUITEMS['Open']: 
             self.show_load()
-        if self.mode == 'Save':
+        elif self.mode == MENUITEMS['Save']:
             self.show_save()
-        if self.mode == 'Quit':
+        elif self.mode == MENUITEMS['ScreenShot']:
+            grabimg = np.asarray(ImageGrab.grab())
+            grabimg = cv2.cvtColor(grabimg,cv2.COLOR_RGB2BGR)
+            self.setsrcimg(grabimg)
+        elif self.mode == MENUITEMS['ToggleThickness']:
+            CON_THICK = 1 if CON_THICK == 2 else 2
+            self.ids['message'].text ='ChangeThickness'
+        elif self.mode == MENUITEMS['Quit']:
             sys.exit()
 
     # ファイルウィンドウをポップした状態からの復帰
     def dismiss_popup(self):
         self._popup.dismiss()
+        self.dialogflag = False
         Window.size = self.keepsize
  
     # ファイルの選択と読み込み
@@ -389,6 +404,7 @@ class GrabCutConsole(BoxLayout):
             self.dismiss_popup()
 
         self.keepsize = Window.size
+        self.dialogflag = True
         Window.size = (600,600)
         content = Factory.LoadDialog(load=load, cancel=self.dismiss_popup)
         self._popup = Popup(title="Load file", content=content,
@@ -405,12 +421,14 @@ class GrabCutConsole(BoxLayout):
                 self.ids['path0'].text = path
                 oh,ow = self.origin.shape[:2]
                 img = np.zeros((oh,ow),np.uint8)
-                x,y,w,h = self.cropRect
+                (x,y,w,h) = self.cropRect
                 img[y:y+h,x:x+w] = self.silhouette
                 rd.imwrite(path,img)
+                print("Write Image {} (x:{},y;{}),(w:{},h:{}))".format(path,x,y,w,h))
             self.dismiss_popup()
 
         self.keepsize = Window.size
+        self.dialogflag = True
         Window.size = (600,600)
         content = Factory.SaveDialog(save=save, cancel=self.dismiss_popup)
         self._popup = Popup(title="Save file", content=content,
@@ -544,9 +562,9 @@ class GrabCutConsole(BoxLayout):
             with self.canvas:
                 exec(COLORS[mark])
                 # ud['drawings'] = Point(points=(touch.x, touch.y), source='res/picdicpics/particle.png',
-                ud['drawings'] = [Point(points=(x, touch.y), source='res/picdicpics/pennib.png', 
+                ud['drawings'] = [Point(points=(x, touch.y), source='res/picdicpics/ic12_pennib.png', 
                                       pointsize=ps, group=g),
-                                 Point(points=(x+w+2*m, touch.y), source='res/picdicpics/pennib.png',
+                                 Point(points=(x+w+2*m, touch.y), source='res/picdicpics/ic12_pennib.png',
                                       pointsize=ps, group=g)] 
                 self.drawPoint(ud['drawings'][0].points,colorvalue=DRAW_COLORS[mark])
         self.pushCV(g)
@@ -615,7 +633,7 @@ class GrabCutConsole(BoxLayout):
             elif self.fState == 1:
                 p2x = int(ud['cross'][0].pos[0]-m)
                 p2y = int((h+BUTTONH)-ud['cross'][1].pos[1])
-                self.rect = [min(self.fp1[0],p2x),min(self.fp1[1],p2y),abs(self.fp1[0]-p2x),abs(self.fp1[1]-p2y)]
+                self.rect = (min(self.fp1[0],p2x),min(self.fp1[1],p2y),abs(self.fp1[0]-p2x),abs(self.fp1[1]-p2y))
                 self.ids['framing'].state = "normal"
                 self.fState = 2
             self.remove_widget(ud['label'])
@@ -641,13 +659,16 @@ class GrabCutConsole(BoxLayout):
         if self.fState < 2:
             return
         elif self.fState == 2:
-            [x,y,w,h] = self.rect
+            (x,y,w,h) = self.rect
+            if min(w,h) < 4*MM: # 矩形が小さすぎる
+                self.undoDraw1()
+                return
             rr = self.resizeratio
-            self.cropRect = [int(rr*x),int(rr*y),int(rr*w),int(rr*h)]
-            [x,y,w,h] = self.cropRect
+            self.cropRect = (int(rr*x),int(rr*y),int(rr*w),int(rr*h))
+            (x,y,w,h) = self.cropRect
             self.srcimg = self.origin[y:y+h,x:x+w]
             self.setsrcimg(self.srcimg,setfState=3)
-            self.rect = [MM,MM,w-2*MM,h-2*MM]
+            self.rect = (MM,MM,w-2*MM,h-2*MM)
         h,w = self.srcimg.shape[:2]
         self.ids['message'].text =  GRC_RES['OnCutting']
         rect = self.rect
@@ -658,6 +679,8 @@ class GrabCutConsole(BoxLayout):
             cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
             self.frame_or_mask = 1
         elif (self.frame_or_mask == 1):
+            if (np.where((self.mask==1) + (self.mask==3),255,0).astype('uint8')).sum() == 0: # 前景候補がない
+                self.mask[rect[1]:rect[1]+rect[3],rect[0]:rect[0]+rect[2]] = 1
             cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_MASK)
         mask2 = np.where((self.mask==1) + (self.mask==3),255,0).astype('uint8')
         if self.ids['rdreform'].state == 'down':
@@ -677,7 +700,8 @@ class GrabCut(App):
 
     def build(self):
         mywidget = GrabCutConsole()
-        mywidget.ids['sp0'].values = ('Open','Save','Quit')
+        menus = (MENUITEMS[i] for i in MENUITEMS.keys())
+        mywidget.ids['sp0'].values = menus
         self.title = 'GrabCut'
         return mywidget
 
