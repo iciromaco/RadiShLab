@@ -40,14 +40,13 @@ GRC_RES ={
 'Finished':'満足できるまで何度かCutをクリック or 1234でヒント情報を追加してCut',
 'Marking0':'Mark sure BG 確実に背景となる領域をマーク',
 'Marking1':'Mark sure FG 確実に対象である領域をマーク',
-'Marking2':'Mark probably BG 背景画素の多い領域をマーク',
-'Marking3':'Mark probably FG 前景がその多い領域ををマーク',
+# 'Marking2':'Mark probably BG 背景画素の多い領域をマーク',
+# 'Marking3':'Mark probably FG 前景がその多い領域ををマーク',
 'ChangeThickness':'輪郭線の線の太さが変更。次の描画の際に反映されます'
 }
 
 MENUITEMS = {'Open':"開く",'Save':"保存",'ToggleThickness':"描線の太さ変更",'ScreenShot':"スクリーンショット",'Quit':"終了"}
 
-DUMMYPATH = './Primrose.png'
 DUMMYIMGBIN = '/res/paprika.pkl'
 # DUMMYIMGBIN = '/res/Primrose.pkl'
 BUTTONH = 32
@@ -85,7 +84,7 @@ CON_COLOR = (100,255,200,255) # 輪郭線描画色
 # デザイン定義
 Builder.load_string('''
 #:set BH 32
-#:set dummypath './Demo.png'
+#:set dummypath './res/testpics/demoimg.jpg'
 <GrabCutConsole>:
     FloatLayout:
         BoxLayout:
