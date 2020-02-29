@@ -262,7 +262,7 @@ class GrabCutConsole(BoxLayout):
         self.fState = 0 # 枠指定の状態 0:初期、1:1点指定済み、2:指定完了
         self.canvasgroups = []
         self.setsrcimg(DUMMYIMG,setfState=0)
-        self.rect = [0,0,1,1] # 切り出し枠
+        self.rect = (0,0,1,1) # 切り出し枠
         self.fp1 = [0,0] # 切り出し枠枠の1点目の座標
         self.pointsize = PENSIZE # ペンサイズ
         self.pensizeimage()
@@ -405,9 +405,10 @@ class GrabCutConsole(BoxLayout):
                 self.ids['path0'].text = path
                 oh,ow = self.origin.shape[:2]
                 img = np.zeros((oh,ow),np.uint8)
-                x,y,w,h = self.cropRect
+                (x,y,w,h) = self.cropRect
                 img[y:y+h,x:x+w] = self.silhouette
                 rd.imwrite(path,img)
+                print("Write Image {} (x:{},y;{}),(w:{},h:{}))".format(path,x,y,w,h))
             self.dismiss_popup()
 
         self.keepsize = Window.size
@@ -615,7 +616,7 @@ class GrabCutConsole(BoxLayout):
             elif self.fState == 1:
                 p2x = int(ud['cross'][0].pos[0]-m)
                 p2y = int((h+BUTTONH)-ud['cross'][1].pos[1])
-                self.rect = [min(self.fp1[0],p2x),min(self.fp1[1],p2y),abs(self.fp1[0]-p2x),abs(self.fp1[1]-p2y)]
+                self.rect = (min(self.fp1[0],p2x),min(self.fp1[1],p2y),abs(self.fp1[0]-p2x),abs(self.fp1[1]-p2y))
                 self.ids['framing'].state = "normal"
                 self.fState = 2
             self.remove_widget(ud['label'])
@@ -641,13 +642,13 @@ class GrabCutConsole(BoxLayout):
         if self.fState < 2:
             return
         elif self.fState == 2:
-            [x,y,w,h] = self.rect
+            (x,y,w,h) = self.rect
             rr = self.resizeratio
-            self.cropRect = [int(rr*x),int(rr*y),int(rr*w),int(rr*h)]
-            [x,y,w,h] = self.cropRect
+            self.cropRect = (int(rr*x),int(rr*y),int(rr*w),int(rr*h))
+            (x,y,w,h) = self.cropRect
             self.srcimg = self.origin[y:y+h,x:x+w]
             self.setsrcimg(self.srcimg,setfState=3)
-            self.rect = [MM,MM,w-2*MM,h-2*MM]
+            self.rect = (MM,MM,w-2*MM,h-2*MM)
         h,w = self.srcimg.shape[:2]
         self.ids['message'].text =  GRC_RES['OnCutting']
         rect = self.rect
