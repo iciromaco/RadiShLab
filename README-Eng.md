@@ -89,7 +89,8 @@ If you run them on Google Colaboratory, upload and run the notebook.
 
 ## How to
 ### Using GUI
-- [Google Colaboratory]()
+
+-  [Local Runtime](https://research.google.com/colaboratory/local-runtimes.html)
 
 ## Author
 - Seiichiro Dan： Osaka Gakuin Univ.

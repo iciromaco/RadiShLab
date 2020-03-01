@@ -134,7 +134,9 @@ Google Colaboratory で実行する場合は，ノートブックをアップロ
 
 ## How to
 ### GUI を使うプログラムの実行
-- [Google Colaboratory を自分のマシンで走らせる]()
+Google Colaboratory のプログラムは、通常はクラウド上の仮想Linuxマシンで実行されるため、ローカルPCのディスプレイリソースを使うプログラム、つまりウィンドウを開くようなプログラムが実行できませんが、ローカルPC上のランタイムと接続すればそのようなプログラムも実行可能です。
+
+-  [ローカル ランタイム](https://research.google.com/colaboratory/local-runtimes.html?hl=ja)
 
 
 ## Author
