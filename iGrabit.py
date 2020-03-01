@@ -39,19 +39,18 @@ GRC_RES ={
 'OnCutting':'カット中です。しばらくお待ちください',
 'Finished':'満足できるまで何度かCutをクリック or 1234でヒント情報を追加してCut',
 'Marking0':'Mark sure BG 確実に背景となる領域をマーク',
-'Marking1':'Mark sure FG 確実に対象である領域をマーク',
-# 'Marking2':'Mark probably BG 背景画素の多い領域をマーク',
-# 'Marking3':'Mark probably FG 前景がその多い領域ををマーク',
-'ChangeThickness':'輪郭線の線の太さが変更。次の描画の際に反映されます'
+'Marking1':'Mark sure FG 確実に対象である領域をマーク'
 }
 
-MENUITEMS = {'Open':"開く",'Save':"保存",'ToggleThickness':"描線の太さ変更",'ScreenShot':"スクリーンショット",'Quit':"終了"}
+FILEMENUS = {'Open':"開く",'Save':"保存",'ScreenShot':"スクリーンショット",'Quit':"終了"}
+PREFMENUS = {'ToggleSave':"保存対象:orig",'ToggleThickness':"描線の太さ:1"}
 
 DUMMYIMGBIN = '/res/paprika.pkl'
 # DUMMYIMGBIN = '/res/Primrose.pkl'
 BUTTONH = 32
 DUMMYIMG = rd.loadPkl(DUMMYIMGBIN)
 picdic = rd.loadPkl('./res/picdic.pkl')
+SAVEDIR = './results' # 'SaveDirFixed:True' の場合の保存場所  
 
 BUTTONH = 32 # hight of menu and buttons
 PENSIZE = 3 # size of drawing pen
@@ -63,10 +62,10 @@ MM = 5 # 枠指定した際、枠から MM ピクセルは背景としてマス�
 from kivy.utils import get_color_from_hex
 C2 = [
     get_color_from_hex('#FF00FF10'), # MAGENDA for BG
-    get_color_from_hex('#FFFFFF10') # WHITE for FG
+    get_color_from_hex('#FFFFFF10'), # WHITE for FG
 ]
 COLORS = []
-for i in range(2):
+for i in range(len(C2)):
     cc = C2[i]
     item = 'Color({},{},{},mode="rgba",group="{}")'.format(cc[0],cc[1],cc[2],cc[3],str(i))
     COLORS.append(item)
@@ -99,7 +98,12 @@ Builder.load_string('''
                     size_hint_x: 0.2
                     id: sp0
                     text: 'File'
-                    on_text: root.do_menu()
+                    on_text: root.do_filemenu()
+                Spinner:
+                    size_hint_x: 0.2
+                    id: sp1
+                    text: 'Preferences'
+                    on_text: root.do_prefmenu()
                 Label:
                     size_hint_x: 1
                     id: message
@@ -264,6 +268,11 @@ class GrabCutConsole(BoxLayout):
         super(GrabCutConsole,self).__init__(**kwargs)
         self.fState = 0 # 枠指定の状態 0:初期、1:1点指定済み、2:指定完了
         self.canvasgroups = []
+        self.conthick = CON_THICK
+        self.tobesaved = 'orig'
+        self.currentOpendir = os.getcwd() # カレントオープンディレクトリ
+        self.currentSavedir = os.getcwd() # カレントセーブディレクトリ
+        self.fixsavedir = True
         self.setsrcimg(DUMMYIMG,setfState=0)
         self.rect = (0,0,1,1) # 切り出し枠
         self.fp1 = [0,0] # 切り出し枠枠の1点目の座標
@@ -313,10 +322,13 @@ class GrabCutConsole(BoxLayout):
         self.mask = np.zeros(srcimg.shape[:2],np.uint8) # GrabCut 用マスクの初期化
         self.maskStack = [self.mask.copy()] # マスクのバックアップ
         self.silhouette = smask = rd.getMajorWhiteArea(gryimg,binary=True) # シルエット画像作成
-        img4 = cv2.cvtColor(srcimg,cv2.COLOR_BGR2BGRA) # アルファチャネル追加
-        img4[:,:,3] = (127*(smask//255)) +128 # 黒領域の透明化
-        self.outimg = rd.draw2(smask,img4,thickness=CON_THICK,color=CON_COLOR) # 輪郭描画
-        self.ids['outimg'].texture = cv2kvtexture(self.outimg,force3=False) # 仮結果画像
+        outimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2BGRA) # アルファチャネル追加
+        outimg[:,:,3] = (127*(smask//255)) + 64 # 黒領域の透明化
+        outimg = rd.draw2(smask,outimg,thickness=self.conthick,color=CON_COLOR) # 輪郭描画
+        self.ids['outimg'].texture = cv2kvtexture(outimg,force3=False) # 仮結果画像
+
+        srcimg = rd.draw2(smask,self.srcimg,thickness=self.conthick,color=CON_COLOR)
+        self.ids['srcimg'].texture = cv2kvtexture(srcimg,force3=False)        
 
         self.fState = setfState # 枠指定の状態初期化
         self.frame_or_mask = 0 # 0 -> mask は初期状態 1 -> セット済み
@@ -367,26 +379,38 @@ class GrabCutConsole(BoxLayout):
         self.setsrcimg(img,setfState=0)
 
     # メニュー処理
-    def do_menu(self):
-        global CON_THICK
+    def do_filemenu(self):
         if self.ids['sp0'].text == 'File':
             return
         else:
-            self.mode = self.ids['sp0'].text
+            mode = self.ids['sp0'].text
             self.ids['sp0'].text = 'File'
-        if self.mode == MENUITEMS['Open']: 
+        if mode == FILEMENUS['Open']: 
             self.show_load()
-        elif self.mode == MENUITEMS['Save']:
-            self.show_save()
-        elif self.mode == MENUITEMS['ScreenShot']:
+        elif mode == FILEMENUS['Save']:
+            if self.fState > 2:
+                self.show_save()
+        elif mode == FILEMENUS['ScreenShot']:
             grabimg = np.asarray(ImageGrab.grab())
             grabimg = cv2.cvtColor(grabimg,cv2.COLOR_RGB2BGR)
             self.setsrcimg(grabimg)
-        elif self.mode == MENUITEMS['ToggleThickness']:
-            CON_THICK = 1 if CON_THICK == 2 else 2
-            self.ids['message'].text ='ChangeThickness'
-        elif self.mode == MENUITEMS['Quit']:
+        elif mode == FILEMENUS['Quit']:
             sys.exit()
+
+    def do_prefmenu(self):
+        if self.ids['sp1'].text == 'Preferences':
+            return
+        else:
+            mode = self.ids['sp1'].text
+            self.ids['sp1'].text = 'Preferences'
+        if mode == PREFMENUS['ToggleThickness']:
+            self.conthick = 1 if self.conthick == 2 else 2
+            PREFMENUS['ToggleThickness'] = "{}{}".format(PREFMENUS['ToggleThickness'][:-1],self.conthick)
+        elif mode == PREFMENUS['ToggleSave']:
+            self.tobesaved = 'orig' if self.tobesaved == 'crop' else 'crop'
+            PREFMENUS['ToggleSave'] = PREFMENUS['ToggleSave'][:-4]+self.tobesaved             
+        self.ids['sp1'].values = (PREFMENUS[i] for i in PREFMENUS.keys())
+
 
     # ファイルウィンドウをポップした状態からの復帰
     def dismiss_popup(self):
@@ -401,6 +425,7 @@ class GrabCutConsole(BoxLayout):
                 self.ids['path0'].text = filepath[0]
                 srcimg = rd.imread(filepath[0])
                 self.setsrcimg(srcimg,setfState=0)
+                self.currentOpendir = os.path.dirname(filepath[0])
             self.dismiss_popup()
 
         self.keepsize = Window.size
@@ -409,30 +434,40 @@ class GrabCutConsole(BoxLayout):
         content = Factory.LoadDialog(load=load, cancel=self.dismiss_popup)
         self._popup = Popup(title="Load file", content=content,
                             size_hint=(0.9,0.9))
+        content.ids['filechooser'].path = self.currentOpendir
         self._popup.open()
         
     def show_save(self):
-        def save(path, filename):
+        def save(dir, filename):
             if filename !='':
-                path = os.path.join(path, filename)
-                path1 = os.path.splitext(path)
+                path = os.path.join(dir, filename) # パスを合成
+                path1 = os.path.splitext(path) # パスを拡張子より前と拡張子に分解
                 if not path1[1].lower() in ['.png','.jpg']:
-                    path = path1[0]+'.png'
-                self.ids['path0'].text = path
+                    path = path1[0]+'.png' # 強制的に png に変更
                 oh,ow = self.origin.shape[:2]
                 img = np.zeros((oh,ow),np.uint8)
                 (x,y,w,h) = self.cropRect
                 img[y:y+h,x:x+w] = self.silhouette
+                if self.tobesaved == 'crop':
+                    img = img[y:y+h,x:x+w] # シルエット画像
+                    simg = (self.origin.copy())[y:y+h,x:x+w] # オリジナル画像
+                    spath = path1[0]+"_Org.png"
+                    rd.imwrite(spath,simg)
                 rd.imwrite(path,img)
                 print("Write Image {} (x:{},y;{}),(w:{},h:{}))".format(path,x,y,w,h))
+                self.currentSavedir = os.path.dirname(path)
             self.dismiss_popup()
 
         self.keepsize = Window.size
         self.dialogflag = True
         Window.size = (600,600)
         content = Factory.SaveDialog(save=save, cancel=self.dismiss_popup)
-        self._popup = Popup(title="Save file", content=content,
+        filename = os.path.basename(self.ids['path0'].text)
+        savename = "Sil_"+os.path.splitext(filename)[0]+".png"
+        content.ids['filename'].text = savename
+        self._popup = Popup(title="Save file", content=content, 
                             size_hint=(0.9, 0.9))
+        content.ids['filechooser'].path = self.currentSavedir
         self._popup.open()
 
     # マウスカーソルが入力画像内にあるかどうかのテスト
@@ -564,8 +599,8 @@ class GrabCutConsole(BoxLayout):
                 # ud['drawings'] = Point(points=(touch.x, touch.y), source='res/picdicpics/particle.png',
                 ud['drawings'] = [Point(points=(x, touch.y), source='res/picdicpics/ic12_pennib.png', 
                                       pointsize=ps, group=g),
-                                 Point(points=(x+w+2*m, touch.y), source='res/picdicpics/ic12_pennib.png',
-                                      pointsize=ps, group=g)] 
+                                 Point(points=(x+w+2*m, touch.y), source='res/picdicpics/ic15_pennib64.png',
+                                      pointsize=ps, group=g)]                                  
                 self.drawPoint(ud['drawings'][0].points,colorvalue=DRAW_COLORS[mark])
         self.pushCV(g)
         touch.grab(self) # ドラッグの追跡を指定            
@@ -607,7 +642,7 @@ class GrabCutConsole(BoxLayout):
             if points:
                 try:
                     lp0 = ud['drawings'][0].add_point # add_point関数 を lp と alias している
-                    lp1 = ud['drawings'][1].add_point # 
+                    lp1 = ud['drawings'][1].add_point #
                     for idx in range(0, len(points), 2):
                         lp0(points[idx], points[idx + 1])
                         lp1(points[idx]+w+2*m, points[idx + 1])
@@ -687,12 +722,14 @@ class GrabCutConsole(BoxLayout):
             mask2 = rd.RDreform(mask2) # デフォルトで平滑化　詳細は rdlib4.py参照
         else:
             mask2 = rd.getMajorWhiteArea(mask2) # 最大白領域のみ抽出
-        img4 = cv2.cvtColor(img,cv2.COLOR_BGR2BGRA)
-        img4[:,:,3] = (127*(mask2//255))+64
-        img4 = rd.draw2(mask2,img4,thickness=CON_THICK,color=CON_COLOR)
-        self.ids['outimg'].texture = cv2kvtexture(img4,force3=False)
+        outimg = cv2.cvtColor(img,cv2.COLOR_BGR2BGRA)
+        outimg[:,:,3] = (127*(mask2//255))+64
+        outimg = rd.draw2(mask2,outimg,thickness=self.conthick,color=CON_COLOR)
+        self.ids['outimg'].texture = cv2kvtexture(outimg,force3=False)
+        srcimg = rd.draw2(mask2,self.srcimg,thickness=self.conthick,color=CON_COLOR)
+        self.ids['srcimg'].texture = cv2kvtexture(srcimg,force3=False)        
         self.silhouette = mask2
-        self.ids['message'].text =  GRC_RES['Finished']
+        self.ids['message'].text = GRC_RES['Finished']
 
 # アプリケーションメイン 
 class GrabCut(App):
@@ -700,13 +737,17 @@ class GrabCut(App):
 
     def build(self):
         mywidget = GrabCutConsole()
-        menus = (MENUITEMS[i] for i in MENUITEMS.keys())
-        mywidget.ids['sp0'].values = menus
+        sp0 = (FILEMENUS[i] for i in FILEMENUS.keys())
+        mywidget.ids['sp0'].values = sp0
+        sp1 = (PREFMENUS[i] for i in PREFMENUS.keys())
+        mywidget.ids['sp1'].values = sp1      
         self.title = 'GrabCut'
+        self.icon = 'res/picdicpics/ic99_radishB.png'
         return mywidget
 
     def on_pause(self):
         return True
 
-if __name__ == '__main__':
-   GrabCut().run()
+    
+if __name__ == "__main__":
+    GrabCut().run()
