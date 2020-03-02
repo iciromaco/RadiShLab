@@ -24,6 +24,9 @@ from kivy.graphics.texture import Texture
 from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle, Point, GraphicException
 
+sys.path.append('./rdlib')
+import pprint
+pprint.pprint(sys.path)
 import filedialog # self made library
 import rdlib4 as rd # self made library
 

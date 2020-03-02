@@ -133,12 +133,13 @@ def pltcol(img,layout="111"):
 def mkparaimage2(img1,img2):
     h1,w1 = img1.shape[:2]
     h2,w2 = img2.shape[:2]
+    img11 = np.zeros((h1,w1,3),'uint8')
     if img1.ndim == 2:
-        img11[:,:,0] = img11[:,:,1]=img11[:,:,2]=img1
+        img11[:,:,0] = img11[:,:,1] = img11[:,:,2] = img1
     else:
         img11=img1
     if img2.ndim == 2:
-        img22 = np.zeros((h2,w2,3))
+        img22 = np.zeros((h2,w2,3),'uint8')
         img22[:,:,0]=img22[:,:,1]=img22[:,:,2]=img2
     else:
         img22=img2
