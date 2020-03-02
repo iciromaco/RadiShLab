@@ -178,9 +178,10 @@ def makemargin(img,mr=1.5,mm = MinimamMargin):
 
 # マージンのカット
 # 白黒画像(0/255)が前提
-def cutmargin(img,mr=1.0,mm=0):
+def cutmargin(img,mr=1.0,mm=0,withRect=False):
     # default ではバウンディングボックスで切り出し
     # makemargin(切り出した画像,mr,mm)でマージンをつけた画像を返す
+    # withxy = True の場合は切り出しの rect も返す
     if len(img.shape) > 2:
         gryimg = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     else:
@@ -188,10 +189,12 @@ def cutmargin(img,mr=1.0,mm=0):
     bimg,data,ami = getMajorWhiteArea0(img=gryimg)
     x,y = data[ami][0:2]
     w,h = data[ami][2:4]
-    # bimg = bimg[data[ami][1]:data[ami][1]+data[ami][3],data[ami][0]:data[ami][0]+data[ami][2]] # マージンなしで切り出して返す
     bimg = bimg[y:y+h,x:x+w] # マージンなしで切り出して返す
     bimg = makemargin(bimg,mr=mr,mm=mm)
-    return bimg
+    if withRect:
+        return bimg,x,y,w,h
+    else:
+        return bimg
 
 # (4) 最大白領域の取り出し
 def getMajorWhiteArea0(img, order=1):
