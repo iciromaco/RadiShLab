@@ -296,6 +296,9 @@ def RDreform(img,order=1,ksize=0,shrink=SHRINK):
     # ガウスぼかしを適用してシルエットを滑らかにする
     # ガウスぼかしのカーネルサイズの決定
 
+    if img.ndim > 2:
+        img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+
     if img.sum() == 0: # 白領域が存在しない
         return img
     if ksize == 0:  # ぼかしのサイズが指定されていないときは最大白領域の面積を基準に定める

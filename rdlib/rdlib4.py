@@ -186,7 +186,10 @@ def cutmargin(img,mr=1.0,mm=0):
     else:
         gryimg = img.copy()
     bimg,data,ami = getMajorWhiteArea0(img=gryimg)
-    bimg = bimg[data[ami][1]:data[ami][1]+data[ami][3],data[ami][0]:data[ami][0]+data[ami][2]] # マージンなしで切り出して返す
+    x,y = data[ami][0:2]
+    w,h = data[ami][2:4]
+    # bimg = bimg[data[ami][1]:data[ami][1]+data[ami][3],data[ami][0]:data[ami][0]+data[ami][2]] # マージンなしで切り出して返す
+    bimg = bimg[y:y+h,x:x+w] # マージンなしで切り出して返す
     bimg = makemargin(bimg,mr=mr,mm=mm)
     return bimg
 
@@ -295,6 +298,9 @@ def RDreform(img,order=1,ksize=0,shrink=SHRINK):
 
     # ガウスぼかしを適用してシルエットを滑らかにする
     # ガウスぼかしのカーネルサイズの決定
+
+    if img.ndim > 2:
+        img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
 
     if img.sum() == 0: # 白領域が存在しない
         return img
