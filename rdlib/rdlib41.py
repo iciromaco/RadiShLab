@@ -520,11 +520,30 @@ def getContour(img):
     # 輪郭情報 主白連結成分の輪郭点列のみ返す関数
     contours, _hierarchy = cv2findContours34(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE) # 輪郭線追跡
     cnt00 = contours[np.argmax([len(c) for c in contours])] # 最も長い輪郭
-    return cnt00.squeeze().tolist()
+    return cnt00
+
+# 輪郭情報をただのリストに変換
+def contolist(con):
+    return con.squeeze().tolist()
+
+# リストを輪郭線構造体に変換
+def listtocon(list):
+    return np.array([[p] for p in list])
+
+# 輪郭の描画
+def drawContours(canvas,con,color=255,thickness=1):
+    if type(con) == np.ndarray:
+        if con.ndim == 3: # 普通の輪郭情報
+            cv2.drawContours(canvas,con,-1, color=color, thickness=thickness)
+        elif con.ndim == 2: # 片側のみの輪郭
+            cv2.polylines(canvas,[con],isClosed=False, color=color, thickness=thickness)
+    elif type(con) == list:
+        for c in con:
+            drawContours(canvas,c,color=255,thickness=1)
 
 # (13) 中心軸端点の推定
 from statistics import mean
-def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.4):
+def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8):
     # 入力　
     #   img シルエット画像
     #   con 輪郭点列　（なければ画像から作る）
@@ -541,9 +560,10 @@ def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.4):
     #   symbottoms 各輪郭点の中心軸下端らしさの評価データ
     
     if len(con)==0: # 点列がすでにあるなら時間短縮のために与えてもよい
-        con = getContour(img) # 輪郭点列のリスト
+        con = getContour(img)
+    conlist = con.squeeze().tolist() # 輪郭点列のリスト
     gx,gy,(x0,y0,w,h,a) = getCoG(img) # 重心とバウンディングボックス
-    N = len(con) # 輪郭点列の数)
+    N = len(conlist) # 輪郭点列の数)
     
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
     # オープニング（収縮→膨張）平滑化した図形を求める
@@ -554,7 +574,7 @@ def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.4):
         data = []
         vc = 0
         for n in range(1,irrend): # 距離が近すぎると誤差が大きいので３から
-            p0,p1,p2 = con[i],con[(i-n)%N],con[(i+n)%N]
+            p0,p1,p2 = conlist[i],conlist[(i-n)%N],conlist[(i+n)%N]
             v1 = (p2[0]-p1[0],p2[1]-p1[1]) # p1p2 ベクトル
             p3 = ((p1[0]+p2[0])/2,(p1[1]+p2[1])/2) # p3 = p1とp2の中点
             v2 = (p3[0]-p0[0],p3[1]-p0[1]) # p0p3 ベクトル
@@ -570,7 +590,7 @@ def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.4):
     # 上部の端点の探索
     symtops = []
     for i in range(N):
-        if con[i][1] - y0 >= top*h: # バウンディングボックス上端からの距離
+        if conlist[i][1] - y0 >= top*h: # バウンディングボックス上端からの距離
             val = -1
         else:
             val = calcval(i,irrend=int(topCD*HL))
@@ -584,7 +604,7 @@ def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.4):
     # 下部の端点の探索
     symbottoms = []
     for i in range(N):
-        if con[i][1] - y0 < bottom*h: # バウンディングボックス上端からの距離
+        if conlist[i][1] - y0 < bottom*h: # バウンディングボックス上端からの距離
             val = -1
         else:
             val = calcval(i,irrend=int(bottomCD*HL))
@@ -595,6 +615,83 @@ def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.4):
             symbottoms[i] = m
     bottomTip = np.argmin(symbottoms)
     return con,topTip,bottomTip,symtops,symbottoms
+
+
+## (14) 上端・末端情報に基づき輪郭線を左右に分割する
+def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10):
+    # drcimg: ダイコンの輪郭画像
+    # (dtopx,dtopy) dtopdr　上部削除円中心と半径
+    # (dbtmx,dbtmy) dbtmdr 　下部削除円中心と半径
+    
+    # 中心軸上端部と末端部に黒で円を描いて輪郭を２つに分離
+    canvas = rdcimg.copy()
+    # まず上端を指定サイズの円で削る
+    canvas = cv2.circle(canvas,(dtopx,dtopy),dtopdr,0,-1)  
+
+    def bracket2to1(cnt):    
+        cnt = [[x,y] for [[x,y]] in cnt]
+        return cnt
+        
+    while True:
+        # 次に末端を削る。末端は細いので、左右の輪郭が縮退している場合があり、削除円が小さいと輪郭が分離できず処理が進められない。
+        canvas = cv2.circle(canvas,(dbtmx,dbtmy),dbtmdr,0,-1) 
+    
+        # 輪郭検出すれば２つの輪郭が見つかるはず。
+        nLabels, _labelImages = cv2.connectedComponents(canvas)
+        if nLabels >= 3: # 背景領域を含めると３以上の領域になっていれば正しい
+            break
+        dbtmdr = dbtmdr + 2 # ラベル数が　３（背景を含むので３） にならないとすれば先端が削り足りない可能性が最も高いので半径を増やしてリトライ   
+        
+    contours, hierarchy = cv2findContours34(canvas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)    
+    maxcnt_i = np.argmax(np.array([len(c) for c in contours]))
+    # cnt0 = bracket2to1(contours[maxcnt_i]) # 最も長い輪郭
+    cnt0 = contours[maxcnt_i].squeeze() # 最も長い輪郭
+    contours = contours[:maxcnt_i]+contours[maxcnt_i+1:]
+    maxcnt_i = np.argmax(np.array([len(c) for c in contours]))
+    # cnt1 = bracket2to1(contours[maxcnt_i])
+    cnt1 = contours[maxcnt_i].squeeze()
+    
+    # 分岐のない線図形の輪郭は、トレースが端点から始まれば１箇所、途中からなら２箇所折り返しがある。端点と折り返し、
+    # もしくは、折り返しと折り返しの間を取り出すことで、重複のない輪郭データとする
+    i1 = 0
+    for i in range(int(len(cnt0))-1):
+        if np.all(cnt0[i-1] == cnt0[i+1]): 
+            i0,i1= i1,i
+    cnt0 = cnt0[i0:i1+1]
+    if cnt0[0][1] > cnt0[-1][1]: 
+        cnt0 = cnt0[::-1]
+    
+    i1 = 0
+    for i in range(int(len(cnt1))-1):
+        if np.all(cnt1[i-1] == cnt1[i+1]):
+            i0,i1= i1,i
+    cnt1 = cnt1[i0:i1+1]
+    if cnt1[0][1] > cnt1[-1][1]:
+        cnt1 = cnt1[::-1]
+    
+    # 中程の点を比べて左にある方を左と判定する。
+    c0 = cnt0[int(len(cnt0)/2)][0]
+    c1 = cnt1[int(len(cnt1)/2)][0]
+    if  c0 > c1: 
+            cntl,cntr = cnt1,cnt0
+    else:
+            cntr,cntl = cnt1,cnt0
+
+    return cntl, cntr
+
+# 与えられたダイコン画像の輪郭を左右に分割する
+def getCntPairWithImg(rdimg,top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8,topdtopdr=10,dbtmdr=10):
+    # drimg: ダイコンの画像
+    # top,bottom,topCD,bottomCD ：findTips() に与えるパラメータ
+    # dtopdr,dbtmdr:　getCntPairWithCntImg() に与えるパラメータ
+    con,topTip,bottomTip,symtops,symbottoms = findTips(rdimg,top=top,bottom=bottom,topCD=topCD, bottomCD=bottomCD)
+    conlist = contolist(con)
+    dtopx,dtopy = conlist[topTip]
+    dbtmx,dbtmy = conlist[bottomTip]
+    rdcimg = np.zeros_like(rdimg)  # 描画キャンバスの準備
+    cv2.drawContours(rdcimg,con, -1, 255,thickness=1)
+    conLeft,conRight = getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10)
+    return conLeft,conRight
 
 # (-1)変数データのストアとリストア
 import pickle
