@@ -45,7 +45,6 @@ def assertglobal(params,verbose=False):
             HARRIS_PARA = params[item] # ハリスコーナー検出で、コーナーとみなすコーナーらしさの指標  1.0 なら最大値のみ
         # elif item == 'CONTOURS_APPROX' :
             CONTOURS_APPROX = params[item] # 輪郭近似精度
-
         # elif item == 'GAUSSIAN_RATE1':
             GAUSSIAN_RATE1= params[item] # 先端位置を決める際に使うガウスぼかしの程度を決める係数
         # elif item == 'GAUSSIAN_RATE2':
@@ -56,11 +55,11 @@ def assertglobal(params,verbose=False):
         #     print(item, "=", params[item])
 
 assertglobal(params = {
-    # 'HARRIS_PARA':1.0, # ハリスコーナー検出で、コーナーとみなすコーナーらしさの指標  1.0 なら最大値のみ
+    'HARRIS_PARA':1.0, # ハリスコーナー検出で、コーナーとみなすコーナーらしさの指標  1.0 なら最大値のみ
     'CONTOURS_APPROX':0.0002, # 輪郭近似精度
     'SHRINK':0.8, # 0.75 # 収縮膨張で形状を整える時のパラメータ
-    # 'GAUSSIAN_RATE1':0.2, # 先端位置を決める際に使うガウスぼかしの程度を決める係数
-    # 'GAUSSIAN_RATE2':0.1, # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
+    'GAUSSIAN_RATE1':0.2, # 先端位置を決める際に使うガウスぼかしの程度を決める係数
+    'GAUSSIAN_RATE2':0.1, # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
     'UNIT':256, # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
     # 'RPARA':1.0 # 見込みサーチのサーチ幅全体に対する割合 ３０なら左に３０％右に３０％の幅を初期探索範囲とする
 })
@@ -408,6 +407,108 @@ def getRadish(img,order=1,shrink=SHRINK):
     silimg = RDreform_D(silimg,ksize=calcksize(silimg),shrink=shrink)
 
     return grabimg, silimg
+
+# 重心の位置を求める
+def getCoG(img):
+    _lnum, _img, cnt, cog = cv2.connectedComponentsWithStats(img)
+    areamax = np.argmax(cnt[1:,4])+1 # ０番を除く面積最大値のインデックス
+    c_x,c_y = np.round(cog[areamax]) # 重心の位置を丸めて答える
+    # x,y,w,h,areas = cnt[areamax] # 囲む矩形の x0,y0,w,h,面積
+    return c_x,c_y,cnt[areamax]
+
+# (9)重心と先端の位置を返す関数
+#   先端位置はシルエットをガウスぼかしで滑らかにした上で曲率の高い場所
+def getCoGandTip(src, showResult=False, useOldImage=True):    
+    # useOldImage = True なら元の画像を使って結果を表示、Falseなら滑らかにした画像
+    img = makemargin(src) # 作業用のマージンを確保
+    img2 = img.copy() # 加工前の状態を保存
+    # （あとでぼかすが、ぼかす前の）元画像の最大白領域の面積とバウンディングボックスを求める
+    c_x,c_y,(_x0,y0,w,h,areas) = getCoG(img)
+    print("1",_x0,y0,w,h,areas)
+    radishwidth = areas/np.sqrt(w*w+h*h) # 面積をバウンディングボックスの対角の長さで割ることで大根の幅を大まかに見積もる
+    # ガウスぼかしを適用してシルエットを滑らかにする
+    ksize = int(GAUSSIAN_RATE1*radishwidth)*2+1 # ぼかし量  元の図形の幅に応じて決める
+    img = cv2.GaussianBlur(img,(ksize,ksize),0) # ガウスぼかしを適用
+    # ２値化してシルエットを求め直す
+    _ret,img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY) # ２値化
+    
+    # コア全体の重心の位置を求める
+    c_x,c_y,(_x0,y0,_w,h,areas) = getCoG(img)
+    print("1",_x0,y0,w,h,areas)
+    # 全体を囲む矩形の中間の高さ
+    h2 = int(h/2)
+    # Harris コーナ検出
+    himg = np.float32(img)
+    himg = cv2.cornerHarris(himg,blockSize=3,ksize=3,k=0.04)
+    # コーナー度合いが最大の領域を求める
+    wimg = np.zeros_like(img)
+    wimg[himg>=HARRIS_PARA*himg[y0+h2:,:].max()]=255 # 下半分のコーナー度最大値の領域を２５５で塗りつぶす。
+    # 最大値に等しい値の領域が１点とは限らないし、いくつかの点の塊になるかもしれない
+    _lnum, _img, cnt, cog = cv2.connectedComponentsWithStats(wimg[y0+h2:,:])
+    areamax = np.argmax(cnt[1:,4])+1 # ０番を除く面積最大値のインデックス
+    t_x,t_y = np.round(cog[areamax]) # 重心の位置
+    t_y += y0+h2
+
+    # コーナーの場所のマーキング（デバッグ用）
+    # himg = cv2.dilate(himg,None,iterations = 3)
+    # img3[himg>=HARRIS_PARA*himg.max()]=[0,0,255]
+
+    if showResult: # 
+        if useOldImage:
+            img3 = cv2.cvtColor(img2,cv2.COLOR_GRAY2BGR)
+        else:
+            img3 = cv2.cvtColor(img,cv2.COLOR_GRAY2BGR)
+        plt.figure(figsize=(10,7),dpi=75)
+        img3=cv2.circle(img3,(int(t_x),int(t_y)),5,(0,255,0),2)
+        img3=cv2.circle(img3,(int(c_x),int(c_y)),5,(255,255,0),2)
+        x1,y1,x2,y2= getTerminalPsOnLine(c_x,c_y,t_x,t_y)
+        img3=cv2.line(img3,(x1,y1),(x2,y2),(255,0,255),2)                 
+        img3 = cv2.cvtColor(img3,cv2.COLOR_BGR2RGB)
+        plt.subplot(122), plt.imshow(img3)
+        plt.show()
+        
+    # 結果を返す (c_x,c_y) 重心　　(t_x,t_y)  先端の位置 img2 滑らかになったシルエット画像
+    dx = int(img.shape[1]-src.shape[1])/2
+    dy = int(img.shape[0]-src.shape[0])/2
+    c_x,c_y,t_x,t_y = c_x-dx, c_y-dy, t_x-dx, t_y-dy 
+    return c_x,c_y,t_x,t_y
+
+# (10) 回転した上でマージンをカットした画像を返す
+def roteteAndCutMargin(img,deg,c_x,c_y): 
+    # 非常に稀であるが、回転すると全体が描画領域外に出ることがあるので作業領域を広く確保
+    # mat = cv2.getRotationMatrix2D((x0,y0), deg-90, 1.0) # アフィン変換マトリクス
+    bigimg = makemargin(img,mr=10) # 作業用のマージンを確保
+    h3,w3 = img.shape[:2]
+    h4,w4 = bigimg.shape[:2]
+    
+    if deg != 0:
+        mat = cv2.getRotationMatrix2D((c_x+(w4-w3)/2,c_y+(h4-h3)/2), deg, 1.0) # アフィン変換マトリクス
+        # アフィン変換の適用
+        bigimg = cv2.warpAffine(bigimg, mat, (0,0),1)
+
+    # 再び最小矩形を求めて切り出す。ただし、マージンを５つける
+    _nLabels, _labelImages, data, _center = cv2.connectedComponentsWithStats(bigimg) 
+    ami = np.argmax(data[1:,4])+1 # もっとも面積の大きい連結成分のラベル番号　（１のはずだが念の為）
+    resultimg = bigimg[data[ami][1]-5:data[ami][1]+data[ami][3]+5,data[ami][0]-5:data[ami][0]+data[ami][2]+5]
+
+    return resultimg
+
+# (11) 重心から上の重心と、重心位置で断面の中心を返す関数
+#   この関数ではぼかしは行わない。
+def getUpperCoGandCoC(src):
+    _lnum, _img, cnt, cog = cv2.connectedComponentsWithStats(src)
+    ami = np.argmax(cnt[1:,4])+1 
+    _c_x,c_y = np.round(cog[ami]) # 重心
+    halfimg = src[:int(c_y),:].copy() # 重心位置から上を取り出す。
+    _lnum, _img, cnt, cog = cv2.connectedComponentsWithStats(halfimg)
+    ami =  np.argmax(cnt[1:,4])+1 
+    uc_x,uc_y = np.round(cog[ami]) # 上半分の重心
+    sliceindex = np.where(src[int(c_y)]!=0) # 重心断面の白画素数位置
+    left = np.min(sliceindex) #  断面における最も左の白画素位置
+    right = np.max(sliceindex) #  断面における最も右の白画素位置
+    ccx = int((left+right)/2) #  断面中央位置
+    return uc_x,uc_y,ccx,c_y
+
 
 # 変数データのストアとリストア
 import pickle
