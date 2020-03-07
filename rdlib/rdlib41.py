@@ -11,7 +11,6 @@ from sympy.abc import a,b,c
 # init_session()
 from sympy import var
 
-
 # OpenCV のファイル入出力が2バイト文字パス名に対応していないための対処
 # （参考）https://qiita.com/SKYS/items/cbde3775e2143cad7455
 def imread(filename, flags=cv2.IMREAD_COLOR, dtype=np.uint8):
@@ -91,6 +90,7 @@ def collectimagepaths(path, imgexts=['jpg','jpge','png']):
     for x in allfiles:
         if os.path.splitext(x)[-1][1:] in imgexts:
             imgfiles.append(x)
+    imgfiles.sort() # ファイル名の順に並び替える
     return imgfiles
 
 # 画像の収集
@@ -187,7 +187,7 @@ def makemargin(img,mr=1.5,mm = MinimamMargin):
 def cutmargin(img,mr=1.0,mm=0,withRect=False):
     # default ではバウンディングボックスで切り出し
     # makemargin(切り出した画像,mr,mm)でマージンをつけた画像を返す
-    # withxy = True の場合は切り出しの rect も返す
+    # withRect = True の場合は切り出しの rect も返す
     if len(img.shape) > 2:
         gryimg = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     else:
@@ -210,6 +210,9 @@ def getMajorWhiteArea0(img, order=1):
     if img.ndim == 3:
         img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY) # カラーの場合はグレイ化する
     _ret,bwimg = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU) # ２値化
+    # 背景が最大の領域であるという前提を用いているが、そうでない可能性があるのでいったん黒を付け足す
+    limg = np.zeros_like(bwimg)
+    bwimg = np.c_[bwimg,limg]
     _lnum, labelimg, cnt, _cog =cv2.connectedComponentsWithStats(bwimg) # ラベリング
     areaindexs = np.argsort(-cnt[:,4])
     if len(areaindexs) > order:
@@ -218,7 +221,8 @@ def getMajorWhiteArea0(img, order=1):
         areaindex = areaindexs[-1] # 指定した番号のインデックスが存在しないなら一番小さい領域番号
     labelimg[labelimg != areaindex] = 0
     labelimg[labelimg == areaindex] = 255
-    labelimg = labelimg.astype(np.uint8)
+    w = labelimg.shape[1]//2
+    labelimg = labelimg.astype(np.uint8)[:,:w]
     return labelimg, cnt, areaindex
 
 def getMajorWhiteArea(img, order=1, dilation=0, binary=False):
@@ -386,7 +390,7 @@ def mkGCmask(img, order=1):
 
     return mask1,mask2
 
-# 大根部分だけセグメンテーションし、結果とマスクを返す
+# (10) 大根部分だけセグメンテーションし、結果とマスクを返す
 def getRadish(img,order=1,shrink=SHRINK):
     # 白領域の面積が order で指定した順位の領域を抜き出す
 
@@ -415,7 +419,7 @@ def getRadish(img,order=1,shrink=SHRINK):
 
     return grabimg, silimg
 
-# 重心の位置を求める
+# (11) 重心の位置を求める
 def getCoG(img):
     _lnum, _img, cnt, cog = cv2.connectedComponentsWithStats(img)
     areamax = np.argmax(cnt[1:,4])+1 # ０番を除く面積最大値のインデックス
@@ -423,66 +427,8 @@ def getCoG(img):
     # x,y,w,h,areas = cnt[areamax] # 囲む矩形の x0,y0,w,h,面積
     return c_x,c_y,cnt[areamax]
 
-# (9)重心と先端の位置を返す関数
-#   先端位置はシルエットをガウスぼかしで滑らかにした上で曲率の高い場所
-def getCoGandTip(src, showResult=False, useOldImage=True):    
-    # useOldImage = True なら元の画像を使って結果を表示、Falseなら滑らかにした画像
-    img = makemargin(src) # 作業用のマージンを確保
-    img2 = img.copy() # 加工前の状態を保存
-    # （あとでぼかすが、ぼかす前の）元画像の最大白領域の面積とバウンディングボックスを求める
-    c_x,c_y,(_x0,y0,w,h,areas) = getCoG(img)
-    print("1",_x0,y0,w,h,areas)
-    radishwidth = areas/np.sqrt(w*w+h*h) # 面積をバウンディングボックスの対角の長さで割ることで大根の幅を大まかに見積もる
-    # ガウスぼかしを適用してシルエットを滑らかにする
-    ksize = int(GAUSSIAN_RATE1*radishwidth)*2+1 # ぼかし量  元の図形の幅に応じて決める
-    print(radishwidth,GAUSSIAN_RATE1,ksize)
-    img = cv2.GaussianBlur(img,(ksize,ksize),0) # ガウスぼかしを適用
-    # ２値化してシルエットを求め直す
-    _ret,img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY) # ２値化
-    
-    # コア全体の重心の位置を求める
-    c_x,c_y,(_x0,y0,_w,h,areas) = getCoG(img)
-    print("2",_x0,y0,w,h,areas)
-    # 全体を囲む矩形の中間の高さ
-    h2 = int(h/2)
-    # Harris コーナ検出
-    himg = np.float32(img)
-    himg = cv2.cornerHarris(himg,blockSize=3,ksize=3,k=0.04)
-    # コーナー度合いが最大の領域を求める
-    wimg = np.zeros_like(img)
-    wimg[himg>=HARRIS_PARA*himg[y0+h2:,:].max()]=255 # 下半分のコーナー度最大値の領域を２５５で塗りつぶす。
-    # 最大値に等しい値の領域が１点とは限らないし、いくつかの点の塊になるかもしれない
-    _lnum, _img, cnt, cog = cv2.connectedComponentsWithStats(wimg[y0+h2:,:])
-    areamax = np.argmax(cnt[1:,4])+1 # ０番を除く面積最大値のインデックス
-    t_x,t_y = np.round(cog[areamax]) # 重心の位置
-    t_y += y0+h2
-
-    # コーナーの場所のマーキング（デバッグ用）
-    # himg = cv2.dilate(himg,None,iterations = 3)
-    # img3[himg>=HARRIS_PARA*himg.max()]=[0,0,255]
-
-    if showResult: # 
-        if useOldImage:
-            img3 = cv2.cvtColor(img2,cv2.COLOR_GRAY2BGR)
-        else:
-            img3 = cv2.cvtColor(img,cv2.COLOR_GRAY2BGR)
-        plt.figure(figsize=(10,7),dpi=75)
-        img3=cv2.circle(img3,(int(t_x),int(t_y)),5,(0,255,0),2)
-        img3=cv2.circle(img3,(int(c_x),int(c_y)),5,(255,255,0),2)
-        x1,y1,x2,y2= getTerminalPsOnLine(c_x,c_y,t_x,t_y)
-        img3=cv2.line(img3,(x1,y1),(x2,y2),(255,0,255),2)                 
-        img3 = cv2.cvtColor(img3,cv2.COLOR_BGR2RGB)
-        plt.subplot(122), plt.imshow(img3)
-        plt.show()
-        
-    # 結果を返す (c_x,c_y) 重心　　(t_x,t_y)  先端の位置 img2 滑らかになったシルエット画像
-    dx = int(img.shape[1]-src.shape[1])/2
-    dy = int(img.shape[0]-src.shape[0])/2
-    c_x,c_y,t_x,t_y = c_x-dx, c_y-dy, t_x-dx, t_y-dy 
-    return c_x,c_y,t_x,t_y
-
-# (10) 回転した上でマージンをカットした画像を返す
-def roteteAndCutMargin(img,deg,c_x,c_y): 
+# (12) 回転した上でマージンをカットした画像を返す
+def rotateAndCutMargin(img,deg,c_x,c_y): 
     # 非常に稀であるが、回転すると全体が描画領域外に出ることがあるので作業領域を広く確保
     # mat = cv2.getRotationMatrix2D((x0,y0), deg-90, 1.0) # アフィン変換マトリクス
     bigimg = makemargin(img,mr=10) # 作業用のマージンを確保
@@ -494,43 +440,86 @@ def roteteAndCutMargin(img,deg,c_x,c_y):
         # アフィン変換の適用
         bigimg = cv2.warpAffine(bigimg, mat, (0,0),1)
 
-    # 再び最小矩形を求めて切り出す。ただし、マージンを５つける
+    # 再び最小矩形を求めて切り出す。
     _nLabels, _labelImages, data, _center = cv2.connectedComponentsWithStats(bigimg) 
     ami = np.argmax(data[1:,4])+1 # もっとも面積の大きい連結成分のラベル番号　（１のはずだが念の為）
+    resultimg = bigimg[data[ami][1]:data[ami][1]+data[ami][3],data[ami][0]:data[ami][0]+data[ami][2]]
 
+    return resultimg
 
-# (11) 重心から上の重心と、重心位置で断面の中心を返す関数
-#   この関数ではぼかしは行わない。
-def getUpperCoGandCoC(src):
-    _lnum, _img, cnt, cog = cv2.connectedComponentsWithStats(src)
-    ami = np.argmax(cnt[1:,4])+1 
-    _c_x,c_y = np.round(cog[ami]) # 重心
-    halfimg = src[:int(c_y),:].copy() # 重心位置から上を取り出す。
-    _lnum, _img, cnt, cog = cv2.connectedComponentsWithStats(halfimg)
-    ami =  np.argmax(cnt[1:,4])+1 
-    uc_x,uc_y = np.round(cog[ami]) # 上半分の重心
-    sliceindex = np.where(src[int(c_y)]!=0) # 重心断面の白画素数位置
-    left = np.min(sliceindex) #  断面における最も左の白画素位置
-    right = np.max(sliceindex) #  断面における最も右の白画素位置
-    ccx = int((left+right)/2) #  断面中央位置
-    return uc_x,uc_y,ccx,c_y
+# (13) 大きさを正規化したシルエットの生成
+def getNormSil(img,tiltzero=True,mr=1.5,unitSize=UNIT):
+    #  img 入力画像
+    #  tiltzero  True なら傾き補正する
+    #  mr マージンなし画像に対するマージンあり画像のサイズ比率
+    #  unitSize バウンダリの長辺をこの値にする
+    
+    img = img.copy()
+    
+    if tiltzero: # 傾き補正する
+        img = tiltZeroImg(img)
+        
+    return makeUnitImage(img,mr=mr,unitSize=UNIT)
+    
+# (14) 長辺の mr 倍サイズの枠の中央に対象を配置した画像を返す
+def makeUnitImage(img,mr=1.5,unitSize=UNIT):
+    # 長辺が UNIT ピクセルになるよう縮小し、(mrxUNIT)x(mrxUNIT)の画像の中央に配置する。
+    h,w = img.shape[:2]
+    s_r = unitSize/w if w > h else unitSize/h #  縮小率    
+    rsh,rsw = int(s_r*h),int(s_r*w) # リサイズ後のサイズ
+    x0 = int((mr*unitSize-rsw)/2) # はめ込みの基準点
+    y0 = int((mr*unitSize-rsh)/2)
+    canvas = np.zeros((int(mr*unitSize),int(mr*unitSize)),np.uint8) # キャンバスの確保
+    canvas[y0:y0+rsh,x0:x0+rsw] = cv2.resize(img,(rsw,rsh)) # リサイズして中央にはめ込み
+    return canvas
+    
+# (15) 近似楕円の軸方向が水平垂直となるように回転補正した画像を求める
+def tiltZeroImg(img):
+    h,w = img.shape[:2]
+    img0,rx,ry,rw,rh = cutmargin(img,mm=0,withRect=True) # バウンダリボックスで切り出し
+    cnt = cv2findContours34(img0, 1, 2)[0][0] # 輪郭線抽出
+    (gx0,gy0),(sr,lr),ang = cv2.fitEllipse(cnt) # 楕円近似
+    #  fitEllipse の返す角度は長軸を垂直に立てるための角度である。
+    #  もしも幅が高さより大きい個体であれば、回転角を９０度減ずる
+    ang = ang-90 if rw > rh else ang
 
-# (12) 輪郭点列を得る
+    # 重心の偏りぐあいを記録
+    ghight0  = abs(rh/2 - gy0) # シルエット重心と矩形中心のy方向距離
+    gright0  = abs(rw/2 - gx0) # シルエット重心と矩形中心のx方向距離
+
+    # 近似楕円の軸が水平垂直となるよう重心周りに回転を加えた図形を求める
+    img1 = rotateAndCutMargin(img0,ang,gx0,gy0)
+
+    # あらためて重心位置を求める
+    gx1,gy1,(_,_,w1,h1,_) = getCoG(img1)
+
+    # 180度回転してしまう場合があるので、重心の偏りぐあいで判断し、必要なら回転
+    if ghight0 > gright0 : # 重心の上下の偏りがと左右の偏りより大きい場合
+        if (rh/2 > gy0) != (h1/2 > gy1): # 上下の
+            img1 = np.rot90(np.rot90(img1))
+    else:
+        if (rw/2 > gx0) != (w1/2 > gx1):
+            img1 = np.rot90(np.rot90(img1)) 
+            
+    return img1
+
+# (16) 輪郭点列を得る
 def getContour(img):
     # 輪郭情報 主白連結成分の輪郭点列のみ返す関数
     contours, _hierarchy = cv2findContours34(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE) # 輪郭線追跡
     cnt00 = contours[np.argmax([len(c) for c in contours])] # 最も長い輪郭
     return cnt00
 
-# 輪郭情報をただのリストに変換
+# (17) 輪郭表現の相互変換
+# 輪郭構造体をただのリストに変換  -> [[1,2],[2,3]....]
 def contolist(con):
     return con.squeeze().tolist()
 
-# リストを輪郭線構造体に変換
+# リストを輪郭線構造体に変換  -> array([[[1,2]],[[2,3]],...])
 def listtocon(list):
     return np.array([[p] for p in list])
 
-# 輪郭の描画
+# (18)  輪郭の描画
 def drawContours(canvas,con,color=255,thickness=1):
     if type(con) == np.ndarray:
         if con.ndim == 3: # 普通の輪郭情報
@@ -541,7 +530,7 @@ def drawContours(canvas,con,color=255,thickness=1):
         for c in con:
             drawContours(canvas,c,color=255,thickness=1)
 
-# (13) 中心軸端点の推定
+# (19) 中心軸端点の推定
 from statistics import mean
 def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8):
     # 入力　
@@ -617,7 +606,7 @@ def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8):
     return con,topTip,bottomTip,symtops,symbottoms
 
 
-## (14) 上端・末端情報に基づき輪郭線を左右に分割する
+## (20) 上端・末端情報に基づき輪郭線を左右に分割する
 def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10):
     # drcimg: ダイコンの輪郭画像
     # (dtopx,dtopy) dtopdr　上部削除円中心と半径
@@ -679,7 +668,7 @@ def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10):
 
     return cntl, cntr
 
-# 与えられたダイコン画像の輪郭を左右に分割する
+# (21) 与えられたダイコン画像の輪郭を左右に分割する
 def getCntPairWithImg(rdimg,top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8,topdtopdr=10,dbtmdr=10):
     # drimg: ダイコンの画像
     # top,bottom,topCD,bottomCD ：findTips() に与えるパラメータ
