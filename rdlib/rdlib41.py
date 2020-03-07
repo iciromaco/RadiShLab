@@ -805,7 +805,7 @@ def fitBezierCurveN(points,precPara=0.01,N=5, debugmode=False):
         if end-(nmid+1) >=1 : # 右にまだ未処理の点があるなら処理する
             refineTparaR(pl,tpara,nmid+1,end,nearest_i+1,smax,onpoints) 
                 
-#ここまで確認
+    #ここまで確認
 
     trynum = 0
     while True:
