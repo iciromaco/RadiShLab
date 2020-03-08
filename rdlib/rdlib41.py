@@ -728,7 +728,7 @@ def fitBezierCurveN(points,precPara=0.01,N=5, debugmode=False):
     for i in range(0,N+1):
         bezN = bezN + binomial(N,i)*v**(N-i)*t**i*P[i]
 
-    # もし、inf データが含まれるならば、補完する
+    # もし、inf データが含まれるならば、補間する
     points = eraseinf(points) # 無限大の値が含まれる場合、補間
 
     # 初期の推定パラメータの決定
