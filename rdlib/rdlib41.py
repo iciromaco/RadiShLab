@@ -957,8 +957,14 @@ class BezierCurve:
         
 # (24) ベジエフィッティングの結果の描画
 def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=None,cpc=None, 
-             cntL=[],cntR=[],cntC=None, ladder=None,PosL=[],PosR=[],PosC=[],n_samples=20,saveImage=False,savepath=""):
-    
+             cntL=[],cntR=[],cntC=None, ladder=None,PosL=[],PosR=[],PosC=[],n_samples=20,saveImage=False,savepath="",cchange=False):
+
+    cmap = plt.get_cmap("tab10")
+    if not cchange :
+        ct = [0,0,0]
+    else:
+        ct = [1,2,3]
+
     # いわゆる自乗誤差の一般式
     s,t= symbols('s,t')
     
@@ -979,7 +985,7 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=N
     if bezL != None:
         plotx = [bezXl.subs(t,tp) for tp in tplins50 ]
         ploty = [bezYl.subs(t,tp) for tp in tplins50 ]
-        plt.plot(plotx,ploty,color = 'red')  
+        plt.plot(plotx,ploty,color = cmap(ct[0]) ) 
     if len(cntL) >0:
         plt.scatter(cntL[:,0],cntL[:,1],color ='blue',marker = '.') #  サンプル点
     if cpl != None:
@@ -989,7 +995,7 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=N
     if bezR != None:
         plotx = [bezXr.subs(t,tp) for tp in tplins50 ]
         ploty = [bezYr.subs(t,tp) for tp in tplins50 ]
-        plt.plot(plotx,ploty,color = 'red')  
+        plt.plot(plotx,ploty,color = cmap(ct[1]))  
     if len(cntR)  > 0:
         plt.scatter(cntR[:,0],cntR[:,1],color ='blue',marker = '.') #  サンプル点
     if cpr != None:
@@ -999,7 +1005,7 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=N
     if bezC != None:
         plotx = [bezXc.subs(t,tp) for tp in tplins50 ]
         ploty = [bezYc.subs(t,tp) for tp in tplins50 ]
-        plt.plot(plotx,ploty,color = 'red')  
+        plt.plot(plotx,ploty,color = cmap(ct[2]))  
         if cntC != None:
             plt.scatter(cntC[:,0],cntC[:,1],color ='blue',marker = '.') #  サンプル点
         if cpc != None:
