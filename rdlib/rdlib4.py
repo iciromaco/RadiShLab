@@ -693,39 +693,31 @@ def getSamples(cont,N=20,mode='Equidistant'):
         return cont[list(map(int,np.linspace(0, len(cont)-1,N)))]
 
 #  (23) N次ベジエフィッティング
-class BezierCurve:
-    
-    # samples:標本点の座標の配列 （ opencv 輪郭形式、numpy 配列 ）
-    # initialpara:初期の仮パラメータ値
-    # N:ベジエ曲線の次数, precPara:近似精度（繰返し計算の打ち切りしきい値）
-    # order 次数、openmode: 両端点フリー、Falseの時は両端点固定
-    
-    precPara = 0.1 # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
-    errorThres = 0.5 # 繰り返し打ち切りを決める、あてはめ誤差の平均値に対するしきい値
-    paraResolution = 0.001 # サンプル点の最寄り点探索の解像度
-    
-    debugmode=False
+from sympy import diff,Symbol,Matrix,symbols,solve,simplify,binomial
+from sympy.abc import a,b,c
+from sympy import var
+from statistics import mean
 
-    # インスタンスの初期化
-    def __init__(self, samples, N=5, initialPara=[], openmode=False):
+class BezierCurve: 
+    # インスタンス変数
+    # f [X座標関数式,Y座標関数式]
+    # samples 標本点のリスト
+    # ts 標本点に対するベジエパラメータ
+
+    # クラス変数
+    driftThres = 0.03 # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
+    errorThres = 0.01 # 繰り返しを打ち切る誤差変化量
+    dCount = 5 # ２分探索の打ち切り回数
+    debugmode = False
+    openmode = False
+
+    def __init__(self, N=5, samples = [], initialPara=[]):
+        self.samples = samples # 標本点
+        self.initialPara = initialPara # パラメータ初期値
+        # self.f  ベジエ曲線の式 = [fx,fy]
+        # 'px0','px1'... が制御点のX座標を表すシンボル
+        # 'py0','py1'...が制御点のY座標を表すシンボル
         self.N = N
-        self.samples = samples # 標本点のリスト（opencv の輪郭点表現形式準拠、numpy 配列）
-        self.openmode = openmode
-        
-        # もし、inf データが含まれるならば、補間する（計算で求められた座標データがサンプルの場合にありうる）
-        samples = self.interporation(samples) 
-        # パラメータの初期化
-        if len(initialPara) > 0:  # 引数として与えられているならそれを使う
-            if len(initialPara) != len(samples): # サンプル数と一致しない
-                print("DATA NUMBER MISMATCH")
-                sys.exit()
-            else:
-                self.tpara = initialPara
-        else: # 初0～1をリニアに刻む
-            axlength = np.array(cv2.arcLength(samples, False)) # 点列に沿って測った総経路長
-            # 各サンプル点の始点からの経路長の全長に対する比を、各点のベジエパラメータの初期化とする
-            self.tpara = [cv2.arcLength(samples[:i+1],False)  for i in range(len(samples))]/axlength
-            
         # ベジエ曲線を定義するのに使うシンボルの宣言
         P = [Symbol('P' + str(i)) for i in range(N+1)] # 制御点を表すシンボル（数値変数ではない）
         px = [var('px'+str(i)) for i in range(N+1)] # 制御点のx座標を表すシンボル
@@ -734,14 +726,19 @@ class BezierCurve:
         v = var('v')
         for i in range(N+1):     # 制御点のシンボルと成分の対応付け
             P[i] = Matrix([px[i],py[i]]) 
-            
         # N次のベジエ曲線の定義式制御点 P0～PN とパラメータ　　t　の関数として定義
         v = 1-t
-        bezN = Matrix([0,0])
+        bezf = Matrix([0,0])
         for i in range(0,N+1):
-            bezN = bezN + binomial(N,i)*v**(N-i)*t**i*P[i]
-        self.bezN = bezN
-            
+            bezf = bezf + binomial(N,i)*v**(N-i)*t**i*P[i]
+        self.f = bezf
+
+        # もし、inf データが含まれるならば、補間する（計算で求められた座標データがサンプルの場合にありうる）
+        if len(samples)>0:
+            self.samples = self.interporation(samples)
+        # 初期パラメータのセット
+        self.ts = self.assignPara2Samples(initialPara=initialPara)
+ 
     # 解なしの部分に np.inf が入っているのでその抜けを前後から推定してデータを埋める
     def interporation(self,plist):
         # plist : np.inf が混入している可能性のある座標の numpy array
@@ -757,171 +754,209 @@ class BezierCurve:
                         plist = np.r_[plist[0:i],[plist[i-2]-2*(plist[i-2]-plist[i-1])],plist[i+1:]]
         print("")
         return plist
-    
-    # 曲線 linefunc(t) 上で座標(x,y) に最も近い点のパラメータを2分サーチして探す関数
-    def nearest(self,x,y,linefunc,pmin,pmax):
-        t= symbols('t')
-        (funcX,funcY) = linefunc # funcX,funcY は t の関数
-        
-        mid = (pmin+pmax)/2
-        p = np.array([x,y])
 
-        def us(p):
-            x,y=p
-            return np.array([float(x),float(y)])
-
-        ps = funcX.subs(t,pmin),funcY.subs(t,pmin) # パラメータ最小点
-        pm = funcX.subs(t,mid),funcY.subs(t,mid)  # 中間パラメータ点
-        pe = funcX.subs(t,pmax),funcY.subs(t,pmax)  # パラメータ最大点
-        ls = np.linalg.norm(us(ps) - p)
-        lm = np.linalg.norm(us(pm) - p)
-        le = np.linalg.norm(us(pe) - p)
-        if pmax-pmin < BezierCurve.paraResolution : # 探索範囲がこのパラメータより狭くなれば探索終了
-            m = min([ls,lm,le])
-            if m == ls:
-                return pmin
-            elif m == le:
-                return pmax
-            else:
-                return mid
-        else:
-            if ls < le:
-                return self.nearest(x,y,linefunc,pmin,mid)
-            else:
-                return self.nearest(x,y,linefunc,mid,pmax)    
-
-    #  パラメトリック曲線　linefunc 上で各サンプル点に最寄りの点のパラメータを対応づける
-    def refineTparaN(self,linefunc,stt,end,pmin,pmax):
-        if stt == end:
+    def assignPara2Samples(self,initialPara=[]):
+        samples = self.samples
+        if len(samples)==0:
             return
-        samples = self.samples
-        nmid = (stt+end)//2  # 探索対象の中央のデータを抜き出す
-        px,py = self.samples[nmid] # 中央のデータの座標
-        midpara = self.nearest(px,py,linefunc,pmin,pmax)
-        self.tpara[nmid] = midpara
-        self.refineTparaN(linefunc,stt,nmid,pmin,midpara-BezierCurve.paraResolution)
-        self.refineTparaN(linefunc,nmid+1,end,midpara+BezierCurve.paraResolution,pmax)
+        if len(initialPara) > 0:  # 引数として与えられているならそれを使う
+            if len(initialPara) != len(samples): # サンプル数と一致しない
+                print("DATA NUMBER MISMATCH")
+                sys.exit()
+            else:
+                self.ts = initialPara
+        else: # パラメータが与えられていない場合、0～1をリニアにサンプル数で刻む
+            axlength = np.array(cv2.arcLength(samples, False)) # 点列に沿って測った総経路長
+            # 各サンプル点の始点からの経路長の全長に対する比を、各点のベジエパラメータの初期化とする
+            return [cv2.arcLength(samples[:i+1],False)  for i in range(len(samples))]/axlength
 
-    # 曲線あてはめの実行
-    def fit(self):
+    # 制御点のi番目を代入 
+    def setACP(self,f,i,cp):
+        [x,y] = cp
+        sx = var('px'+str(i))
+        sy = var('py'+str(i))
+        f[0]=f[0].subs(sx,x)
+        f[1]=f[1].subs(sy,y)
+        return f
 
-        samples = self.samples
-        openmode = self.openmode
-        N = self.N
-        bezN = self.bezN
+    # 制御点座標をセットして関数式を完成
+    def setCPs(self,cps):
+        f = self.f.copy()
+        for i in range(self.N+1):
+            self.setACP(f,i,cps[i])
+        return f
 
-        # ベジエ曲線を定義するのに使うシンボルの宣言
-        s,t= symbols('s,t')
-        dx_ = [var('dx_'+str(i)) for i in range(N+1)] # 制御点におけるx微係数を表すシンボル
-        dy_ = [var('dy_'+str(i)) for i in range(N+1)] # 制御点におけるy微係数を表すシンボル
-        P = [Symbol('P' + str(i)) for i in range(N+1)] # 制御点を表すシンボル（数値変数ではない）
-        px = [var('px'+str(i)) for i in range(N+1)] # 制御点のx座標を表すシンボル
-        py = [var('py'+str(i)) for i in range(N+1)] # 制御点のy座標を表すシンボル
-        
+    # ベジエ近似レベル０（標本点のパラメータを等間隔と仮定してあてはめ）
+    def fit0(self):
+        samples = self.samples # 標本点
+        x,y = samples[:,0],samples[:,1] # 標本点のｘ座標列とｙ座標列
+        t = self.ts # 標本点に結びつけられたパラメータ
+        N = self.N # ベジエの次数
+        M = len(samples) # サンプル数
+        # バーンスタイン関数の定義
+        def bs(n,t): 
+            return binomial(N,n)*(1-t)**(N-n)*t**n
+        # 標本点と、それに対応する曲線上の点の距離の総和を最小化するような制御点を求める
+        if BezierCurve.openmode:
+            exA = np.array([[sum([bs(i,t[k])*bs(n,t[k]) for k in range(M)]) for i in range(N+1)] for n in range(N+1)],'float64')
+            exBX = np.array([[sum([x[k]*bs(n,t[k]) for k in range(M)])] for n in range(N+1)],'float64')
+            exBY = np.array([[sum([y[k]*bs(n,t[k]) for k in range(M)])] for n in range(N+1)],'float64')
+            cpsx = np.linalg.solve(exA, exBX)
+            cpsy = np.linalg.solve(exA, exBY)
+
+        else: # 両端点をサンプルの両端に固定する場合
+            exA = np.array([[sum([bs(i,t[k])*bs(n,t[k]) for k in range(M)]) for i in range(1,N)] for n in range(1,N)],'float64')
+            exBX = np.array([[sum([ bs(n,t[k])*(x[k]-x[0]*(1-t[k])**N - x[-1]*t[k]**N) for k in range(M)])] for n in range(1,N)],'float64')
+            exBY = np.array([[sum([ bs(n,t[k])*(y[k]-y[0]*(1-t[k])**N - y[-1]*t[k]**N) for k in range(M)]) ] for n in range(1,N)],'float64')
+            cpsx = np.r_[[[x[0]]],np.linalg.solve(exA, exBX), [[x[-1]]]]
+            cpsy = np.r_[ [[y[0]]],np.linalg.solve(exA, exBY),[[y[-1]]]]
+        cps = list(zip(cpsx,cpsy))
+
+        return cps,self.setCPs(cps)
+
+    # ベジエ近似　パラメータの繰り返し再調整あり
+    def fit1(self):
+        sps = self.samples
         # 最小自乗法の目的関数の一般式
         # 自乗誤差の一般式
+        s,t= symbols('s,t')
         loss1 = (s - t)**2        
         def lossfunc(listA,listB):
             return sum([loss1.subs([(s,a),(t,b)]) for (a,b) in zip(listA,listB)])/2
-        
-        trynum = 0
-        while True:
-        
-            trynum += 1
-            linesamples = [bezN.subs(t,t_) for t_ in self.tpara] # 曲線上の点列の式表現
-            linesamplesX = [x  for  [x,y] in linesamples] # X座標のリスト、式表現
-            linesamplesY = [y  for  [x,y] in linesamples] # Y座標のリスト、式表現
-            EsumX = lossfunc(listA=samples[:,0],listB=linesamplesX) #  X方向のずれの評価値
-            EsumY = lossfunc(listA=samples[:,1],listB=linesamplesY) #  Y 方向のずれの評価値
-            # px0,px1, px2, px3, ... py1, py2,py3 ...で偏微分
+        # バーンスタイン関数
+        def bs(n,t):
+            return binomial(N,n)*t**n*(1-t)**(N-n)
 
-            if  not openmode : # 両端点を固定
-                EsumX = EsumX.subs(px[-1],samples[-1][0])
-                EsumY = EsumY.subs(py[-1],samples[-1][1])
-                EsumX = EsumX.subs(px[0],samples[0][0])
-                EsumY = EsumY.subs(py[0],samples[0][1])
-            for i in range(0,N+1):
-                dx_[i] = diff(EsumX,px[i])
-                dy_[i] = diff(EsumY,py[i])  
+        #  パラメトリック曲線　curvefunc 上で各サンプル点に最寄りの点のパラメータを対応づける
+        def refineTparaN(curvefunc,stt,end):
+            f = curvefunc
+            ts = self.ts
+            def searchband(n):
+                if n == 0:
+                    return 0,ts[1]
+                elif n == len(ts)-1:
+                    return ts[-2],1
+                else:
+                    return ts[n-1],ts[n+1]
 
-            # 連立させて解く
-            if not openmode :
-                resultX = solve([dx_[i] for i in range(1,N)],[px[i] for i in range(1,N)])
-                resultY = solve([dy_[i] for i in range(1,N)],[py[i] for i in range(1,N)])
-            else : 
-                resultX = solve([dx_[i] for i in range(N+1)],[px[i] for i in range(N+1)])
-                resultY = solve([dy_[i] for i in range(N+1)],[py[i] for i in range(N+1)])
+            if stt == end:
+                return
 
-            if len(resultX) == 0 or len(resultY) == 0: # 方程式が解けない　非常にまれなケース
-                return False,np.array([]),np.array([]),None,None,None
+            nmid = (stt+end)//2  # 探索対象の中央のデータを抜き出す
+            px,py = sps[nmid] # 中央のデータの座標
+            band = searchband(nmid)
+            midpara = nearest(px,py,f,band[0],band[1],dcount= BezierCurve.dCount)
+            self.ts[nmid] = midpara
+            refineTparaN(f,stt,nmid)
+            refineTparaN(f,nmid+1,end)
 
-            # 解をベジエの式に代入
-            if not openmode:
-                bezresX = bezN[0].subs([(px[0],samples[0][0]),(px[-1],samples[-1][0])])
-                bezresY = bezN[1].subs([(py[0],samples[0][1]),(py[-1],samples[-1][1])])
-                for i in range(1,N):
-                    bezresX = bezresX.subs(px[i],resultX[px[i]])
-                    bezresY = bezresY.subs(py[i],resultY[py[i]])
-            else: 
-                bezresX = bezN[0]
-                bezresY = bezN[1]           
-                for i in range(0,N+1):
-                    bezresX = bezresX.subs(px[i],resultX[px[i]])
-                    bezresY = bezresY.subs(py[i],resultY[py[i]])
+        # 曲線 linefunc(t) 上で座標(x,y) に最も近い点のパラメータを2分サーチして探す関数
+        def nearest(x,y,curvefunc,pmin,pmax,dcount=5):
+            (funcX,funcY) = curvefunc # funcX,funcY は 't' の関数
+            # x,y 座標、pmin,pmax 探索範囲、dcount 再起呼び出しの残り回数
+            t = symbols('t')
+                        
+            mid = (pmin+pmax)/2
+            p = np.array([x,y])
 
-            rx,ry = resultX,resultY
-            if not openmode:
-                cpx = [samples[0][0]]+[rx[px[i]] for i in range(1,N)]+[samples[-1][0]]
-                cpy = [samples[0][1]]+[ry[py[i]] for i in range(1,N)]+[samples[-1][1]]    
-            else: # openmode
-                cpx = [rx[px[i]] for i in range(N+1)]
-                cpy = [ry[py[i]] for i in range(N+1)]
+            # sympy 表現の座標を数値化
+            def us(p):
+                x,y = p
+                return np.array([float(x),float(y)])
 
-            tpara = self.tpara
-            tpara0 = tpara.copy() # 前回の t の推定値
-            
-            self.refineTparaN((bezresX,bezresY),0,len(samples),0,1)
-            diffpara, error = 0,0
-            for i in range(len(tpara)) :
-                diffpara += np.sqrt((tpara[i]-tpara0[i])**2) 
-                sx,sy = samples[i]
-                ox,oy = float(bezresX.subs(t,tpara[i])),float(bezresY.subs(t,tpara[i]))
-                error += np.sqrt((sx-ox)**2+(sy-oy)**2)
-            print(".",end='')
-            diffpara = diffpara/len(tpara)*100 # パラメータの変化量の平均の100倍値
-            error = error/len(tpara) # あてはめ誤差の平均
-            if BezierCurve.debugmode: print("error:{}, drift:{}".format(error,diffpara))
-            if trynum <= 5:
-                if diffpara < BezierCurve.precPara and error < BezierCurve.errorThres:
-                    break
+            ps = funcX.subs(t,pmin),funcY.subs(t,pmin) # パラメータ最小点
+            pm = funcX.subs(t,mid),funcY.subs(t,mid)  # 中間パラメータ点
+            pe = funcX.subs(t,pmax),funcY.subs(t,pmax)  # パラメータ最大点
+            ls = np.linalg.norm(us(ps) - p) # 
+            lm = np.linalg.norm(us(pm) - p)
+            le = np.linalg.norm(us(pe) - p)
+
+            if dcount == 0 : # 分割回数が指定回数に到達したら探索終了
+                m = min([ls,lm,le])
+                if m == ls:
+                    return pmin
+                elif m == le:
+                    return pmax
+                else:
+                    return mid
             else:
-                if diffpara < BezierCurve.precPara*1.05**(trynum-5): # 収束しない時のために、条件を徐々に緩めていく
-                    break
+                if ls < le:
+                    return nearest(x,y,curvefunc,pmin,mid,dcount-1)
+                else:
+                    return nearest(x,y,curvefunc,mid,pmax,dcount-1)  
+
+        # Itterations start hear
+        trynum = 0 # 繰り返し回数
+
+        cps,[fx,fy] = self.fit0() # レベル０フィッティングを実行
+
+        # 近似誤差を求める
+        ts = self.ts # 前回の t の推定値  
+        # パラメータから求めた曲線上の点列
+        onps = [[float(fx.subs(t,ts[i])),float(fy.subs(t,ts[i]))] for i in range(len(ts)) ]        
+        # あてはめ誤差
+        olderror = mean([np.sqrt((sps[i][0]-onps[i][0])**2+(sps[i][1]-onps[i][1])**2) for i in range(len(sps))]) 
+
+        while True:
+            print(".",end='')
+
+            tsold = self.ts.copy() # 前回の t の推定値            
+            # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
+            refineTparaN([fx,fy],0,len(sps))
+            ts = self.ts # 調整後の  t の推定値
+            # レベル０フィッティングを実行
+            cps,[fx,fy] = self.fit0() 
+
+            # 近似誤差とパラメータの平均変動量を求める
+            # パラメータの変動量
+            drift = mean([np.sqrt((ts[i]-tsold[i])**2) for i in range(len(ts))])*100
+
+            # パラメータから求めた曲線上の点列
+            onps = [[float(fx.subs(t,ts[i])),float(fy.subs(t,ts[i]))] for i in range(len(ts)) ]        
+            # あてはめ誤差
+            error = mean([np.sqrt((sps[i][0]-onps[i][0])**2+(sps[i][1]-onps[i][1])**2) for i in range(len(sps))]) 
+
+            # 繰り返し判定調整量
+            thresrate = 1.0 if trynum <= 10 else 1.1**(trynum-10)
+            print("{} err:{:.5f}({:.5f}>{:.5f}), drift:{:.5f} > {:.3f}".format(trynum,error,abs(error-olderror),\
+                                                            BezierCurve.errorThres,drift,BezierCurve.driftThres*thresrate))
+
+            if drift < BezierCurve.driftThres*thresrate  and abs(error- olderror) < BezierCurve.errorThres:
+                break
+
+            olderror = error
+            trynum += 1
+
         print("")
-        return True,np.array(cpx),np.array(cpy),bezresX,bezresY,self.tpara
+        return cps,[fx,fy]
         # cpx,cpy 制御点、bezresX,bezresY ベジエ曲線の定義式
         # tpara 制御点   
         
     # デバッグモードのオンオフ
-    def toggledebugmode():
-        BezierCurve.debugmode = not BezierCurve.debugmode
+    def toggledebugmode(set=True,debug=False):
+        if set:
+            BezierCurve.debugmode = debug
+        else: # set が False のときはトグル反応
+            BezierCurve.debugmode = not BezierCurve.debugmode
         print("debugmode:",BezierCurve.debugmode)
         
     # パラメータのセットと表示　引数なしで呼ぶ出せば初期化
-    def setParameters(reset=False,precPara=0.1,errorThres=0.5,paraResolution = 0.001):
-        
-        BezierCurve.precPara = precPara # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
-        BezierCurve.errorThres = errorThres # 繰り返し打ち切りを決める、あてはめ誤差の平均値に対するしきい値
-        BezierCurve.paraResolution = paraResolution # サンプル点の最寄り点探索の解像度
-        
-        print("precPara:       ",precPara)
-        print("errorThres:     ",errorThres)
-        print("paraResolution: ",paraResolution)
-        print("debugmode:      ",BezierCurve.debugmode)
+    def setParameters(driftThres=0.03,errorThres=0.01,dCount=5,debugmode=False,openmode=False):
+        BezierCurve.driftThres = driftThres # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
+        BezierCurve.errorThres = errorThres # 繰り返しにおける誤差変動幅に対するしきい値
+        BezierCurve.dCount = dCount # サンプル点の最寄り点の2分探索の回数
+        BezierCurve.debugmode = debugmode
+        BezierCurve.openmode = openmode
+
+        print("driftThres: ",driftThres)
+        print("errorThres: ",errorThres)
+        print("dCount    : ",dCount)
+        print("debugmode : ",debugmode)
+        print("openmode  : ",openmode)
         print("")
         
-# 結果の描画
-def drawBez(rdimg,bezL=None,bezR=None,bezC=None,cpl=None,cpr=None,cpc=None, 
+# (24) ベジエフィッティングの結果の描画
+def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=None,cpc=None, 
              cntL=[],cntR=[],cntC=None, ladder=None,PosL=[],PosR=[],PosC=[],n_samples=20,saveImage=False,savepath=""):
     
     # いわゆる自乗誤差の一般式
@@ -933,8 +968,8 @@ def drawBez(rdimg,bezL=None,bezR=None,bezC=None,cpl=None,cpr=None,cpc=None,
     cpxl,cpyl = cpl if cpl != None else ([],[])
     cpxr,cpyr = cpr if cpr != None else ([],[])
     cpxc,cpyc = cpc if cpc != None else ([],[])
-    tplins50 = np.linspace(0, 1, 50)
-    tplinsSP = np.linspace(0, 1, n_samples)
+    tplins50 = np.linspace(stt, end, 50)
+    tplinsSP = np.linspace(stt, end, n_samples)
     
     plt.figure(figsize=(6,6),dpi=100)
     plt.gca().invert_yaxis() 
@@ -1008,7 +1043,6 @@ def pltsaveimage(savepath,prefix):
             os.remove(savepath)
         print("TEST",savepath)
         plt.savefig(savepath)
-
 
 
 # (-1)変数データのストアとリストア
