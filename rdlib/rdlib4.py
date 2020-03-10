@@ -918,7 +918,7 @@ class BezierCurve:
 
             # 繰り返し判定調整量
             thresrate = 1.0 if trynum <= 10 else 1.1**(trynum-10)
-            print("{} err:{:.5f}({:.5f}>{:.5f}), drift:{:.5f} > {:.3f}".format(trynum,error,abs(error-olderror),\
+            if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f}>{:.5f}), drift:{:.5f} > {:.3f}".format(trynum,error,abs(error-olderror),\
                                                             BezierCurve.errorThres,drift,BezierCurve.driftThres*thresrate))
 
             if drift < BezierCurve.driftThres*thresrate  and abs(error- olderror) < BezierCurve.errorThres:
