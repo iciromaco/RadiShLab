@@ -698,6 +698,7 @@ from sympy.abc import a,b,c
 from sympy import var
 from statistics import mean
 
+
 class BezierCurve: 
     # インスタンス変数
     # f [X座標関数式,Y座標関数式]
@@ -707,13 +708,15 @@ class BezierCurve:
     # クラス変数
     driftThres = 0.03 # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
     errorThres = 0.01 # 繰り返しを打ち切る誤差変化量
-    dCount = 5 # ２分探索の打ち切り回数
+    dCount = 7 # ２分探索の打ち切り回数　（5以上が望ましい）
     debugmode = False
     openmode = False
+    AsymptoticPriority = 'distance' # パラメータ更新法　
+                                    # 'distance':距離優先、'span':間隔優先
 
-    def __init__(self, N=5, samples = [], initialPara=[]):
+    def __init__(self, N=5, samples = [], prefunc=None):
         self.samples = samples # 標本点
-        self.initialPara = initialPara # パラメータ初期値
+        self.prefunc = prefunc # パラメータ初期値
         # self.f  ベジエ曲線の式 = [fx,fy]
         # 'px0','px1'... が制御点のX座標を表すシンボル
         # 'py0','py1'...が制御点のY座標を表すシンボル
@@ -737,7 +740,7 @@ class BezierCurve:
         if len(samples)>0:
             self.samples = self.interporation(samples)
         # 初期パラメータのセット
-        self.ts = self.assignPara2Samples(initialPara=initialPara)
+        self.ts = self.assignPara2Samples(prefunc=prefunc)
  
     # 解なしの部分に np.inf が入っているのでその抜けを前後から推定してデータを埋める
     def interporation(self,plist):
@@ -755,16 +758,48 @@ class BezierCurve:
         print("")
         return plist
 
-    def assignPara2Samples(self,initialPara=[]):
+
+    def assignPara2Samples(self,prefunc=None):
+        def assignP2P(stt,end,pstart,pend):
+            if stt==end:
+                return []
+            mid = stt+(end-stt)//2 # 真ん中の番号
+            midpn = pstart+(mid-stt)+np.abs(np.asarray(lengths)[(pstart+(mid-stt)):(pend-(end-mid-1))] - searchfor[mid]).argmin()
+            midp = [midpn/(len(samples)*PREC-1)]  # 真ん中のパラメータ
+            before = assignP2P(stt,mid,pstart,midpn)
+            after = assignP2P(mid+1,end,midpn+1,pend)
+            return before + midp + after
+
         samples = self.samples
-        if len(samples)==0:
+        if len(samples)==0: # 標本点を与えずにベジエ曲線の一般式として使うこともできる
             return
-        if len(initialPara) > 0:  # 引数として与えられているならそれを使う
-            if len(initialPara) != len(samples): # サンプル数と一致しない
-                print("DATA NUMBER MISMATCH")
-                sys.exit()
-            else:
-                self.ts = initialPara
+        if prefunc != None:  # 近似式が与えられている場合
+            para = []
+            bzpoints = []
+            ss = 0.0
+            fx,fy = prefunc
+            dfx,dfy = diff(fx),diff(fy)
+            while ss < 1:
+                absdx = abs(dfx.subs('t',ss)) # x微係数
+                absdy = abs(dfy.subs('t',ss)) # y微係数
+                absd = max(absdx,absdy)
+                pstep = 1/absd if absd > 0 else 0.001  # 傾きの逆数＝ｘかｙが最大1移動するだけのパラメータ変化
+                ss += pstep/2
+                ss = 1.0 if ss > 1 else ss
+                para.append(ss)  # パラメータのリスト
+                bzpoints.append([int(float(fx.subs('t',ss))),int(float(fy.subs('t',ss)))]) # para に対応する曲線上の点
+            bzpoints = np.array(bzpoints)
+            axlength = cv2.arcLength(bzpoints, closed=False) # 弧長
+            lengths = np.array([cv2.arcLength(bzpoints[:i+1],closed=False)  for i in range(len(bzpoints))]) # 各点までの弧長の配列
+            tobefound = np.linspace(0,axlength,len(samples)) # 全長をサンプルの数で区切る
+            ftpara = [0.0]
+            i = 1
+            for slength in tobefound[1:]:
+                while lengths[i] < slength:
+                    i += 1
+                ftpara.append(float(para[i]))
+            return  ftpara
+
         else: # パラメータが与えられていない場合、0～1をリニアにサンプル数で刻む
             axlength = np.array(cv2.arcLength(samples, False)) # 点列に沿って測った総経路長
             # 各サンプル点の始点からの経路長の全長に対する比を、各点のベジエパラメータの初期化とする
@@ -810,7 +845,8 @@ class BezierCurve:
             exBY = np.array([[sum([ bs(n,t[k])*(y[k]-y[0]*(1-t[k])**N - y[-1]*t[k]**N) for k in range(M)]) ] for n in range(1,N)],'float64')
             cpsx = np.r_[[[x[0]]],np.linalg.solve(exA, exBX), [[x[-1]]]]
             cpsy = np.r_[ [[y[0]]],np.linalg.solve(exA, exBY),[[y[-1]]]]
-        cps = list(zip(cpsx,cpsy))
+
+        cps = [[i[0][0],i[1][0]] for i in zip(cpsx,cpsy)]
 
         return cps,self.setCPs(cps)
 
@@ -828,9 +864,13 @@ class BezierCurve:
             return binomial(N,n)*t**n*(1-t)**(N-n)
 
         #  パラメトリック曲線　curvefunc 上で各サンプル点に最寄りの点のパラメータを対応づける
-        def refineTparaN(curvefunc,stt,end):
+        def refineTparaN(bezierparameters,curvefunc,stt,end):
+            # bezierparameters 標本点と結びつけられたベジエパラメータ
+            # curvefunc 曲線の式
+            # stt,end パラメータを割り当てる標本番号の最初と最後（最後は含まない）
+            ts = bezierparameters
             f = curvefunc
-            ts = self.ts
+
             def searchband(n):
                 if n == 0:
                     return 0,ts[1]
@@ -840,18 +880,23 @@ class BezierCurve:
                     return ts[n-1],ts[n+1]
 
             if stt == end:
-                return
+                return ts
 
             nmid = (stt+end)//2  # 探索対象の中央のデータを抜き出す
             px,py = sps[nmid] # 中央のデータの座標
             band = searchband(nmid)
-            midpara = nearest(px,py,f,band[0],band[1],dcount= BezierCurve.dCount)
-            self.ts[nmid] = midpara
-            refineTparaN(f,stt,nmid)
-            refineTparaN(f,nmid+1,end)
+
+            midpara = nearest(px,py,f,band[0],band[1],dcount= BezierCurve.dCount) # 最も近い点を探す
+
+            ts[nmid] = midpara
+            ts = refineTparaN(ts,f,stt,nmid)
+            ts = refineTparaN(ts,f,nmid+1,end)
+
+            return ts
 
         # 曲線 linefunc(t) 上で座標(x,y) に最も近い点のパラメータを2分サーチして探す関数
-        def nearest(x,y,curvefunc,pmin,pmax,dcount=5):
+        def nearest(x,y,curvefunc,pmin,pmax,dcount=7):
+
             (funcX,funcY) = curvefunc # funcX,funcY は 't' の関数
             # x,y 座標、pmin,pmax 探索範囲、dcount 再起呼び出しの残り回数
             t = symbols('t')
@@ -871,7 +916,11 @@ class BezierCurve:
             lm = np.linalg.norm(us(pm) - p)
             le = np.linalg.norm(us(pe) - p)
 
-            if dcount == 0 : # 分割回数が指定回数に到達したら探索終了
+            # 再帰終了判定 おおむね1ピクセル以内に収まったかどうか
+            xv = abs((pmax-pmin)*diff(curvefunc[0]).subs(t,mid)) # x の範囲 
+            yv = abs((pmax-pmin)*diff(curvefunc[0]).subs(t,mid)) # y の範囲
+            # 1ピクセル以内の変動しかないか、分割回数が指定回数に到達したら探索終了
+            if max(xv,yv) < 1.0 or dcount == 0 :
                 m = min([ls,lm,le])
                 if m == ls:
                     return pmin
@@ -885,7 +934,9 @@ class BezierCurve:
                 else:
                     return nearest(x,y,curvefunc,mid,pmax,dcount-1)  
 
-        # Itterations start hear
+        # #######################
+        # Itterations start hear フィッティングのメインプログラム
+        # #######################
         trynum = 0 # 繰り返し回数
 
         cps,[fx,fy] = self.fit0() # レベル０フィッティングを実行
@@ -902,8 +953,12 @@ class BezierCurve:
 
             tsold = self.ts.copy() # 前回の t の推定値            
             # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
-            refineTparaN([fx,fy],0,len(sps))
-            ts = self.ts # 調整後の  t の推定値
+            if BezierCurve.AsymptoticPriority == 'distance':
+                self.ts = ts = refineTparaN(ts,[fx,fy],0,len(sps))
+            # 標本点が等間隔であることを重視し、曲線上の対応点も等間隔であるということを評価尺度とする方法 
+            elif BezierCurve.AsymptoticPriority == 'span':
+                self.ts = ts = self.assignPara2Samples(prefunc=[fx,fy])
+
             # レベル０フィッティングを実行
             cps,[fx,fy] = self.fit0() 
 
@@ -918,7 +973,7 @@ class BezierCurve:
 
             # 繰り返し判定調整量
             thresrate = 1.0 if trynum <= 10 else 1.1**(trynum-10)
-            if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f}>{:.5f}), drift:{:.5f} > {:.3f}".format(trynum,error,abs(error-olderror),\
+            if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f} > {:.5f}), drift:{:.5f} > {:.3f}".format(trynum,error,abs(error-olderror),\
                                                             BezierCurve.errorThres,drift,BezierCurve.driftThres*thresrate))
 
             if drift < BezierCurve.driftThres*thresrate  and abs(error- olderror) < BezierCurve.errorThres:
@@ -941,29 +996,45 @@ class BezierCurve:
         print("debugmode:",BezierCurve.debugmode)
         
     # パラメータのセットと表示　引数なしで呼ぶ出せば初期化
-    def setParameters(driftThres=0.03,errorThres=0.01,dCount=5,debugmode=False,openmode=False):
+    def setParameters(priority = 'distance', driftThres=0.03,errorThres=0.01, dCount=5,debugmode=False,openmode=False):
+
+        BezierCurve.AsymptoticPriority = priority # パラメータ割り当てフェーズにおける評価尺度
+
         BezierCurve.driftThres = driftThres # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
         BezierCurve.errorThres = errorThres # 繰り返しにおける誤差変動幅に対するしきい値
         BezierCurve.dCount = dCount # サンプル点の最寄り点の2分探索の回数
         BezierCurve.debugmode = debugmode
         BezierCurve.openmode = openmode
 
+        print("AsymptoticPriority : ",priority)
+        print("dCount    : ",dCount)
         print("driftThres: ",driftThres)
         print("errorThres: ",errorThres)
-        print("dCount    : ",dCount)
         print("debugmode : ",debugmode)
         print("openmode  : ",openmode)
         print("")
-        
+
+# (25) カラーの名前をからコードに
+def n2c(name):
+    cmap = plt.get_cmap("tab10") # カラーマップ
+    # 0:darkblue,1:orange,2:green,3:red,4:purple,
+    # 5:brown,6:lpurple,7:gray,8:leaf,9:rikyu
+    # 0#1f77b4:1#ff7f0e:2#2ca02c:3#d62728:4#9467bd
+    # 5#8c564b:6#e377c2:7#7f7f7f:8#bcbd22:9#17becf
+    # https://www.color-sample.com/
+    c = {'blue':0,'orange':1,'green':2,'red':3,'purple':4,
+        'brown':5,'lpurple':6,'gray':7,'leaf':8,'rikyugreen':9}
+    if type(name) == str:
+        return cmap(c[name])
+    elif type(name) == int:
+        return cmap(name)
+    else:
+        return cmap(0)
+
 # (24) ベジエフィッティングの結果の描画
 def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=None,cpc=None, 
-             cntL=[],cntR=[],cntC=None, ladder=None,PosL=[],PosR=[],PosC=[],n_samples=20,saveImage=False,savepath="",cchange=False):
-
-    cmap = plt.get_cmap("tab10")
-    if not cchange :
-        ct = [0,0,0]
-    else:
-        ct = [1,2,3]
+             cntL=[],cntR=[],cntC=None, ladder=None,PosL=[],PosR=[],PosC=[],n_samples=20,saveImage=False,savepath="",
+                 ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange']):
 
     # いわゆる自乗誤差の一般式
     s,t= symbols('s,t')
@@ -985,31 +1056,31 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=N
     if bezL != None:
         plotx = [bezXl.subs(t,tp) for tp in tplins50 ]
         ploty = [bezYl.subs(t,tp) for tp in tplins50 ]
-        plt.plot(plotx,ploty,color = cmap(ct[0]) ) 
+        plt.plot(plotx,ploty,color = n2c(ct[0])) # red
     if len(cntL) >0:
-        plt.scatter(cntL[:,0],cntL[:,1],color ='blue',marker = '.') #  サンプル点
-    if cpl != None:
-        plt.scatter(cpxl,cpyl,color ='purple',marker = '*') #  制御点の描画
+        plt.scatter(cntL[:,0],cntL[:,1],color =n2c(ct[3]),marker = '.') #  サンプル点 blue
+    if cpl != None: # 制御点
+        plt.scatter(cpxl,cpyl,color = n2c(ct[6]),marker = '*') #  制御点の描画 purple
         for i in range(len(cpxl)) : plt.annotate(str(i),(cpxl[i],cpyl[i]))
     # 右輪郭の描画
     if bezR != None:
         plotx = [bezXr.subs(t,tp) for tp in tplins50 ]
         ploty = [bezYr.subs(t,tp) for tp in tplins50 ]
-        plt.plot(plotx,ploty,color = cmap(ct[1]))  
-    if len(cntR)  > 0:
-        plt.scatter(cntR[:,0],cntR[:,1],color ='blue',marker = '.') #  サンプル点
+        plt.plot(plotx,ploty,color = n2c(ct[1])) # red  
+    if len(cntR)  > 0: 
+        plt.scatter(cntR[:,0],cntR[:,1],color = n2c(ct[4]),marker = '.') #  サンプル点 blue
     if cpr != None:
-        plt.scatter(cpxr,cpyr,color ='red',marker = '*') #  制御点の描画
+        plt.scatter(cpxr,cpyr,color = n2c(ct[7]),marker = '*') #  制御点の描画 red
         for i in range(len(cpxr)):plt.annotate(str(i),(cpxr[i],cpyr[i]))
     # 中心軸の描画
     if bezC != None:
         plotx = [bezXc.subs(t,tp) for tp in tplins50 ]
         ploty = [bezYc.subs(t,tp) for tp in tplins50 ]
-        plt.plot(plotx,ploty,color = cmap(ct[2]))  
+        plt.plot(plotx,ploty,color = n2c(ct[2])) # red
         if cntC != None:
-            plt.scatter(cntC[:,0],cntC[:,1],color ='blue',marker = '.') #  サンプル点
+            plt.scatter(cntC[:,0],cntC[:,1],color = n2c(ct[5]),marker = '.') #  サンプル点 blue
         if cpc != None:
-            plt.scatter(cpxc,cpyc,color ='darkgreen',marker = '*') #  制御点の描画
+            plt.scatter(cpxc,cpyc,color = n2c(ct[8]),marker = '*') #  制御点の描画 rikyugreen
             for i in range(len(cpxc)):plt.annotate(str(i),(cpxc[i],cpyc[i]))
                 
         # ラダーの描画
@@ -1019,7 +1090,7 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=N
             plotSPrx = [bezXr.subs(t,tp) for tp in tplinsSP ]
             plotSPry = [bezYr.subs(t,tp) for tp in tplinsSP ]       
             for x0,x1,y0,y1 in zip(plotSPlx,plotSPrx,plotSPly,plotSPry):
-                plt.plot([x0,x1],[y0,y1],color = 'orange') 
+                plt.plot([x0,x1],[y0,y1],color = n2c(ct[9]))  # orange
                 
         elif ladder == 'normal':
             # 中心軸上に設定したサンプル点における法線と両輪郭の交点のリストを求める。
@@ -1031,10 +1102,10 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=N
             plot20ry = [yr if yr !=np.inf else np.inf for [xr,yr] in PosR ]
             for x0,x1,y0,y1 in zip(plot20lx,plot20cx,plot20ly,plot20cy):
                 if x0 != np.inf and y0 !=np.inf:
-                    plt.plot([x0,x1],[y0,y1],color = 'orange') 
+                    plt.plot([x0,x1],[y0,y1],color =  n2c(ct[9]))  # orange
             for x0,x1,y0,y1 in zip(plot20rx,plot20cx,plot20ry,plot20cy):
                 if x0 != np.inf and y0 !=np.inf:
-                    plt.plot([x0,x1],[y0,y1],color = 'orange') 
+                    plt.plot([x0,x1],[y0,y1],color =  n2c(ct[9]))  # orange
             if saveImage:
                 pltsaveimage(savepath,'RAD')
 
