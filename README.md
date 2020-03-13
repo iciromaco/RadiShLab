@@ -18,7 +18,7 @@ Radish Shape Analysis Laboratory
   - OPENCV 4.X 用にコードを書き換え
 
 ====
-## Demo
+## Preview
 
 <div align="center">
 <img src="https://user-images.githubusercontent.com/24559785/75554908-28a5ae00-5a33-11ea-9b1e-ce737aa6d440.gif" width=512> </img>
