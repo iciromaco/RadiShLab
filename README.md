@@ -23,9 +23,7 @@ Radish Shape Analysis Laboratory
 <div align="center">
 <img src="https://user-images.githubusercontent.com/24559785/75554908-28a5ae00-5a33-11ea-9b1e-ce737aa6d440.gif" width=512> </img>
 
-[](<video src="https://www.youtube.com/watch?v=geLT5e6Tkqg" width=512 align='center'><img src="https://img.youtube.com/vi/geLT5e6Tkqg/0.jpg" width=512></video>）
-
-<img src="https://user-images.githubusercontent.com/24559785/76582358-5b62a280-6519-11ea-87ad-5b7a3ef90f24.gif" width=50%>
+<!-- <video src="https://www.youtube.com/watch?v=geLT5e6Tkqg" width=512 align='center'><img src="https://img.youtube.com/vi/geLT5e6Tkqg/0.jpg" width=512></video>） -->
 
 ![ddd](https://user-images.githubusercontent.com/24559785/76141224-10004e00-605a-11ea-9c36-a27888906e22.png)
 
@@ -51,9 +49,19 @@ GUIを使うプログラムを使う人は（推奨２）の Anaconda 環境も�
 ## とりあえずどんなものか見てみたい方へ
 Google Colaboratory で試してみてください。
 - 開発環境のインストール不要
-- ブラウザさえあれば実行可能、スマホやタブレットでも
+- ブラウザさえあれば実行可能、スマホやタブレットでも実行可能
+<img src="https://user-images.githubusercontent.com/24559785/76582358-5b62a280-6519-11ea-87ad-5b7a3ef90f24.gif" width=300>
 
-https://youtu.be/DpTiaS8osWE
+1. このリポジトリの zip をダウンロードし、解凍。Google Drive 直下に「RadiShLab」という名前で保存してください。
+2. [Google Colaboratory](https://colab.research.google.com/)にログイン
+3. ノートブックを開く　＞　GitHub で、 "**iciromaco**" を検索
+4. iciromaco/RadiShLab のリポジトリにあるノートブックファイルを開く
+
+あとは説明にしたがって上から実行していくだけです。
+
+Google ドライブに保存したファイルにアクセスしますので、許可が必要になります。
+
+<img src="https://user-images.githubusercontent.com/24559785/76583297-315eaf80-651c-11ea-8ab7-ef47db3aa9bb.gif" width=500>
 
 ## Anaconda と OpenCV のインストール
 ほとんどの処理は，Google Colaboratory でできますので，特に何もインストールする必要はありませんが，GUIを使ったインタラクティブな処理がしたい場合は，ローカルPCに Anaconda と OpenCV をインストールしてください．
