@@ -6,9 +6,9 @@ Radish Shape Analysis Laboratory
 
 **RadiShLab** is a python library for shape analysis of radishes.
 
-  - Generatation of silhouette images from radish photos
-  - Silhouette shape description
-  - Measurement taking into account the radish body bending
+  - Generatation of silhouette images from radish photos  
+  - Silhouette shape description  
+  - Measurement taking into account the radish body bending  
 
 # New!
 
@@ -26,16 +26,17 @@ Radish Shape Analysis Laboratory
 </div>
 
 <H1> <font color="RoyalBlue">Lazy Way</font> For those who want to see what it's like , or who are not willing to install the development environment</H1>
-Try it on Google Colaboratory.
-- No need to install development environment
-- Only need a browser, you can run it on your smartphone or tablet.
+
+Try it on Google Colaboratory.  
+- No need to install development environment  
+- Only need a browser, you can run it on your smartphone or tablet.  
 
 <img src="https://user-images.githubusercontent.com/24559785/76582358-5b62a280-6519-11ea-87ad-5b7a3ef90f24.gif" width=300>
 
-1. Download and unzip the zip file of this repository. Save it directly under Google Drive named 'RadiShLab'.
-2. Log in to [Google Laboratory] (https://colab.research.google.com/)
-3. Open Notebook > Search GitHub for *iciromaco*
-4. Open a notebook file in the *iciromaco/RadiShLab* repository
+1. Download and unzip the zip file of this repository. Save it directly under Google Drive named 'RadiShLab'.  
+2. Log in to [Google Laboratory] (https://colab.research.google.com/)  
+3. Open Notebook > Search GitHub for *iciromaco*  
+4. Open a notebook file in the *iciromaco/RadiShLab* repository  
 
 All you have to do is follow the explanation and run the code.
 
