@@ -25,7 +25,7 @@ Radish Shape Analysis Laboratory
 
 </div>
 
-<H1> <font color="RoyalBlue">Lazy Way</font> For those who want to see what it's like , or who are not willing to install the development environment</H1>
+# :high_brightness:Lazy Way:high_brightness:   For those who want to see what it's like , or who are not willing to install the development environment</H1>
 
 Try it on Google Colaboratory.  
 - No need to install development environment  
