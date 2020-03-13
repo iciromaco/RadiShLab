@@ -15,15 +15,33 @@ Radish Shape Analysis Laboratory
   - Rewritten code for OPENCV 4.X
 
 ====
-## Demo
 
 <div align="center">
 <img src="https://user-images.githubusercontent.com/24559785/75554908-28a5ae00-5a33-11ea-9b1e-ce737aa6d440.gif" width=512> </img>
-<video src="https://www.youtube.com/watch?v=geLT5e6Tkqg" width=512 align='center'><img src="https://img.youtube.com/vi/geLT5e6Tkqg/0.jpg" width=512></video>
+
+<!-- <video src="https://www.youtube.com/watch?v=geLT5e6Tkqg" width=512 align='center'><img src="https://img.youtube.com/vi/geLT5e6Tkqg/0.jpg" width=512></video>） -->
 
 ![ddd](https://user-images.githubusercontent.com/24559785/76141224-10004e00-605a-11ea-9c36-a27888906e22.png)
 
 </div>
+
+## <font color="RoyalBlue">Lazy Way</font> For those who want to see what it's like , or who are not willing to install the development environment
+Try it on Google Colaboratory.
+- No need to install development environment
+- Only need a browser, you can run it on your smartphone or tablet.
+
+<img src="https://user-images.githubusercontent.com/24559785/76582358-5b62a280-6519-11ea-87ad-5b7a3ef90f24.gif" width=300>
+
+1. Download and unzip the zip file of this repository. Save it directly under Google Drive named 'RadiShLab'.
+2. Log in to [Google Laboratory] (https://colab.research.google.com/)
+3. Open Notebook > Search GitHub for *iciromaco*
+4. Open a notebook file in the *iciromaco/RadiShLab* repository
+
+All you have to do is follow the explanation and run the code.
+
+You'll need permission to access the files you've saved to Google Drive.
+
+<img src="https://user-images.githubusercontent.com/24559785/76583297-315eaf80-651c-11ea-8ab7-ef47db3aa9bb.gif" width=500>
 
 ## Requirement
 - ### python and jupyter notebook execution environment
