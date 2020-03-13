@@ -29,6 +29,23 @@ Radish Shape Analysis Laboratory
 
 </div>
 
+## Lazy Way とりあえずどんなものか見てみたい方、開発環境のインストールなしで済ませたい方へ
+Google Colaboratory で試してみてください。
+- 開発環境のインストール不要
+- ブラウザさえあれば実行可能、スマホやタブレットでも実行可能
+<img src="https://user-images.githubusercontent.com/24559785/76582358-5b62a280-6519-11ea-87ad-5b7a3ef90f24.gif" width=300>
+
+1. このリポジトリの zip をダウンロードし、解凍。Google Drive 直下に「RadiShLab」という名前で保存してください。
+2. [Google Colaboratory](https://colab.research.google.com/)にログイン
+3. ノートブックを開く　＞　GitHub で、 "**iciromaco**" を検索
+4. iciromaco/RadiShLab のリポジトリにあるノートブックファイルを開く
+
+あとは説明にしたがって上から実行していくだけです。
+
+Google ドライブに保存したファイルにアクセスしますので、許可が必要になります。
+
+<img src="https://user-images.githubusercontent.com/24559785/76583297-315eaf80-651c-11ea-8ab7-ef47db3aa9bb.gif" width=500>
+
 ## Requirement
 - ### python と jupyter notebook が実行できる環境
 （推奨1)  [**Google Colaboratory**](https://colab.research.google.com/notebooks/welcome.ipynb?hl=ja). 
@@ -45,23 +62,6 @@ python や Anaconda，そして 画像処理ライブラリ OpenCV は非常に�
 バージョン指定の面倒とライブラリの更新の手間を省くためと，環境が統一されていたら説明が楽だという理由で，（推奨１）のGoogle Colaboratory で実行することを基本にすることにします．
 
 GUIを使うプログラムを使う人は（推奨２）の Anaconda 環境もインストールすることになります．その場合は Google Colaboratory を使う必要はありませんが，Google の仮想マシンはたいていのPCより性能が上ですので，GUIを使うとき以外は Colaboratory で処理し，GUIの必要な作業だけローカルPCの Anaconda で作業するとよいでしょう．
-
-## とりあえずどんなものか見てみたい方へ
-Google Colaboratory で試してみてください。
-- 開発環境のインストール不要
-- ブラウザさえあれば実行可能、スマホやタブレットでも実行可能
-<img src="https://user-images.githubusercontent.com/24559785/76582358-5b62a280-6519-11ea-87ad-5b7a3ef90f24.gif" width=300>
-
-1. このリポジトリの zip をダウンロードし、解凍。Google Drive 直下に「RadiShLab」という名前で保存してください。
-2. [Google Colaboratory](https://colab.research.google.com/)にログイン
-3. ノートブックを開く　＞　GitHub で、 "**iciromaco**" を検索
-4. iciromaco/RadiShLab のリポジトリにあるノートブックファイルを開く
-
-あとは説明にしたがって上から実行していくだけです。
-
-Google ドライブに保存したファイルにアクセスしますので、許可が必要になります。
-
-<img src="https://user-images.githubusercontent.com/24559785/76583297-315eaf80-651c-11ea-8ab7-ef47db3aa9bb.gif" width=500>
 
 ## Anaconda と OpenCV のインストール
 ほとんどの処理は，Google Colaboratory でできますので，特に何もインストールする必要はありませんが，GUIを使ったインタラクティブな処理がしたい場合は，ローカルPCに Anaconda と OpenCV をインストールしてください．
