@@ -25,7 +25,7 @@ Radish Shape Analysis Laboratory
 
 </div>
 
-## <font color="RoyalBlue">Lazy Way</font> For those who want to see what it's like , or who are not willing to install the development environment
+<H1> <font color="RoyalBlue">Lazy Way</font> For those who want to see what it's like , or who are not willing to install the development environment</H1>
 Try it on Google Colaboratory.
 - No need to install development environment
 - Only need a browser, you can run it on your smartphone or tablet.
@@ -43,6 +43,7 @@ You'll need permission to access the files you've saved to Google Drive.
 
 <img src="https://user-images.githubusercontent.com/24559785/76583297-315eaf80-651c-11ea-8ab7-ef47db3aa9bb.gif" width=500>
 
+# Developer's way
 ## Requirement
 - ### python and jupyter notebook execution environment
 （Recomendation1)  [**Google Colaboratory**](https://colab.research.google.com/notebooks/welcome.ipynb?hl=ja). 
