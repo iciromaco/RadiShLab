@@ -1,6 +1,6 @@
 # RadiShLab (4th)
 
-![logo](https://user-images.githubusercontent.com/24559785/76579947-687b9380-6511-11ea-8003-d1bb37b0e21d.png) 
+![logo](https://user-images.githubusercontent.com/24559785/76580094-066f5e00-6512-11ea-9963-66e3bb6d2cbc.png)
 Radish Shape Analysis Laboratory
 
 [English](https://github.com/iciromaco/RadiShLab/blob/master/README-Eng.md)
