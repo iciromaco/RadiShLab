@@ -533,7 +533,7 @@ def drawContours(canvas,con,color=255,thickness=1):
 
 # (19) 中心軸端点の推定
 from statistics import mean
-def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8):
+def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8,mode=2):
     # 入力　
     #   img シルエット画像
     #   con 輪郭点列　（なければ画像から作る）
@@ -542,6 +542,7 @@ def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8):
     #   bottom 中心軸下端点の候補探索範囲　
     #   topCD  中心軸上端点らしさの評価データを収集する範囲
     #   bottomCD 中心軸下端点らしさの評価データを収集する範囲
+    #   mode 0: 頭頂点のみ返す、1:尾端のみ返す、2:頭頂と尾端の両方を返す
     # 出力
     #   con  輪郭点列
     #   topTip  中心軸上端点の輪郭番号
@@ -579,67 +580,73 @@ def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8):
     
     # 上部の端点の探索
     symtops = []
-    for i in range(N):
-        if conlist[i][1] - y0 >= top*h: # バウンディングボックス上端からの距離
-            val = -1
-        else:
-            val = calcval(i,irrend=int(topCD*HL))
-        symtops.append(val)
-    m = np.max(symtops) # 探索対象のうちの最大評価値
-    for i in range(N):
-        if symtops[i] < 0: 
-            symtops[i] = m
-    topTip = np.argmin(symtops)
-    
+    if mode == 1:
+        topTip = 0
+    else:
+        for i in range(N):
+            if conlist[i][1] - y0 >= top*h: # バウンディングボックス上端からの距離
+                val = -1
+            else:
+                val = calcval(i,irrend=int(topCD*HL))
+            symtops.append(val)
+        m = np.max(symtops) # 探索対象のうちの最大評価値
+        for i in range(N):
+            if symtops[i] < 0: 
+                symtops[i] = m
+        topTip = np.argmin(symtops)
+
     # 下部の端点の探索
     symbottoms = []
-    for i in range(N):
-        if conlist[i][1] - y0 < bottom*h: # バウンディングボックス上端からの距離
-            val = -1
-        else:
-            val = calcval(i,irrend=int(bottomCD*HL))
-        symbottoms.append(val)
-    m = np.max(symbottoms) # 探索対象のうちの最大評価値
-    for i in range(N):
-        if symbottoms[i] < 0: 
-            symbottoms[i] = m
-    bottomTip = np.argmin(symbottoms)
+    if mode == 0:
+        bottomTip = 0
+    else:
+        for i in range(N):
+            if conlist[i][1] - y0 < bottom*h: # バウンディングボックス上端からの距離
+                val = -1
+            else:
+                val = calcval(i,irrend=int(bottomCD*HL))
+            symbottoms.append(val)
+        m = np.max(symbottoms) # 探索対象のうちの最大評価値
+        for i in range(N):
+            if symbottoms[i] < 0: 
+                symbottoms[i] = m
+        bottomTip = np.argmin(symbottoms)
     return con,topTip,bottomTip,symtops,symbottoms
 
 
 ## (20) 上端・末端情報に基づき輪郭線を左右に分割する
-def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10):
+def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10,mode=2):
     # drcimg: ダイコンの輪郭画像
     # (dtopx,dtopy) dtopdr　上部削除円中心と半径
     # (dbtmx,dbtmy) dbtmdr 　下部削除円中心と半径
-    
+    # mode:  1:下部端点で開いた輪郭を返す、2: 左右分割した2本の輪郭を返す
+
     # 中心軸上端部と末端部に黒で円を描いて輪郭を２つに分離
     canvas = rdcimg.copy()
     # まず上端を指定サイズの円で削る
-    canvas = cv2.circle(canvas,(dtopx,dtopy),dtopdr,0,-1)  
-
-    def bracket2to1(cnt):    
-        cnt = [[x,y] for [[x,y]] in cnt]
-        return cnt
+    if mode != 1: # 下端のみが要求されているときはパス
+        canvas = cv2.circle(canvas,(dtopx,dtopy),dtopdr,0,-1)  
         
-    while True:
-        # 次に末端を削る。末端は細いので、左右の輪郭が縮退している場合があり、削除円が小さいと輪郭が分離できず処理が進められない。
-        canvas = cv2.circle(canvas,(dbtmx,dbtmy),dbtmdr,0,-1) 
-    
-        # 輪郭検出すれば２つの輪郭が見つかるはず。
-        nLabels, _labelImages = cv2.connectedComponents(canvas)
-        if nLabels >= 3: # 背景領域を含めると３以上の領域になっていれば正しい
-            break
-        dbtmdr = dbtmdr + 2 # ラベル数が　３（背景を含むので３） にならないとすれば先端が削り足りない可能性が最も高いので半径を増やしてリトライ   
+    if mode != 0:  # 上端のみが要求されているときはパス
+        while True:
+            # 次に末端を削る。末端は細いので、左右の輪郭が縮退している場合があり、削除円が小さいと輪郭が分離できず処理が進められない。
+            canvas = cv2.circle(canvas,(dbtmx,dbtmy),dbtmdr,0,-1) 
+        
+            # 輪郭検出すれば２つの輪郭が見つかるはず。
+            nLabels, _labelImages = cv2.connectedComponents(canvas)
+            if mode == 2 and nLabels >= 3: # 背景領域を含めると３以上の領域になっていれば正しい
+                break
+            elif mode != 2 and nLabels >= 2:
+                break
+            dbtmdr = dbtmdr + 2 # ラベル数が　３（背景を含むので３） にならないとすれば先端が削り足りない可能性が最も高いので半径を増やしてリトライ   
         
     contours, hierarchy = cv2findContours34(canvas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)    
     maxcnt_i = np.argmax(np.array([len(c) for c in contours]))
-    # cnt0 = bracket2to1(contours[maxcnt_i]) # 最も長い輪郭
     cnt0 = contours[maxcnt_i].squeeze() # 最も長い輪郭
-    contours = contours[:maxcnt_i]+contours[maxcnt_i+1:]
-    maxcnt_i = np.argmax(np.array([len(c) for c in contours]))
-    # cnt1 = bracket2to1(contours[maxcnt_i])
-    cnt1 = contours[maxcnt_i].squeeze()
+    if mode == 2:
+        contours = contours[:maxcnt_i]+contours[maxcnt_i+1:]
+        maxcnt_i = np.argmax(np.array([len(c) for c in contours]))
+        cnt1 = contours[maxcnt_i].squeeze()
     
     # 分岐のない線図形の輪郭は、トレースが端点から始まれば１箇所、途中からなら２箇所折り返しがある。端点と折り返し、
     # もしくは、折り返しと折り返しの間を取り出すことで、重複のない輪郭データとする
@@ -651,37 +658,43 @@ def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10):
     if cnt0[0][1] > cnt0[-1][1]: 
         cnt0 = cnt0[::-1]
     
-    i1 = 0
-    for i in range(int(len(cnt1))-1):
-        if np.all(cnt1[i-1] == cnt1[i+1]):
-            i0,i1= i1,i
-    cnt1 = cnt1[i0:i1+1]
-    if cnt1[0][1] > cnt1[-1][1]:
-        cnt1 = cnt1[::-1]
-    
-    # 中程の点を比べて左にある方を左と判定する。
-    c0 = cnt0[int(len(cnt0)/2)][0]
-    c1 = cnt1[int(len(cnt1)/2)][0]
-    if  c0 > c1: 
-            cntl,cntr = cnt1,cnt0
-    else:
-            cntr,cntl = cnt1,cnt0
+    if mode != 2:
+        return cnt0
+    else: # mode == 2:
+        i1 = 0
+        for i in range(int(len(cnt1))-1):
+            if np.all(cnt1[i-1] == cnt1[i+1]):
+                i0,i1= i1,i
+        cnt1 = cnt1[i0:i1+1]
+        if cnt1[0][1] > cnt1[-1][1]:
+            cnt1 = cnt1[::-1]
 
-    return cntl, cntr
+        # 中程の点を比べて左にある方を左と判定する。
+        c0 = cnt0[int(len(cnt0)/2)][0]
+        c1 = cnt1[int(len(cnt1)/2)][0]
+        if  c0 > c1: 
+                conLeft,conRight = cnt1,cnt0
+        else:
+                conRight,conLeft = cnt1,cnt0
+        return conLeft,conRight
 
 # (21) 与えられたダイコン画像の輪郭を左右に分割する
-def getCntPairWithImg(rdimg,top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8,topdtopdr=10,dbtmdr=10):
+def getCntPairWithImg(rdimg,top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8,topdtopdr=10,dbtmdr=10,mode=2):
     # drimg: ダイコンの画像
     # top,bottom,topCD,bottomCD ：findTips() に与えるパラメータ
     # dtopdr,dbtmdr:　getCntPairWithCntImg() に与えるパラメータ
-    con,topTip,bottomTip,symtops,symbottoms = findTips(rdimg,top=top,bottom=bottom,topCD=topCD, bottomCD=bottomCD)
+    con,topTip,bottomTip,symtops,symbottoms = findTips(rdimg,top=top,bottom=bottom,topCD=topCD, bottomCD=bottomCD,mode=mode)
     conlist = contolist(con)
     dtopx,dtopy = conlist[topTip]
     dbtmx,dbtmy = conlist[bottomTip]
     rdcimg = np.zeros_like(rdimg)  # 描画キャンバスの準備
     cv2.drawContours(rdcimg,con, -1, 255,thickness=1)
-    conLeft,conRight = getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10)
-    return conLeft,conRight
+    if mode == 2:
+        conLeft,conRight = getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10,mode=mode)
+        return conLeft,conRight
+    else:
+        contAll = getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10,mode=mode)
+        return contAll       
 
 #　(22) 座標リストから等間隔で指定した数の標本を抜き出す。
 def getSamples(cont,N=20,mode='Equidistant'):
@@ -697,7 +710,6 @@ from sympy import diff,Symbol,Matrix,symbols,solve,simplify,binomial
 from sympy.abc import a,b,c
 from sympy import var
 from statistics import mean
-
 
 class BezierCurve: 
     # インスタンス変数
@@ -1025,16 +1037,26 @@ def n2c(name):
     c = {'blue':0,'orange':1,'green':2,'red':3,'purple':4,
         'brown':5,'lpurple':6,'gray':7,'leaf':8,'rikyugreen':9}
     if type(name) == str:
-        return cmap(c[name])
+        if len(name) > 1:
+            return cmap(c[name])
+        else:
+            return cmap(int(name))
     elif type(name) == int:
         return cmap(name)
     else:
         return cmap(0)
 
 # (24) ベジエフィッティングの結果の描画
-def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=None,cpc=None, 
-             cntL=[],cntR=[],cntC=None, ladder=None,PosL=[],PosR=[],PosC=[],n_samples=20,saveImage=False,savepath="",
-                 ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange']):
+def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],cpc=[], 
+             cntL=[],cntR=[],cntC=[], ladder=None,PosL=[],PosR=[],PosC=[],saveImage=False,savepath="",
+                 resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange']):
+    # rdimg 入力画像、stt,end 曲線の描画範囲、
+    # bezL,bezR,bezC ベジエ曲線、cpl,cpr,cpc 制御点
+    # cntL,cntR,cntC 標本点のリスト, 
+    # ladder 梯子描画モード、
+    # PosL,PosR,PosC ラダー用座標
+    # saveImage 結果の保存の有無
+    # resolution 曲線を描画する際に生成する描画点の数
 
     # いわゆる自乗誤差の一般式
     s,t= symbols('s,t')
@@ -1042,11 +1064,11 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=N
     bezXl,bezYl = bezL if bezL != None else ([],[])
     bezXr,bezYr = bezR if bezR != None else ([],[])
     bezXc,bezYc = bezC if bezC != None else ([],[])
-    cpxl,cpyl = cpl if cpl != None else ([],[])
-    cpxr,cpyr = cpr if cpr != None else ([],[])
-    cpxc,cpyc = cpc if cpc != None else ([],[])
-    tplins50 = np.linspace(stt, end, 50)
-    tplinsSP = np.linspace(stt, end, n_samples)
+    cpxl,cpyl = [x for [x,y] in cpl],[y for [x,y] in cpl] if len(cpl) > 0 else ([],[])
+    cpxr,cpyr = [x for [x,y] in cpr],[y for [x,y] in cpr] if len(cpr) > 0 else ([],[])
+    cpxc,cpyc = [x for [x,y] in cpc],[y for [x,y] in cpc] if len(cpc) > 0 else ([],[])
+    tplins50 = np.linspace(stt, end, resolution)
+    tplinsSP = np.linspace(stt, end, n_ladder)
     
     plt.figure(figsize=(6,6),dpi=100)
     plt.gca().invert_yaxis() 
@@ -1054,32 +1076,35 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=N
     plt.imshow(192+(cv2.cvtColor(rdimg,cv2.COLOR_GRAY2RGB)/4).astype(np.uint8))
     # 左輪郭の描画
     if bezL != None:
+        if len(cntL) > 0 : tplins50 = np.linspace(stt, end, 5*len(cntL))
         plotx = [bezXl.subs(t,tp) for tp in tplins50 ]
         ploty = [bezYl.subs(t,tp) for tp in tplins50 ]
         plt.plot(plotx,ploty,color = n2c(ct[0])) # red
     if len(cntL) >0:
         plt.scatter(cntL[:,0],cntL[:,1],color =n2c(ct[3]),marker = '.') #  サンプル点 blue
-    if cpl != None: # 制御点
+    if len(cpl) > 0: # 制御点
         plt.scatter(cpxl,cpyl,color = n2c(ct[6]),marker = '*') #  制御点の描画 purple
         for i in range(len(cpxl)) : plt.annotate(str(i),(cpxl[i],cpyl[i]))
     # 右輪郭の描画
     if bezR != None:
+        if len(cntR) > 0 : tplins50 = np.linspace(stt, end, 5*len(cntR))
         plotx = [bezXr.subs(t,tp) for tp in tplins50 ]
         ploty = [bezYr.subs(t,tp) for tp in tplins50 ]
         plt.plot(plotx,ploty,color = n2c(ct[1])) # red  
     if len(cntR)  > 0: 
         plt.scatter(cntR[:,0],cntR[:,1],color = n2c(ct[4]),marker = '.') #  サンプル点 blue
-    if cpr != None:
+    if len(cpr) > 0:
         plt.scatter(cpxr,cpyr,color = n2c(ct[7]),marker = '*') #  制御点の描画 red
         for i in range(len(cpxr)):plt.annotate(str(i),(cpxr[i],cpyr[i]))
     # 中心軸の描画
     if bezC != None:
+        if len(cntC) > 0 : tplins50 = np.linspace(stt, end, 5*len(cntC))
         plotx = [bezXc.subs(t,tp) for tp in tplins50 ]
         ploty = [bezYc.subs(t,tp) for tp in tplins50 ]
         plt.plot(plotx,ploty,color = n2c(ct[2])) # red
-        if cntC != None:
+        if len(cntC) > 0:
             plt.scatter(cntC[:,0],cntC[:,1],color = n2c(ct[5]),marker = '.') #  サンプル点 blue
-        if cpc != None:
+        if len(cpc) > 0:
             plt.scatter(cpxc,cpyc,color = n2c(ct[8]),marker = '*') #  制御点の描画 rikyugreen
             for i in range(len(cpxc)):plt.annotate(str(i),(cpxc[i],cpyc[i]))
                 
@@ -1093,21 +1118,21 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=None,cpr=N
                 plt.plot([x0,x1],[y0,y1],color = n2c(ct[9]))  # orange
                 
         elif ladder == 'normal':
-            # 中心軸上に設定したサンプル点における法線と両輪郭の交点のリストを求める。
-            plot20lx = [xl if xl !=np.inf else np.inf for [xl,yl] in PosL ]
-            plot20ly = [yl if yl !=np.inf else np.inf for [xl,yl] in PosL]
+            # 中心軸上に設定したサンプル点における法線と両輪郭の交点のリストを求める(予定)。
+            plot20lx = PosL[:,0]
+            plot20ly = PosL[:,1]
             plot20cx = PosC[:,0]
             plot20cy = PosC[:,1]
-            plot20rx = [xr if xr !=np.inf else np.inf for [xr,yr] in PosR ]
-            plot20ry = [yr if yr !=np.inf else np.inf for [xr,yr] in PosR ]
+            plot20rx = PosR[:,0] 
+            plot20ry = PosR[:,1]
             for x0,x1,y0,y1 in zip(plot20lx,plot20cx,plot20ly,plot20cy):
                 if x0 != np.inf and y0 !=np.inf:
                     plt.plot([x0,x1],[y0,y1],color =  n2c(ct[9]))  # orange
             for x0,x1,y0,y1 in zip(plot20rx,plot20cx,plot20ry,plot20cy):
                 if x0 != np.inf and y0 !=np.inf:
                     plt.plot([x0,x1],[y0,y1],color =  n2c(ct[9]))  # orange
-            if saveImage:
-                pltsaveimage(savepath,'RAD')
+    if saveImage:
+        pltsaveimage(savepath,'Bez')
 
 # matplotlib で描いた画像の保存
 def pltsaveimage(savepath,prefix):
