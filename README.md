@@ -7,11 +7,12 @@ Radish Shape Analysis Laboratory
 
 ## Description
 
-**RadiShLab** は プログラミング言語 python で記述されたダイコンの形状解析のためのライブラリです.
+- **RadiShLab** は プログラミング言語 python で記述されたダイコンの形状解析のためのプログラム集です。
+- jupyter notebook 形式の実行できるノートを公開します。（N001,N002〜）
 
   - 原画像からのシルエット画像を生成
-  - シルエットの形状記述
-  - 曲がりを考慮した計測
+  - シルエットの形状記述（ベジエ曲線、フーリエ記述子）
+  - 曲がりを考慮した計測（ベジエの応用）
 
 # New!
 
@@ -36,7 +37,8 @@ Google Colaboratory で試してみてください。
 - ブラウザさえあれば実行可能、スマホやタブレットでも実行可能
 <img src="https://user-images.githubusercontent.com/24559785/76582358-5b62a280-6519-11ea-87ad-5b7a3ef90f24.gif" width=300>
 
-1. このリポジトリの zip をダウンロードし、解凍。Google Drive 直下に「RadiShLab」という名前で保存してください。
+1. このリポジトリの zip をダウンロードし、解凍。フォルダ名を「RadiShLab」に書き換え、自分の Google Drive 直下に保存する。  
+![repositoryZipDownload](https://user-images.githubusercontent.com/24559785/76692365-dacab000-6698-11ea-943b-dcb2d3fcd4e9.png)
 2. [Google Colaboratory](https://colab.research.google.com/)にログイン
 3. ノートブックを開く　＞　GitHub で、 "**iciromaco**" を検索
 4. iciromaco/RadiShLab のリポジトリにあるノートブックファイルを開く
