@@ -147,6 +147,7 @@ conda install Pillow numpy jupyter matplotlib seaborn
 ``` $ conda update --all```
 
 ## Install
+![repositoryZipDownload](https://user-images.githubusercontent.com/24559785/76692365-dacab000-6698-11ea-943b-dcb2d3fcd4e9.png)
 
 このリポジトリのzipをダウンロードして任意のディレクトリに解凍するだけです．
 
