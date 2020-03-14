@@ -40,7 +40,7 @@ def imwrite(filename, img, params=None):
 
 def assertglobal(params,verbose=False):
     global CONTOURS_APPROX, HARRIS_PARA, CONTOURS_APPROX, SHRINK, \
-            HARRIS_PARA, GAUSSIAN_RATE1, GAUSSIAN_RATE2, UNIT, RPARA
+            HARRIS_PARA, GAUSSIAN_RATE1, GAUSSIAN_RATE2, UNIT, RPARA, PATIENCE
     for item in params:
         if item == 'UNIT':
             UNIT = params[item] # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
@@ -57,7 +57,9 @@ def assertglobal(params,verbose=False):
         elif item == 'GAUSSIAN_RATE2':
             GAUSSIAN_RATE2 = params[item] # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
         elif item == 'RPARA':
-            RPARA = params[item]# 見込みでサーチ候補から外す割合
+            RPARA = params[item] # 見込みでサーチ候補から外す割合
+        elif item == 'PATIENCE':
+            PATIENCE = params[item] # 見込みでサーチ候補から外す割合
         # if verbose:
         #     print(item, "=", params[item])
 
@@ -68,7 +70,8 @@ assertglobal(params = {
     'GAUSSIAN_RATE1':0.2, # 先端位置を決める際に使うガウスぼかしの程度を決める係数
     'GAUSSIAN_RATE2':0.1, # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
     'UNIT':256, # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
-    'RPARA':1.0 # 見込みサーチのサーチ幅全体に対する割合 ３０なら左に３０％右に３０％の幅を初期探索範囲とする
+    'RPARA':1.0, # 見込みサーチのサーチ幅全体に対する割合 ３０なら左に３０％右に３０％の幅を初期探索範囲とする
+    'PATIENCE':1 # ベジエ曲線あてはめで、この回数続けて誤差が増えてしまったら探索を打ち切る
 })
 
 
@@ -770,7 +773,6 @@ class BezierCurve:
         print("")
         return plist
 
-
     def assignPara2Samples(self,prefunc=None):
         def assignP2P(stt,end,pstart,pend):
             if stt==end:
@@ -795,8 +797,8 @@ class BezierCurve:
                 absdx = abs(dfx.subs('t',ss)) # x微係数
                 absdy = abs(dfy.subs('t',ss)) # y微係数
                 absd = max(absdx,absdy)
-                pstep = 1/absd if absd > 0 else 0.001  # 傾きの逆数＝ｘかｙが最大1移動するだけのパラメータ変化
-                ss += pstep/2
+                pstep = 1/absd if absd > 0 else 1/len(samples)  # 傾きの逆数＝ｘかｙが最大1移動するだけのパラメータ変化
+                ss += 0.7*pstep
                 ss = 1.0 if ss > 1 else ss
                 para.append(ss)  # パラメータのリスト
                 bzpoints.append([int(float(fx.subs('t',ss))),int(float(fy.subs('t',ss)))]) # para に対応する曲線上の点
@@ -834,10 +836,12 @@ class BezierCurve:
         return f
 
     # ベジエ近似レベル０（標本点のパラメータを等間隔と仮定してあてはめ）
-    def fit0(self):
+    def fit0(self,tpara=[]):
+        # ts 標本点に対するパラメータ割り当て
         samples = self.samples # 標本点
         x,y = samples[:,0],samples[:,1] # 標本点のｘ座標列とｙ座標列
-        t = self.ts # 標本点に結びつけられたパラメータ
+        # t 標本点に結びつるパラメータは引数として与えられているならそれを、さもなくばインスタンス自身のものを使う
+        t = self.ts if len(tpara) == 0 else tpara
         N = self.N # ベジエの次数
         M = len(samples) # サンプル数
         # バーンスタイン関数の定義
@@ -862,49 +866,25 @@ class BezierCurve:
 
         return cps,self.setCPs(cps)
 
-    # ベジエ近似　パラメータの繰り返し再調整あり
-    def fit1(self):
+    #  パラメトリック曲線　curvefunc 上で各サンプル点に最寄りの点のパラメータを対応づける
+    def refineTparaN(self,bezierparameters,curvefunc,stt,end):
+        # bezierparameters 標本点と結びつけられたベジエパラメータ
+        # curvefunc 曲線の式
+        # stt,end パラメータを割り当てる標本番号の最初と最後（最後は含まない）
+
+        t= symbols('t')
+
         sps = self.samples
-        # 最小自乗法の目的関数の一般式
-        # 自乗誤差の一般式
-        s,t= symbols('s,t')
-        loss1 = (s - t)**2        
-        def lossfunc(listA,listB):
-            return sum([loss1.subs([(s,a),(t,b)]) for (a,b) in zip(listA,listB)])/2
-        # バーンスタイン関数
-        def bs(n,t):
-            return binomial(N,n)*t**n*(1-t)**(N-n)
+        ts = bezierparameters
+        f = curvefunc
 
-        #  パラメトリック曲線　curvefunc 上で各サンプル点に最寄りの点のパラメータを対応づける
-        def refineTparaN(bezierparameters,curvefunc,stt,end):
-            # bezierparameters 標本点と結びつけられたベジエパラメータ
-            # curvefunc 曲線の式
-            # stt,end パラメータを割り当てる標本番号の最初と最後（最後は含まない）
-            ts = bezierparameters
-            f = curvefunc
-
-            def searchband(n):
-                if n == 0:
-                    return 0,ts[1]
-                elif n == len(ts)-1:
-                    return ts[-2],1
-                else:
-                    return ts[n-1],ts[n+1]
-
-            if stt == end:
-                return ts
-
-            nmid = (stt+end)//2  # 探索対象の中央のデータを抜き出す
-            px,py = sps[nmid] # 中央のデータの座標
-            band = searchband(nmid)
-
-            midpara = nearest(px,py,f,band[0],band[1],dcount= BezierCurve.dCount) # 最も近い点を探す
-
-            ts[nmid] = midpara
-            ts = refineTparaN(ts,f,stt,nmid)
-            ts = refineTparaN(ts,f,nmid+1,end)
-
-            return ts
+        def searchband(n):
+            if n == 0:
+                return 0,ts[1]
+            elif n == len(ts)-1:
+                return ts[-2],1
+            else:
+                return ts[n-1],ts[n+1]
 
         # 曲線 linefunc(t) 上で座標(x,y) に最も近い点のパラメータを2分サーチして探す関数
         def nearest(x,y,curvefunc,pmin,pmax,dcount=7):
@@ -929,8 +909,8 @@ class BezierCurve:
             le = np.linalg.norm(us(pe) - p)
 
             # 再帰終了判定 おおむね1ピクセル以内に収まったかどうか
-            xv = abs((pmax-pmin)*diff(curvefunc[0]).subs(t,mid)) # x の範囲 
-            yv = abs((pmax-pmin)*diff(curvefunc[0]).subs(t,mid)) # y の範囲
+            xv = abs((pmax-pmin)*diff(funcX,'t').subs(t,mid)) # x の範囲 
+            yv = abs((pmax-pmin)*diff(funcY,'t').subs(t,mid)) # y の範囲
             # 1ピクセル以内の変動しかないか、分割回数が指定回数に到達したら探索終了
             if max(xv,yv) < 1.0 or dcount == 0 :
                 m = min([ls,lm,le])
@@ -946,33 +926,60 @@ class BezierCurve:
                 else:
                     return nearest(x,y,curvefunc,mid,pmax,dcount-1)  
 
+        if stt == end:
+            return ts
+
+        nmid = (stt+end)//2  # 探索対象の中央のデータを抜き出す
+        px,py = sps[nmid] # 中央のデータの座標
+        band = searchband(nmid)
+
+        midpara = nearest(px,py,f,band[0],band[1],dcount= BezierCurve.dCount) # 最も近い点を探す
+
+        ts[nmid] = midpara
+        ts = self.refineTparaN(ts,f,stt,nmid)
+        ts = self.refineTparaN(ts,f,nmid+1,end)
+
+        return ts
+
+    # ベジエ近似　パラメータの繰り返し再調整あり
+    def fit1(self):
+        sps = self.samples
+        
+        t= symbols('t')
+
+        # バーンスタイン関数
+        def bs(n,t):
+            return binomial(N,n)*t**n*(1-t)**(N-n)
+
         # #######################
         # Itterations start hear フィッティングのメインプログラム
         # #######################
         trynum = 0 # 繰り返し回数
+        rmcounter = 0 # エラー増加回数のカウンター
+        priority = BezierCurve.AsymptoticPriority
 
         cps,[fx,fy] = self.fit0() # レベル０フィッティングを実行
-
         # 近似誤差を求める
-        ts = self.ts # 前回の t の推定値  
+        ts = bestts = self.ts # 前回の t の推定値  
         # パラメータから求めた曲線上の点列
         onps = [[float(fx.subs(t,ts[i])),float(fy.subs(t,ts[i]))] for i in range(len(ts)) ]        
         # あてはめ誤差
-        olderror = mean([np.sqrt((sps[i][0]-onps[i][0])**2+(sps[i][1]-onps[i][1])**2) for i in range(len(sps))]) 
+        olderror = minerror = mean([np.sqrt((sps[i][0]-onps[i][0])**2+(sps[i][1]-onps[i][1])**2) for i in range(len(sps))]) 
+        if BezierCurve.debugmode: print("initial error:{:.5f}".format(olderror))
 
         while True:
             print(".",end='')
 
-            tsold = self.ts.copy() # 前回の t の推定値            
+            tsold = self.ts.copy() # 前回の t の推定値
             # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
-            if BezierCurve.AsymptoticPriority == 'distance':
-                self.ts = ts = refineTparaN(ts,[fx,fy],0,len(sps))
+            if priority == 'distance' or priority == 'hyblid':
+                ts = self.refineTparaN(ts,[fx,fy],0,len(sps))
             # 標本点が等間隔であることを重視し、曲線上の対応点も等間隔であるということを評価尺度とする方法 
-            elif BezierCurve.AsymptoticPriority == 'span':
-                self.ts = ts = self.assignPara2Samples(prefunc=[fx,fy])
+            if priority == 'span':
+                ts = self.assignPara2Samples(prefunc=[fx,fy])
 
             # レベル０フィッティングを実行
-            cps,[fx,fy] = self.fit0() 
+            cps,[fx,fy] = self.fit0(tpara=ts) 
 
             # 近似誤差とパラメータの平均変動量を求める
             # パラメータの変動量
@@ -982,18 +989,30 @@ class BezierCurve:
             onps = [[float(fx.subs(t,ts[i])),float(fy.subs(t,ts[i]))] for i in range(len(ts)) ]        
             # あてはめ誤差
             error = mean([np.sqrt((sps[i][0]-onps[i][0])**2+(sps[i][1]-onps[i][1])**2) for i in range(len(sps))]) 
-
+            if error < minerror : 
+                bestts = ts.copy() # 今までで一番よかったパラメータセットを記録
+                minerror = error
             # 繰り返し判定調整量
-            thresrate = 1.0 if trynum <= 10 else 1.1**(trynum-10)
+            thresrate = 1.0 if trynum <= 10 else 1.1**(trynum-10) # 繰り返しが10回を超えたら条件を緩めていく
             if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f} > {:.5f}), drift:{:.5f} > {:.3f}".format(trynum,error,abs(error-olderror),\
                                                             BezierCurve.errorThres,drift,BezierCurve.driftThres*thresrate))
 
-            if drift < BezierCurve.driftThres*thresrate  and abs(error- olderror) < BezierCurve.errorThres:
-                break
+            rmcounter = 0 if error < olderror else rmcounter + 1 # エラー増加回数のカウントアップ　減り続けているなら０
+            if rmcounter > PATIENCE or (drift < BezierCurve.driftThres*thresrate  and abs(olderror - error) < BezierCurve.errorThres):
+            # PATIENCE回続けてエラーが増加したらあきらめる デフォルトは１、つまりすぐあきらめる
+                if BezierCurve.debugmode: 
+                    if rmcounter > PATIENCE: print("W") 
+                    else: print("M")
+                if priority == 'hyblid':
+                    rmcounter = 0
+                    priority = 'span'
+                else:
+                    break
 
             olderror = error
             trynum += 1
 
+        self.ts = bestts
         print("")
         return cps,[fx,fy]
         # cpx,cpy 制御点、bezresX,bezresY ベジエ曲線の定義式
