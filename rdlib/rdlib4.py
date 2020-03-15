@@ -942,14 +942,11 @@ class BezierCurve:
         return ts
 
     # ベジエ近似　パラメータの繰り返し再調整あり
-    def fit1(self):
+    def fit1(self,maxTry=0):
+        # maxTry 最大繰り返し回数
         sps = self.samples
         
         t= symbols('t')
-
-        # バーンスタイン関数
-        def bs(n,t):
-            return binomial(N,n)*t**n*(1-t)**(N-n)
 
         # #######################
         # Itterations start hear フィッティングのメインプログラム
@@ -1011,10 +1008,12 @@ class BezierCurve:
 
             olderror = error
             trynum += 1
+            if maxTry > 0 and trynum >= maxTry:
+                break
 
         self.ts = bestts
         print("")
-        return cps,[fx,fy]
+        return cps,Matrix([fx,fy])
         # cpx,cpy 制御点、bezresX,bezresY ベジエ曲線の定義式
         # tpara 制御点   
         
@@ -1027,7 +1026,7 @@ class BezierCurve:
         print("debugmode:",BezierCurve.debugmode)
         
     # パラメータのセットと表示　引数なしで呼ぶ出せば初期化
-    def setParameters(priority = 'distance', driftThres=0.03,errorThres=0.01, dCount=5,debugmode=False,openmode=False):
+    def setParameters(priority = 'distance', driftThres=0.03,errorThres=0.01, dCount=7,debugmode=False,openmode=False):
 
         BezierCurve.AsymptoticPriority = priority # パラメータ割り当てフェーズにおける評価尺度
 
