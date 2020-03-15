@@ -1067,7 +1067,9 @@ def n2c(name):
 # (24) ベジエフィッティングの結果の描画
 def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],cpc=[], 
              cntL=[],cntR=[],cntC=[], ladder=None,PosL=[],PosR=[],PosC=[],saveImage=False,savepath="",
-                 resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange']):
+                 resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange'],
+                 figsize=(6,6),dpi=100,layout="111"):
+        
     # rdimg 入力画像、stt,end 曲線の描画範囲、
     # bezL,bezR,bezC ベジエ曲線、cpl,cpr,cpc 制御点
     # cntL,cntR,cntC 標本点のリスト, 
@@ -1075,6 +1077,19 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],
     # PosL,PosR,PosC ラダー用座標
     # saveImage 結果の保存の有無
     # resolution 曲線を描画する際に生成する描画点の数
+
+    if figsize != None:
+        plt.figure(figsize=figsize,dpi=dpi)
+
+    plt.subplot(layout)
+
+    drawBez0(rdimg,stt=stt,end=end,bezL=bezL,bezR=bezR,bezC=bezC,cpl=cpl,cpr=cpr,cpc=cpc, 
+            cntL=cntL,cntR=cntR,cntC=cntC, ladder=ladder,PosL=PosL,PosR=PosR,PosC=PosC,saveImage=saveImage,savepath=savepath,
+                resolution=resolution,n_ladder=n_ladder,ct=ct)
+
+def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],cpc=[], 
+             cntL=[],cntR=[],cntC=[], ladder=None,PosL=[],PosR=[],PosC=[],saveImage=False,savepath="",
+                 resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange']):
 
     # いわゆる自乗誤差の一般式
     s,t= symbols('s,t')
@@ -1088,10 +1103,11 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],
     tplins50 = np.linspace(stt, end, resolution)
     tplinsSP = np.linspace(stt, end, n_ladder)
     
-    plt.figure(figsize=(6,6),dpi=100)
+    # plt.figure(figsize=(6,6),dpi=100)
     plt.gca().invert_yaxis() 
     plt.gca().set_aspect('equal', adjustable='box') # アスペクト比を１：１に
     plt.imshow(192+(cv2.cvtColor(rdimg,cv2.COLOR_GRAY2RGB)/4).astype(np.uint8))
+    
     # 左輪郭の描画
     if bezL != None:
         if len(cntL) > 0 : tplins50 = np.linspace(stt, end, 5*len(cntL))
