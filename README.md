@@ -7,17 +7,21 @@ Radish Shape Analysis Laboratory
 
 ## Description
 
-**RadiShLab** は プログラミング言語 python で記述されたダイコンの形状解析のためのライブラリです.
+- **RadiShLab** は プログラミング言語 python で記述されたダイコンの形状解析のためのプログラム集です。
+- jupyter notebook 形式の実行できるノートを公開します。（N001,N002〜）
 
   - 原画像からのシルエット画像を生成
-  - シルエットの形状記述
-  - 曲がりを考慮した計測
+  - シルエットの形状記述（ベジエ曲線、フーリエ記述子）
+  - 曲がりを考慮した計測（ベジエの応用）
+
+----
 
 # New!
 
   - OPENCV 4.X 用にコードを書き換え
 
-====
+----
+
 ## Preview
 
 <div align="center">
@@ -30,13 +34,17 @@ Radish Shape Analysis Laboratory
 </div>
 
 ----
-## :high_brightness:Lazy Way:high_brightness: とりあえずどんなものか見てみたい方、開発環境のインストールなしで済ませたい方へ
+
+# :high_brightness:Lazy Way:high_brightness: 
+>とりあえずどんなものか見てみたい方、開発環境のインストールなしで済ませたい方へ
+
 Google Colaboratory で試してみてください。
 - 開発環境のインストール不要
 - ブラウザさえあれば実行可能、スマホやタブレットでも実行可能
 <img src="https://user-images.githubusercontent.com/24559785/76582358-5b62a280-6519-11ea-87ad-5b7a3ef90f24.gif" width=300>
 
-1. このリポジトリの zip をダウンロードし、解凍。Google Drive 直下に「RadiShLab」という名前で保存してください。
+1. このリポジトリの zip をダウンロードし、解凍。フォルダ名を「RadiShLab」に書き換え、自分の Google Drive 直下に保存する。  
+![repositoryZipDownload](https://user-images.githubusercontent.com/24559785/76692365-dacab000-6698-11ea-943b-dcb2d3fcd4e9.png)
 2. [Google Colaboratory](https://colab.research.google.com/)にログイン
 3. ノートブックを開く　＞　GitHub で、 "**iciromaco**" を検索
 4. iciromaco/RadiShLab のリポジトリにあるノートブックファイルを開く
@@ -48,7 +56,9 @@ Google ドライブに保存したファイルにアクセスしますので、�
 <img src="https://user-images.githubusercontent.com/24559785/76583297-315eaf80-651c-11ea-8ab7-ef47db3aa9bb.gif" width=500>
 
 ----
-# 自分のパソコン上に開発環境を構築して実行してみたい方、GUIツールも使いたい方
+# Developer's way
+> 自分のパソコン上に開発環境を構築して実行してみたい方、GUIツールも使いたい方
+
 ## Requirement
 - ### python と jupyter notebook が実行できる環境
 （推奨1)  [**Google Colaboratory**](https://colab.research.google.com/notebooks/welcome.ipynb?hl=ja). 
@@ -146,7 +156,10 @@ conda install Pillow numpy jupyter matplotlib seaborn
 ### すべてのライブラリをバージョンアップ
 ``` $ conda update --all```
 
-## Install
+____
+
+## RadiShLab 自体のインストール
+![repositoryZipDownload](https://user-images.githubusercontent.com/24559785/76692365-dacab000-6698-11ea-943b-dcb2d3fcd4e9.png)
 
 このリポジトリのzipをダウンロードして任意のディレクトリに解凍するだけです．
 
@@ -162,12 +175,13 @@ Google Colaboratory のプログラムは、通常はクラウド上の仮想Lin
 
 -  [ローカル ランタイム](https://research.google.com/colaboratory/local-runtimes.html?hl=ja)
 
+----
 
 ## Author
 - Seiichiro Dan： Osaka Gakuin Univ.
 - Yumiko Dan, Yasuko Yoshida： Kobe Univ.
 
-==
+____
 
 ## Related Links
 - [SHAPE](http://lbm.ab.a.u-tokyo.ac.jp/~iwata/shape/index.html)
