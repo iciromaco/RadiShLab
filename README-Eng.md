@@ -4,17 +4,20 @@ Radish Shape Analysis Laboratory
 
 ## Description
 
-**RadiShLab** is a python library for shape analysis of radishes.
+**RadiShLab** is RadiShLab is a collection of programs for shape analysis o radishes written in the programming language python.
 
   - Generatation of silhouette images from radish photos  
-  - Silhouette shape description  
-  - Measurement taking into account the radish body bending  
+  - Silhouette shape description  (Bezier curve, Fourier descriptor)
+  - Measurement taking into account the radish body bending   (Using Bezier curve）
+
+----
 
 # New!
 
   - Rewritten code for OPENCV 4.X
 
-====
+----
+
 # Preview
 
 <div align="center">
@@ -25,6 +28,8 @@ Radish Shape Analysis Laboratory
 ![ddd](https://user-images.githubusercontent.com/24559785/76141224-10004e00-605a-11ea-9c36-a27888906e22.png)
 
 </div>
+
+----
 
 # :high_brightness:Lazy Way:high_brightness:   For those who want to see what it's like , or who are not willing to install the development environment</H1>
 
@@ -44,6 +49,8 @@ All you have to do is follow the explanation and run the code.
 You'll need permission to access the files you've saved to Google Drive.
 
 <img src="https://user-images.githubusercontent.com/24559785/76583297-315eaf80-651c-11ea-8ab7-ef47db3aa9bb.gif" width=500>
+
+----
 
 # Developer's way
 ## Requirement
@@ -102,7 +109,9 @@ Please update the local environment regularly so that the version of Google Cola
 ### Update all libraries to the latest version
 ``` $ conda update --all```
 
-## Install
+____
+
+## Install RadiShLab 
 
 Just download the zip of this repository and unzip it to any directory.
 
@@ -120,9 +129,13 @@ If you run them on Google Colaboratory, upload and run the notebook.
 
 -  [Local Runtime](https://research.google.com/colaboratory/local-runtimes.html)
 
+----
+
 ## Author
 - Seiichiro Dan： Osaka Gakuin Univ.
 - Yumiko Dan, Yasuko Yoshida： Kobe Univ.
+
+____
 
 ## Related Links
 - [SHAPE](http://lbm.ab.a.u-tokyo.ac.jp/~iwata/shape/index.html)
