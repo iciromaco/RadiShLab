@@ -31,7 +31,8 @@ Radish Shape Analysis Laboratory
 
 ----
 
-# :high_brightness:Lazy Way:high_brightness:   For those who want to see what it's like , or who are not willing to install the development environment</H1>
+# :high_brightness:Lazy Way:high_brightness:   
+>For those who want to see what it's like , or who are not willing to install the development environment</H1>
 
 Try it on Google Colaboratory.  
 - No need to install development environment  
@@ -53,6 +54,8 @@ You'll need permission to access the files you've saved to Google Drive.
 ----
 
 # Developer's way
+> Those who want to build and run a development environment on site, and those who want to use GUI tools
+
 ## Requirement
 - ### python and jupyter notebook execution environment
 （Recomendation1)  [**Google Colaboratory**](https://colab.research.google.com/notebooks/welcome.ipynb?hl=ja). 
@@ -114,6 +117,7 @@ ____
 ## Install RadiShLab 
 
 Just download the zip of this repository and unzip it to any directory.
+See **Lazy Way**
 
 ## Usage
 
