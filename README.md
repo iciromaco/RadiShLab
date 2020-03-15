@@ -14,11 +14,14 @@ Radish Shape Analysis Laboratory
   - シルエットの形状記述（ベジエ曲線、フーリエ記述子）
   - 曲がりを考慮した計測（ベジエの応用）
 
+----
+
 # New!
 
   - OPENCV 4.X 用にコードを書き換え
 
-====
+----
+
 ## Preview
 
 <div align="center">
@@ -31,7 +34,10 @@ Radish Shape Analysis Laboratory
 </div>
 
 ----
-## :high_brightness:Lazy Way:high_brightness: とりあえずどんなものか見てみたい方、開発環境のインストールなしで済ませたい方へ
+
+## :high_brightness:Lazy Way:high_brightness: 
+>とりあえずどんなものか見てみたい方、開発環境のインストールなしで済ませたい方へ
+
 Google Colaboratory で試してみてください。
 - 開発環境のインストール不要
 - ブラウザさえあれば実行可能、スマホやタブレットでも実行可能
@@ -148,6 +154,8 @@ conda install Pillow numpy jupyter matplotlib seaborn
 ### すべてのライブラリをバージョンアップ
 ``` $ conda update --all```
 
+____
+
 ## RadiShLab 自体のインストール
 ![repositoryZipDownload](https://user-images.githubusercontent.com/24559785/76692365-dacab000-6698-11ea-943b-dcb2d3fcd4e9.png)
 
@@ -165,12 +173,13 @@ Google Colaboratory のプログラムは、通常はクラウド上の仮想Lin
 
 -  [ローカル ランタイム](https://research.google.com/colaboratory/local-runtimes.html?hl=ja)
 
+----
 
 ## Author
 - Seiichiro Dan： Osaka Gakuin Univ.
 - Yumiko Dan, Yasuko Yoshida： Kobe Univ.
 
-==
+____
 
 ## Related Links
 - [SHAPE](http://lbm.ab.a.u-tokyo.ac.jp/~iwata/shape/index.html)
