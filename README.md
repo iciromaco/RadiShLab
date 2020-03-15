@@ -35,7 +35,7 @@ Radish Shape Analysis Laboratory
 
 ----
 
-## :high_brightness:Lazy Way:high_brightness: 
+# :high_brightness:Lazy Way:high_brightness: 
 >とりあえずどんなものか見てみたい方、開発環境のインストールなしで済ませたい方へ
 
 Google Colaboratory で試してみてください。
@@ -56,7 +56,9 @@ Google ドライブに保存したファイルにアクセスしますので、�
 <img src="https://user-images.githubusercontent.com/24559785/76583297-315eaf80-651c-11ea-8ab7-ef47db3aa9bb.gif" width=500>
 
 ----
-# 自分のパソコン上に開発環境を構築して実行してみたい方、GUIツールも使いたい方
+# Developer's way
+> 自分のパソコン上に開発環境を構築して実行してみたい方、GUIツールも使いたい方
+
 ## Requirement
 - ### python と jupyter notebook が実行できる環境
 （推奨1)  [**Google Colaboratory**](https://colab.research.google.com/notebooks/welcome.ipynb?hl=ja). 
