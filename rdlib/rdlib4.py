@@ -169,7 +169,7 @@ def mkparaimage(imglist):
         return mkparaimage2(imglist[0],imglist[1])
     return mkparaimage2(imglist[0],mkparaimage(imglist[1:]))
 
-# (3) マージンをつける
+# (4) マージンをつける
 MinimamMargin = 10 
 def makemargin(img,mr=1.5,mm = MinimamMargin):
     # 画像サイズが元の短径の mr 倍になるようにマージンをつける
@@ -186,7 +186,7 @@ def makemargin(img,mr=1.5,mm = MinimamMargin):
     img2[y1:y1+h,x1:x1+w] = img
     return img2
 
-# マージンのカット
+# (4)-2 マージンのカット
 # 白黒画像(0/255)が前提
 def cutmargin(img,mr=1.0,mm=0,withRect=False):
     # default ではバウンディングボックスで切り出し
@@ -206,7 +206,7 @@ def cutmargin(img,mr=1.0,mm=0,withRect=False):
     else:
         return bimg
 
-# (4) 最大白領域の取り出し
+# (5) 最大白領域の取り出し
 def getMajorWhiteArea0(img, order=1):
     # order 何番目に大きい領域を取り出したいか
     # dilation 取り出す白領域をどれだけ多めにするか
@@ -229,6 +229,7 @@ def getMajorWhiteArea0(img, order=1):
     labelimg = labelimg.astype(np.uint8)[:,:w]
     return labelimg, cnt, areaindex
 
+# (5)-2 
 def getMajorWhiteArea(img, order=1, dilation=0, binary=False):
     # order 何番目に大きい領域を取り出したいか
     # dilation 取り出す白領域をどれだけ多めにするか
@@ -250,7 +251,7 @@ def getMajorWhiteArea(img, order=1, dilation=0, binary=False):
         oimg[limg>0] = 255
     return oimg
 
-# (5) 処理結果画像（fimg)に処理前画像（bimg)の輪郭を描く
+# (6) 処理結果画像（fimg)に処理前画像（bimg)の輪郭を描く
 def draw2(bimg,fimg,thickness=2,color=(255,0,200)):
     bimg2 = getMajorWhiteArea(bimg,binary=True)
     if len(fimg.shape)>2:
@@ -265,7 +266,7 @@ def draw2(bimg,fimg,thickness=2,color=(255,0,200)):
     canvas = cv2.drawContours(canvas, cnt, -1, color, thickness)
     return canvas # 
 
-# (6) (x1,y1)から（x2,y2) に向かう直線のX軸に対する角度
+# (7) (x1,y1)から（x2,y2) に向かう直線のX軸に対する角度
 def getDegreeOfALine(x1,y1,x2,y2):
         dx = x2-x1
         dy = y2-y1
@@ -280,7 +281,7 @@ def getDegreeOfALine(x1,y1,x2,y2):
             deg = 180*(1+np.arctan(dy/dx)/np.pi)
         return deg
 
-# (7) (x1,y1)から（x2,y2) に向かう直線の延長上の十分離れた２点の座標
+# (8) (x1,y1)から（x2,y2) に向かう直線の延長上の十分離れた２点の座標
 def getTerminalPsOnLine(x1,y1,x2,y2):
         dx = x2-x1
         dy = y2-y1
@@ -290,10 +291,10 @@ def getTerminalPsOnLine(x1,y1,x2,y2):
         t2 = int(y1 - 1000*dy)
         return s1,t1,s2,t2
 
-# (8) ガウスぼかし、膨張収縮、輪郭近似で形状を整える関数 RDreform()
+# (9) ガウスぼかし、膨張収縮、輪郭近似で形状を整える関数 RDreform()
 # 形状の細かな変化をガウスぼかし等でなくして大まかな形状にする関数
 
-# ガウスぼかしの程度を決めるカーネルサイズの自動決定
+# (9)-1 ガウスぼかしの程度を決めるカーネルサイズの自動決定
 def calcksize(img):
     if img.ndim == 3:
         img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)        
@@ -308,6 +309,7 @@ def calcksize(img):
         ksize = int(np.sqrt(maxarea)/60)*2+1
     return ksize
 
+# (9)-2 
 def RDreform(img,order=1,ksize=0,shrink=SHRINK):
     # ksize : ガウスぼかしの量、shrink 膨張収縮による平滑化のパラメータ
     # order : 取り出したい白領域の順位
@@ -330,6 +332,7 @@ def RDreform(img,order=1,ksize=0,shrink=SHRINK):
 
     return RDreform_D(img2,ksize=ksize,shrink=SHRINK)
 
+# (9)-3
 def RDreform_D(img,ksize=5,shrink=SHRINK):
 
     # 収縮・膨張によりヒゲ根を除去する
@@ -372,7 +375,7 @@ def RDreform_D(img,ksize=5,shrink=SHRINK):
         outimg = np.ones_like(img3)*255
     return outimg
 
-# (9) Grabcut による大根領域の抜き出し
+# (10) Grabcut による大根領域の抜き出し
 # GrabCutのためのマスクを生成する
 def mkGCmask(img, order=1):
     # カラー画像の場合はまずグレー画像に変換
@@ -394,7 +397,7 @@ def mkGCmask(img, order=1):
 
     return mask1,mask2
 
-# (10) 大根部分だけセグメンテーションし、結果とマスクを返す
+# (11) 大根部分だけセグメンテーションし、結果とマスクを返す
 def getRadish(img,order=1,shrink=SHRINK):
     # 白領域の面積が order で指定した順位の領域を抜き出す
 
@@ -423,7 +426,7 @@ def getRadish(img,order=1,shrink=SHRINK):
 
     return grabimg, silimg
 
-# (11) 重心の位置を求める
+# (12) 重心の位置を求める
 def getCoG(img):
     _lnum, _img, cnt, cog = cv2.connectedComponentsWithStats(img)
     areamax = np.argmax(cnt[1:,4])+1 # ０番を除く面積最大値のインデックス
@@ -431,7 +434,7 @@ def getCoG(img):
     # x,y,w,h,areas = cnt[areamax] # 囲む矩形の x0,y0,w,h,面積
     return c_x,c_y,cnt[areamax]
 
-# (12) 回転した上でマージンをカットした画像を返す
+# (13) 回転した上でマージンをカットした画像を返す
 def rotateAndCutMargin(img,deg,c_x,c_y): 
     # 非常に稀であるが、回転すると全体が描画領域外に出ることがあるので作業領域を広く確保
     # mat = cv2.getRotationMatrix2D((x0,y0), deg-90, 1.0) # アフィン変換マトリクス
@@ -451,7 +454,7 @@ def rotateAndCutMargin(img,deg,c_x,c_y):
 
     return resultimg
 
-# (13) 大きさを正規化したシルエットの生成
+# (14) 大きさを正規化したシルエットの生成
 def getNormSil(img,tiltzero=True,mr=1.5,unitSize=UNIT):
     #  img 入力画像
     #  tiltzero  True なら傾き補正する
@@ -465,7 +468,7 @@ def getNormSil(img,tiltzero=True,mr=1.5,unitSize=UNIT):
         
     return makeUnitImage(img,mr=mr,unitSize=UNIT)
     
-# (14) 長辺の mr 倍サイズの枠の中央に対象を配置した画像を返す
+# (15) 長辺の mr 倍サイズの枠の中央に対象を配置した画像を返す
 def makeUnitImage(img,mr=1.5,unitSize=UNIT):
     # 長辺が UNIT ピクセルになるよう縮小し、(mrxUNIT)x(mrxUNIT)の画像の中央に配置する。
     h,w = img.shape[:2]
@@ -477,7 +480,7 @@ def makeUnitImage(img,mr=1.5,unitSize=UNIT):
     canvas[y0:y0+rsh,x0:x0+rsw] = cv2.resize(img,(rsw,rsh)) # リサイズして中央にはめ込み
     return canvas
     
-# (15) 近似楕円の軸方向が水平垂直となるように回転補正した画像を求める
+# (16) 近似楕円の軸方向が水平垂直となるように回転補正した画像を求める
 def tiltZeroImg(img):
     h,w = img.shape[:2]
     img0,rx,ry,rw,rh = cutmargin(img,mm=0,withRect=True) # バウンダリボックスで切り出し
@@ -507,14 +510,30 @@ def tiltZeroImg(img):
             
     return img1
 
-# (16) 輪郭点列を得る
+# (17) 輪郭点列を得る
 def getContour(img):
     # 輪郭情報 主白連結成分の輪郭点列のみ返す関数
     contours, _hierarchy = cv2findContours34(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE) # 輪郭線追跡
     cnt00 = contours[np.argmax([len(c) for c in contours])] # 最も長い輪郭
     return cnt00
 
-# (17) 輪郭表現の相互変換
+# (18) 幅１の輪郭データを開く
+def openAContour(cnt):
+    # cnt 幅１の領域の輪郭データ
+    cnt0 = cnt.squeeze() # すでに squeeze()されていた場合は変化しない
+    # 分岐のない線図形の輪郭は、トレースが端点から始まれば１箇所、途中からなら２箇所折り返しがある。端点と折り返し、
+    # もしくは、折り返しと折り返しの間を取り出すことで、重複のない輪郭データとする
+    i1 = 0
+    for i in range(int(len(cnt0))-1):
+        if np.all(cnt0[i-1] == cnt0[i+1]) or np.all(cnt0[i-2] == cnt0[i+1]): 
+            i0,i1= i1,i
+    cnt0 = cnt0[i0:i1+1]
+    if cnt0[0][1] > cnt0[-1][1]: 
+        cnt0 = cnt0[::-1]
+    
+    return cnt0
+
+# (19) 輪郭表現の相互変換
 # 輪郭構造体をただのリストに変換  -> [[1,2],[2,3]....]
 def contolist(con):
     return con.squeeze().tolist()
@@ -523,7 +542,7 @@ def contolist(con):
 def listtocon(list):
     return np.array([[p] for p in list])
 
-# (18)  輪郭の描画
+# (20)  輪郭の描画
 def drawContours(canvas,con,color=255,thickness=1):
     if type(con) == np.ndarray:
         if con.ndim == 3: # 普通の輪郭情報
@@ -534,96 +553,154 @@ def drawContours(canvas,con,color=255,thickness=1):
         for c in con:
             drawContours(canvas,c,color=255,thickness=1)
 
-# (19) 中心軸端点の推定
+# (21) 曲率関数
+def curvature(func): # func は sympy 形式の t の関数（fx,fy）のペア
+    t= symbols('t')
+    fx,fy = func
+    dx = diff(fx)
+    dy = diff(fy)
+    ddx = diff(dx)
+    ddy = diff(dy)
+    k = (dx*ddy - dy*ddy)/(dx*dx + dy*dy)**(3/2)
+    return k*k
+
+# (22) 輪郭中の曲率最大点のインデックスと輪郭データを返す
+def maxCurvatureP(rdimg,con=[],cuttop = 0, cutbottom = 0.8, sband = 0.25, N=8):
+    # rdimg 画像、con 輪郭データ
+    # cuttop, cutbottom 個体の高さに対してこの範囲は除外する
+    # sband 曲率最大値を探す範囲　0.5 を挟んで両側この値の範囲で曲率最大点を探す
+    con = con.squeeze()
+    # 輪郭データが与えられていないなら抽出
+    if len(con) == 0:
+        con = getContour(rdimg)
+    ys = con[:,1]
+    y0 = ys.min() # バウンディングボックスの上端
+    h = ys.max() - y0 + 1 # バウンディングボックスの高さ
+    canvas = np.zeros_like(rdimg)
+    drawContours(canvas,con) # 輪郭を描く
+    canvas[int(y0 + cuttop*h):int(y0 + cutbottom*h),:] = 0 # 指定範囲を黒で塗りつぶす
+    # 輪郭の輪郭を抽出
+    contours, hierarchy = cv2findContours34(canvas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)    
+    maxcnt_i = np.argmax(np.array([len(c) for c in contours])) # 最も長い輪郭データの番号
+    # 幅１の図形の輪郭なので、データが折り返しになっている
+    cnt0 = contours[maxcnt_i].squeeze() # 最も長い輪郭
+
+    i1 = 0
+    for i in range(int(len(cnt0))-1):
+        if np.all(cnt0[i-1] == cnt0[i+1]) or np.all(cnt0[i-2] == cnt0[i+1]): 
+            i0,i1= i1,i
+    cnt0 = cnt0[i0:i1+1]
+    if cnt0[0][1] > cnt0[-1][1]: 
+        cnt0 = cnt0[::-1]
+
+    samples = getSamples(cnt0,N=len(cnt0)//3,mode='Equidistant')
+    bez = BezierCurve(N=N,samples=samples) # 7次近似固定
+    cps,[fx,fy] = bez.fit0() # ベジエ近似
+    t= symbols('t')
+    kf = curvature([fx,fy]) # 曲率関数を得る
+    # t = 0.5 ± sband 内 を１００等分して曲率データを得る
+    ps = np.array([float(kf.subs(t,s)) for s in np.linspace(0.5-sband,0.5+sband,101)])
+    maxindex = ps.argmax() # 曲率最大のデータ番号
+    tmax = 0.5 - sband + 2*sband*maxindex/100
+    mx,my = float(fx.subs(t,tmax)),float(fy.subs(t,tmax)) # 曲率最大点の座標
+    maxindex = np.array([np.linalg.norm(v) for v in con - [mx,my]]).argmin()
+    return maxindex, con
+
+# (23) 中心軸端点の推定
 from statistics import mean
-def findTips(img,con=[],top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8,mode=2):
+def findTips(img,con=[],top=0.1,bottom=0.8,topCD=0.5,bottomCD=0.5,mode=2):
     # 入力　
     #   img シルエット画像
     #   con 輪郭点列　（なければ画像から作る）
     # パラメータ
     #   top 中心軸上端点の候補探索範囲　高さに対する割合
-    #   bottom 中心軸下端点の候補探索範囲　
+    #   bottom 中心軸下端点の候補探索範囲　高さに対する割合
     #   topCD  中心軸上端点らしさの評価データを収集する範囲
-    #   bottomCD 中心軸下端点らしさの評価データを収集する範囲
+    #   bottomCD  中心軸下端点らしさの評価データを収集する範囲
     #   mode 0: 頭頂点のみ返す、1:尾端のみ返す、2:頭頂と尾端の両方を返す
     # 出力
     #   con  輪郭点列
     #   topTip  中心軸上端点の輪郭番号
     #   bottomTip 中心軸下端点の輪郭番号
-    #   symtops 各輪郭点の中心軸上端らしさの評価データ
-    #   symbottoms 各輪郭点の中心軸下端らしさの評価データ
+    #   symtops,symbottoms 評価データ
     
     if len(con)==0: # 点列がすでにあるなら時間短縮のために与えてもよい
         con = getContour(img)
     conlist = con.squeeze().tolist() # 輪郭点列のリスト
     gx,gy,(x0,y0,w,h,a) = getCoG(img) # 重心とバウンディングボックス
-    N = len(conlist) # 輪郭点列の数)
+    ncon = len(conlist) # 輪郭点列の数)
     
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
     # オープニング（収縮→膨張）平滑化した図形を求める
     img1 = cv2.morphologyEx(img.copy(), cv2.MORPH_OPEN, kernel,iterations = 5)
-    HL = (N+len(getContour(img1)))//4 #  平滑化図形の輪郭長
+    HL = (ncon+len(getContour(img1)))//4 #  平滑化図形の輪郭長
     
+    # 対称性評価関数
     def calcval(i,irrend):
         data = []
         vc = 0
-        for n in range(1,irrend): # 距離が近すぎると誤差が大きいので３から
-            p0,p1,p2 = conlist[i],conlist[(i-n)%N],conlist[(i+n)%N]
+        for n in range(3,irrend): # 距離が近すぎると誤差が大きいので３から
+            p0,p1,p2 = conlist[i],conlist[(i-n)%ncon],conlist[(i+n)%ncon]
             v1 = (p2[0]-p1[0],p2[1]-p1[1]) # p1p2 ベクトル
             p3 = ((p1[0]+p2[0])/2,(p1[1]+p2[1])/2) # p3 = p1とp2の中点
             v2 = (p3[0]-p0[0],p3[1]-p0[1]) # p0p3 ベクトル
             nv1 = np.linalg.norm(v1) # p1p2 の長さ
             nv2 = np.linalg.norm(v2) # p0p3 の長さ
-            if nv2 > 0:
-                data.append(np.dot(v1,v2)/nv1/nv2)
+            if nv2 > 0 and nv1 > 0:
+                data.append(abs(np.dot(v1,v2)/nv1/nv2))
         if len(data) == 0:
             return -1
         else:
-            return abs(mean(data))
+            return mean(data)
     
     # 上部の端点の探索
     symtops = []
     if mode == 1:
         topTip = 0
     else:
-        for i in range(N):
+        for i in range(ncon):
             if conlist[i][1] - y0 >= top*h: # バウンディングボックス上端からの距離
                 val = -1
             else:
                 val = calcval(i,irrend=int(topCD*HL))
             symtops.append(val)
         m = np.max(symtops) # 探索対象のうちの最大評価値
-        for i in range(N):
+        for i in range(ncon):
             if symtops[i] < 0: 
                 symtops[i] = m
         topTip = np.argmin(symtops)
 
-    # 下部の端点の探索
+    # 下部の端点は曲率最大点
+    # bottomTip, _con = maxCurvatureP(img,con=con,cutbottom = bottom, sband=sband,N=N)
+
+    # 下部の端点の探索 （上端と同じ手法）
+    
     symbottoms = []
     if mode == 0:
         bottomTip = 0
     else:
-        for i in range(N):
+        for i in range(ncon):
             if conlist[i][1] - y0 < bottom*h: # バウンディングボックス上端からの距離
                 val = -1
             else:
-                val = calcval(i,irrend=int(bottomCD*HL))
+                val = calcval(i,irrend=int(0.5*HL)) # bottomCD
             symbottoms.append(val)
         m = np.max(symbottoms) # 探索対象のうちの最大評価値
-        for i in range(N):
+        for i in range(ncon):
             if symbottoms[i] < 0: 
                 symbottoms[i] = m
-        bottomTip = np.argmin(symbottoms)
+        bottomTip = np.argmin(symbottoms) 
+
     return con,topTip,bottomTip,symtops,symbottoms
 
-
-## (20) 上端・末端情報に基づき輪郭線を左右に分割する
-def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10,mode=2):
+# (24) 上端・末端情報に基づき輪郭線を左右に分割する
+def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=3,dbtmdr=3,mode=2):
     # drcimg: ダイコンの輪郭画像
     # (dtopx,dtopy) dtopdr　上部削除円中心と半径
     # (dbtmx,dbtmy) dbtmdr 　下部削除円中心と半径
     # mode:  1:下部端点で開いた輪郭を返す、2: 左右分割した2本の輪郭を返す
-
+    # if  dtopdr < 2 or dbtmdr < 2:
+    #    print("Warning. Radius may be too small. dtopdr {}, dbtmdr {}".format(dtopdr,dbtmdr))
     # 中心軸上端部と末端部に黒で円を描いて輪郭を２つに分離
     canvas = rdcimg.copy()
     # まず上端を指定サイズの円で削る
@@ -642,35 +719,24 @@ def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10,mode
             elif mode != 2 and nLabels >= 2:
                 break
             dbtmdr = dbtmdr + 2 # ラベル数が　３（背景を含むので３） にならないとすれば先端が削り足りない可能性が最も高いので半径を増やしてリトライ   
-        
+
     contours, hierarchy = cv2findContours34(canvas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)    
     maxcnt_i = np.argmax(np.array([len(c) for c in contours]))
     cnt0 = contours[maxcnt_i].squeeze() # 最も長い輪郭
+
     if mode == 2:
         contours = contours[:maxcnt_i]+contours[maxcnt_i+1:]
         maxcnt_i = np.argmax(np.array([len(c) for c in contours]))
         cnt1 = contours[maxcnt_i].squeeze()
-    
+
     # 分岐のない線図形の輪郭は、トレースが端点から始まれば１箇所、途中からなら２箇所折り返しがある。端点と折り返し、
     # もしくは、折り返しと折り返しの間を取り出すことで、重複のない輪郭データとする
-    i1 = 0
-    for i in range(int(len(cnt0))-1):
-        if np.all(cnt0[i-1] == cnt0[i+1]): 
-            i0,i1= i1,i
-    cnt0 = cnt0[i0:i1+1]
-    if cnt0[0][1] > cnt0[-1][1]: 
-        cnt0 = cnt0[::-1]
+    cnt0 = openAContour(cnt0)
     
     if mode != 2:
         return cnt0
     else: # mode == 2:
-        i1 = 0
-        for i in range(int(len(cnt1))-1):
-            if np.all(cnt1[i-1] == cnt1[i+1]):
-                i0,i1= i1,i
-        cnt1 = cnt1[i0:i1+1]
-        if cnt1[0][1] > cnt1[-1][1]:
-            cnt1 = cnt1[::-1]
+        cnt1 = openAContour(cnt1)
 
         # 中程の点を比べて左にある方を左と判定する。
         c0 = cnt0[int(len(cnt0)/2)][0]
@@ -681,25 +747,25 @@ def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10,mode
                 conRight,conLeft = cnt1,cnt0
         return conLeft,conRight
 
-# (21) 与えられたダイコン画像の輪郭を左右に分割する
-def getCntPairWithImg(rdimg,top=0.1,bottom=0.9,topCD=1.0, bottomCD=0.8,topdtopdr=10,dbtmdr=10,mode=2):
+# (25) 与えられたダイコン画像の輪郭を左右に分割する
+def getCntPairWithImg(rdimg,top=0.1,bottom=0.9,topCD=1.0,bottomCD=0.5,dtopdr=3,dbtmdr=3,mode=2):
     # drimg: ダイコンの画像
-    # top,bottom,topCD,bottomCD ：findTips() に与えるパラメータ
+    # top,bottom,topCD：findTips() に与えるパラメータ
     # dtopdr,dbtmdr:　getCntPairWithCntImg() に与えるパラメータ
-    con,topTip,bottomTip,symtops,symbottoms = findTips(rdimg,top=top,bottom=bottom,topCD=topCD, bottomCD=bottomCD,mode=mode)
-    conlist = contolist(con)
+    con,topTip,bottomTip,symtops,symbottoms = findTips(rdimg,top=top,bottom=bottom,topCD=topCD,bottomCD=bottomCD,mode=mode)
+    conlist = con.squeeze()
     dtopx,dtopy = conlist[topTip]
     dbtmx,dbtmy = conlist[bottomTip]
     rdcimg = np.zeros_like(rdimg)  # 描画キャンバスの準備
     cv2.drawContours(rdcimg,con, -1, 255,thickness=1)
     if mode == 2:
-        conLeft,conRight = getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10,mode=mode)
+        conLeft,conRight = getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=dtopdr,dbtmdr=dbtmdr,mode=mode)
         return conLeft,conRight
     else:
-        contAll = getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=10,dbtmdr=10,mode=mode)
+        contAll = getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=dtopdr,dbtmdr=dbtmdr,mode=mode)
         return contAll       
 
-#　(22) 座標リストから等間隔で指定した数の標本を抜き出す。
+#　(26) 座標リストから等間隔で指定した数の標本を抜き出す。
 def getSamples(cont,N=20,mode='Equidistant'):
     if mode=='Equidistant':
         axlength = np.array(cv2.arcLength(cont, closed=False)) # 弧長
@@ -708,7 +774,7 @@ def getSamples(cont,N=20,mode='Equidistant'):
     else: # 'Simple' 実際にはなんでもOK 
         return cont[list(map(int,np.linspace(0, len(cont)-1,N)))]
 
-#  (23) N次ベジエフィッティング
+#  (27) N次ベジエフィッティング
 from sympy import diff,Symbol,Matrix,symbols,solve,simplify,binomial
 from sympy.abc import a,b,c
 from sympy import var
@@ -1017,7 +1083,7 @@ class BezierCurve:
         # cpx,cpy 制御点、bezresX,bezresY ベジエ曲線の定義式
         # tpara 制御点   
         
-    # デバッグモードのオンオフ
+    # (28) デバッグモードのオンオフ
     def toggledebugmode(set=True,debug=False):
         if set:
             BezierCurve.debugmode = debug
@@ -1025,7 +1091,7 @@ class BezierCurve:
             BezierCurve.debugmode = not BezierCurve.debugmode
         print("debugmode:",BezierCurve.debugmode)
         
-    # パラメータのセットと表示　引数なしで呼ぶ出せば初期化
+    # (29) パラメータのセットと表示　引数なしで呼ぶ出せば初期化
     def setParameters(priority = 'distance', driftThres=0.03,errorThres=0.01, dCount=7,debugmode=False,openmode=False):
 
         BezierCurve.AsymptoticPriority = priority # パラメータ割り当てフェーズにおける評価尺度
@@ -1044,7 +1110,7 @@ class BezierCurve:
         print("openmode  : ",openmode)
         print("")
 
-# (25) カラーの名前をからコードに
+# (30) カラーの名前をからコードに
 def n2c(name):
     cmap = plt.get_cmap("tab10") # カラーマップ
     # 0:darkblue,1:orange,2:green,3:red,4:purple,
@@ -1064,7 +1130,7 @@ def n2c(name):
     else:
         return cmap(0)
 
-# (24) ベジエフィッティングの結果の描画
+# (31) ベジエフィッティングの結果の描画
 def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],cpc=[], 
              cntL=[],cntR=[],cntC=[], ladder=None,PosL=[],PosR=[],PosC=[],saveImage=False,savepath="",
                  resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange'],
@@ -1086,7 +1152,7 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],
     drawBez0(rdimg,stt=stt,end=end,bezL=bezL,bezR=bezR,bezC=bezC,cpl=cpl,cpr=cpr,cpc=cpc, 
             cntL=cntL,cntR=cntR,cntC=cntC, ladder=ladder,PosL=PosL,PosR=PosR,PosC=PosC,saveImage=saveImage,savepath=savepath,
                 resolution=resolution,n_ladder=n_ladder,ct=ct)
-
+# (31)-2
 def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],cpc=[], 
              cntL=[],cntR=[],cntC=[], ladder=None,PosL=[],PosR=[],PosC=[],saveImage=False,savepath="",
                  resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange']):
@@ -1168,7 +1234,7 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
     if saveImage:
         pltsaveimage(savepath,'Bez')
 
-# matplotlib で描いた画像の保存
+# (32) matplotlib で描いた画像の保存
 def pltsaveimage(savepath,prefix):
         # 結果を保存する
         savedir,filename = os.path.split(savepath)
