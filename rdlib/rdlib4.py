@@ -1081,7 +1081,23 @@ class BezierCurve:
         print("")
         return cps,Matrix([fx,fy])
         # cpx,cpy 制御点、bezresX,bezresY ベジエ曲線の定義式
-        # tpara 制御点   
+        # tpara 制御点
+
+    # 段階的ベジエ近似　    
+    def fit2(self,Nfrom=3,Nto=12,maxTry=3,prefunc = None):
+        abez = BezierCurve(N=Nfrom,samples=self.Samples,prefunc = prefunc)
+        if prefunc 
+        cps,[fx,fy] = abez.fit0() # レベル０フィッティングを実行
+        trynum = Nfrom
+        while trynum <= Nto:
+            print(trynum,end="")
+            # 最大 maxTry 回あてはめを繰り返す
+            cps,fall = self.fit1(maxTry=maxTry)
+            # 結果を描画
+            drawBez0(img,stt=0.00,end=1.0,bezL=fall,cntL=Samples,ct=cts[(N-3)%10],bzlabel=str(N)) 
+            # 次数を上げてインスタンス生成
+            trynum = trynum +1
+            bezAll = BezierCurve(N=self.N,samples=self.Samples,prefunc=fall)
         
     # (28) デバッグモードのオンオフ
     def toggledebugmode(set=True,debug=False):
@@ -1134,7 +1150,7 @@ def n2c(name):
 def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],cpc=[], 
              cntL=[],cntR=[],cntC=[], ladder=None,PosL=[],PosR=[],PosC=[],saveImage=False,savepath="",
                  resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange'],
-                 figsize=(6,6),dpi=100,layout="111"):
+                 figsize=(6,6),dpi=100,layout="111",bzlabel = ""):
         
     # rdimg 入力画像、stt,end 曲線の描画範囲、
     # bezL,bezR,bezC ベジエ曲線、cpl,cpr,cpc 制御点
@@ -1151,11 +1167,13 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],
 
     drawBez0(rdimg,stt=stt,end=end,bezL=bezL,bezR=bezR,bezC=bezC,cpl=cpl,cpr=cpr,cpc=cpc, 
             cntL=cntL,cntR=cntR,cntC=cntC, ladder=ladder,PosL=PosL,PosR=PosR,PosC=PosC,saveImage=saveImage,savepath=savepath,
-                resolution=resolution,n_ladder=n_ladder,ct=ct)
-# (31)-2
+                resolution=resolution,n_ladder=n_ladder,ct=ct,bzlabel = bzlabel)
+                
+# (31)-2 # 重ね書き用
 def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],cpc=[], 
              cntL=[],cntR=[],cntC=[], ladder=None,PosL=[],PosR=[],PosC=[],saveImage=False,savepath="",
-                 resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange']):
+                 resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange'],
+                 bzlabel = ""):
 
     # いわゆる自乗誤差の一般式
     s,t= symbols('s,t')
@@ -1179,7 +1197,7 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
         if len(cntL) > 0 : tplins50 = np.linspace(stt, end, 5*len(cntL))
         plotx = [bezXl.subs(t,tp) for tp in tplins50 ]
         ploty = [bezYl.subs(t,tp) for tp in tplins50 ]
-        plt.plot(plotx,ploty,color = n2c(ct[0])) # red
+        plt.plot(plotx,ploty,color = n2c(ct[0]),label=bzlabel) # red
     if len(cntL) >0:
         plt.scatter(cntL[:,0],cntL[:,1],color =n2c(ct[3]),marker = '.') #  サンプル点 blue
     if len(cpl) > 0: # 制御点
