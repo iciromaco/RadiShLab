@@ -1085,21 +1085,18 @@ class BezierCurve:
 
     # 段階的ベジエ近似　    
     def fit2(self,Nfrom=3,Nto=12,maxTry=3,prefunc = None):
-        abez = BezierCurve(N=Nfrom,samples=self.Samples,prefunc = prefunc)
-        if prefunc 
-        cps,[fx,fy] = abez.fit0() # レベル０フィッティングを実行
         trynum = Nfrom
+        func = prefunc
         while trynum <= Nto:
+            abez = BezierCurve(N=Nfrom,samples=self.samples, prefunc = func)
             print(trynum,end="")
             # 最大 maxTry 回あてはめを繰り返す
-            cps,fall = self.fit1(maxTry=maxTry)
-            # 結果を描画
-            drawBez0(img,stt=0.00,end=1.0,bezL=fall,cntL=Samples,ct=cts[(N-3)%10],bzlabel=str(N)) 
+            cps,func = abez.fit1(maxTry=maxTry)
             # 次数を上げてインスタンス生成
             trynum = trynum +1
-            bezAll = BezierCurve(N=self.N,samples=self.Samples,prefunc=fall)
-        
-    # (28) デバッグモードのオンオフ
+        return cps,func
+
+    # デバッグモードのオンオフ
     def toggledebugmode(set=True,debug=False):
         if set:
             BezierCurve.debugmode = debug
@@ -1107,7 +1104,7 @@ class BezierCurve:
             BezierCurve.debugmode = not BezierCurve.debugmode
         print("debugmode:",BezierCurve.debugmode)
         
-    # (29) パラメータのセットと表示　引数なしで呼ぶ出せば初期化
+    # パラメータのセットと表示　引数なしで呼ぶ出せば初期化
     def setParameters(priority = 'distance', driftThres=0.03,errorThres=0.01, dCount=7,debugmode=False,openmode=False):
 
         BezierCurve.AsymptoticPriority = priority # パラメータ割り当てフェーズにおける評価尺度
@@ -1126,7 +1123,7 @@ class BezierCurve:
         print("openmode  : ",openmode)
         print("")
 
-# (30) カラーの名前をからコードに
+# (28) カラーの名前をからコードに
 def n2c(name):
     cmap = plt.get_cmap("tab10") # カラーマップ
     # 0:darkblue,1:orange,2:green,3:red,4:purple,
@@ -1146,7 +1143,7 @@ def n2c(name):
     else:
         return cmap(0)
 
-# (31) ベジエフィッティングの結果の描画
+# (29) ベジエフィッティングの結果の描画
 def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],cpc=[], 
              cntL=[],cntR=[],cntC=[], ladder=None,PosL=[],PosR=[],PosC=[],saveImage=False,savepath="",
                  resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange'],
@@ -1169,7 +1166,7 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],
             cntL=cntL,cntR=cntR,cntC=cntC, ladder=ladder,PosL=PosL,PosR=PosR,PosC=PosC,saveImage=saveImage,savepath=savepath,
                 resolution=resolution,n_ladder=n_ladder,ct=ct,bzlabel = bzlabel)
                 
-# (31)-2 # 重ね書き用
+# (29)-2 # 重ね書き用
 def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],cpc=[], 
              cntL=[],cntR=[],cntC=[], ladder=None,PosL=[],PosR=[],PosC=[],saveImage=False,savepath="",
                  resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange'],
@@ -1252,7 +1249,7 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
     if saveImage:
         pltsaveimage(savepath,'Bez')
 
-# (32) matplotlib で描いた画像の保存
+# (30) matplotlib で描いた画像の保存
 def pltsaveimage(savepath,prefix):
         # 結果を保存する
         savedir,filename = os.path.split(savepath)
