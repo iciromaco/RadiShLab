@@ -1043,7 +1043,7 @@ class BezierCurve:
             tsold = ts.copy()
             # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
             if priority == 'distance' or priority == 'hyblid':
-                ts = self.refineTparaN(tsold,[fx,fy],0,len(sps))
+                ts = self.refineTparaN(ts,[fx,fy],0,len(sps))
             # 標本点が等間隔であることを重視し、曲線上の対応点も等間隔であるということを評価尺度とする方法 
             if priority == 'span':
                 ts = self.assignPara2Samples(prefunc=[fx,fy])
@@ -1093,7 +1093,7 @@ class BezierCurve:
             return bestcps,bestfunc
 
     # 段階的ベジエ近似　    
-    def fit2(self,Nfrom=3,Nto=12,maxTry=3,prefunc = None,errorThres=0.01,withError=False,tpara=[]):
+    def fit2(self,Nfrom=3,Nto=12, maxTry = 10,prefunc = None,errorThres=0.5,withError=False,tpara=[],withFig=False):
         # Nfrom 近似開始次数
         # Nto 最大近似次数 Nto < Nfrom  の場合は誤差しきい値による打ち切り
         # maxTry 各次数での繰り返し回数
@@ -1101,19 +1101,20 @@ class BezierCurve:
         # errorThres 打ち切り誤差
         # withError 誤差と次数を返すかどうか
 
-        Ncurrent = Nfrom
+        Ncurrent = Nfrom - 1
         func = prefunc
         ts = tpara
-        while Ncurrent <= Nto:
+        err = errorThres + 1
+        while Ncurrent < Nto and  errorThres < err :
+            Ncurrent = Ncurrent + 1
             abez = BezierCurve(N=Ncurrent,samples=self.samples, prefunc = func)
             print(Ncurrent,end="")
             # 最大 maxTry 回あてはめを繰り返す
-            cps,func,error = abez.fit1(maxTry=maxTry,withError=True,tpara=ts)
+            cps,func,err = abez.fit1(maxTry=maxTry,withError=True,tpara=ts)
             ts = abez.ts
             # 次数を上げてインスタンス生成
-            Ncurrent = Ncurrent +1
         if withError:
-            return cps,func,Ncurrent,error
+            return cps,func,Ncurrent,err
         else:
             return cps,func
 
