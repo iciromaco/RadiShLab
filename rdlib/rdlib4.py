@@ -906,8 +906,8 @@ class BezierCurve:
         # ts 標本点に対するパラメータ割り当て
         samples = self.samples # 標本点
         x,y = samples[:,0],samples[:,1] # 標本点のｘ座標列とｙ座標列
-        # t 標本点に結びつるパラメータは引数として与えられているならそれを、さもなくばインスタンス自身のものを使う
-        t = self.ts if len(tpara) == 0 else tpara
+        # t 標本点に結びつるパラメータは引数として与えられているならそれを、さもなくばリニアに設定
+        t = self.assignPara2Samples(prefunc=None) if len(tpara) == 0 else tpara
         N = self.N # ベジエの次数
         M = len(samples) # サンプル数
         # バーンスタイン関数の定義
@@ -938,7 +938,7 @@ class BezierCurve:
         # curvefunc 曲線の式
         # stt,end パラメータを割り当てる標本番号の最初と最後（最後は含まない）
 
-        t= symbols('t')
+        t = symbols('t')
 
         sps = self.samples
         ts = bezierparameters
@@ -1008,12 +1008,11 @@ class BezierCurve:
         return ts
 
     # ベジエ近似　パラメータの繰り返し再調整あり
-    def fit1(self,maxTry=0,withError=False):
+    def fit1(self,maxTry=0,withError=False,tpara=[]):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withError 誤差情報を返すかどうか
+        # tpara  fit0() にわたす初期パラメータ値
         sps = self.samples
-        # 現在の t の推定値
-        ts = bestts = self.ts   
 
         # 当てはめ誤差の平均値を算出する関数
         def meanerr(ts): 
@@ -1029,17 +1028,19 @@ class BezierCurve:
         rmcounter = 0 # エラー増加回数のカウンター
         priority = BezierCurve.AsymptoticPriority
 
-        cps,func = self.fit0() # レベル０フィッティングを実行
+        cps,func = self.fit0(tpara=tpara) # レベル０フィッティングを実行
         [fx,fy] = bestfunc = func
         bestcps = cps
 
-        olderror = minerror = meanerr() # 当てはめ誤差
+        olderror = minerror = meanerr(ts=self.ts) # 当てはめ誤差
         if BezierCurve.debugmode: print("initial error:{:.5f}".format(olderror))
+
+        ts = bestts = self.ts.copy()
 
         while True:
             print(".",end='')
 
-            tsold = ts.copy() # 前回の t の推定値
+            tsold = ts.copy()
             # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
             if priority == 'distance' or priority == 'hyblid':
                 ts = self.refineTparaN(tsold,[fx,fy],0,len(sps))
@@ -1092,7 +1093,7 @@ class BezierCurve:
             return bestcps,bestfunc
 
     # 段階的ベジエ近似　    
-    def fit2(self,Nfrom=3,Nto=12,maxTry=3,prefunc = None,errorThres=0.01,withError=False):
+    def fit2(self,Nfrom=3,Nto=12,maxTry=3,prefunc = None,errorThres=0.01,withError=False,tpara=[]):
         # Nfrom 近似開始次数
         # Nto 最大近似次数 Nto < Nfrom  の場合は誤差しきい値による打ち切り
         # maxTry 各次数での繰り返し回数
@@ -1102,14 +1103,16 @@ class BezierCurve:
 
         Ncurrent = Nfrom
         func = prefunc
+        ts = tpara
         while Ncurrent <= Nto:
-            abez = BezierCurve(N=Nfrom,samples=self.samples, prefunc = func)
+            abez = BezierCurve(N=Ncurrent,samples=self.samples, prefunc = func)
             print(Ncurrent,end="")
             # 最大 maxTry 回あてはめを繰り返す
-            cps,func,error = abez.fit1(maxTry=maxTry,withError=True)
+            cps,func,error = abez.fit1(maxTry=maxTry,withError=True,tpara=ts)
+            ts = abez.ts
             # 次数を上げてインスタンス生成
             Ncurrent = Ncurrent +1
-        if withError
+        if withError:
             return cps,func,Ncurrent,error
         else:
             return cps,func
