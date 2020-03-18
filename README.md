@@ -80,7 +80,7 @@ GUIを使うプログラムを使う人は（推奨２）の Anaconda 環境も�
 ほとんどの処理は，Google Colaboratory でできますので，特に何もインストールする必要はありませんが，GUIを使ったインタラクティブな処理がしたい場合は，ローカルPCに Anaconda と OpenCV をインストールしてください．
 
 ### 1. Anaconda のインストール
-上記サイトから自分のOS（Windows，macOS, Linux）に合ったインストーラをダウンロードしてインストールしてください．
+[上記サイト](https://www.anaconda.com/python)から自分のOS（Windows，macOS, Linux）に合ったインストーラをダウンロードしてインストールしてください．
 
 標準で科学技術計算に必要な主だったライブラリはすべてインストールされます．
 
@@ -116,7 +116,7 @@ Proceed ([y]/n)? y
 ```
 conda install -c conda-forge kivy
 ```
-日本語が使いたい場合は、
+GUI(kivy)で日本語が使いたい場合は、
 ```
 pip install japanize-kivy
 ```
@@ -136,7 +136,7 @@ Anaconda で仮想環境を作った場合、ライブラリは最小限しか�
 - pandas
 
 ```
-conda install Pillow numpy jupyter matplotlib seaborn
+conda install Pillow numpy jupyter matplotlib seaborn sympy scikit-learn pandas
 ```
 
 #### その他
