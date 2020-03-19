@@ -557,12 +557,12 @@ def drawContours(canvas,con,color=255,thickness=1):
 def curvature(func): # func は sympy 形式の t の関数（fx,fy）のペア
     t= symbols('t')
     fx,fy = func
-    dx = diff(fx)
-    dy = diff(fy)
-    ddx = diff(dx)
-    ddy = diff(dy)
-    k = (dx*ddy - dy*ddy)/(dx*dx + dy*dy)**(3/2)
-    return k*k
+    dx = diff(fx,t)
+    dy = diff(fy,t)
+    ddx = diff(dx,t)
+    ddy = diff(dy,t)
+    k = (dx*ddy - dy*ddx)/(dx*dx + dy*dy)**(3/2)
+    return -k # 画像の座標系は数学の座標系とｙ方向が逆なので正負が反転する
 
 # (22) 輪郭中の曲率最大点のインデックスと輪郭データを返す
 def maxCurvatureP(rdimg,con=[],cuttop = 0, cutbottom = 0.8, sband = 0.25, N=8):
@@ -761,7 +761,7 @@ def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=3,dbtmdr=3,mode=2
         return conLeft,conRight
 
 # (25) 与えられたダイコン画像の輪郭を左右に分割する
-def getCntPairWithImg(rdimg,top=0.1,bottom=0.9,topCD=1.0,bottomCD=0.5,dtopdr=3,dbtmdr=3,mode=2):
+def getCntPairWithImg(rdimg,top=0.1,bottom=0.9,topCD=0.9,bottomCD=0.2,dtopdr=3,dbtmdr=3,mode=2):
     # drimg: ダイコンの画像
     # top,bottom,topCD：findTips() に与えるパラメータ
     # dtopdr,dbtmdr:　getCntPairWithCntImg() に与えるパラメータ
