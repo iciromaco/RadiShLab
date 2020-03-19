@@ -34,7 +34,7 @@ Radish Shape Analysis Laboratory
 ![ddd](https://user-images.githubusercontent.com/24559785/76141224-10004e00-605a-11ea-9c36-a27888906e22.png)
 
 ### ベジエ曲線のあてはめ
-
+<img src="https://user-images.githubusercontent.com/24559785/77037479-cc5ff980-69f4-11ea-9bc8-1087dbd5b50d.png" width=240><img src="https://user-images.githubusercontent.com/24559785/77037483-cec25380-69f4-11ea-965f-1588d982d4f5.png" width=240>
 
 ----
 
