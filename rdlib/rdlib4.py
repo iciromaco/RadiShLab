@@ -636,18 +636,31 @@ def findTips(img,con=[],top=0.1,bottom=0.8,topCD=0.5,bottomCD=0.5,mode=2):
     HL = (ncon+len(getContour(img1)))//4 #  平滑化図形の輪郭長
     
     # 対称性評価関数
-    def calcval(i,irrend):
+    import cmath
+    def calcval(i,irrend,isBottom=False):
         data = []
         vc = 0
         for n in range(3,irrend): # 距離が近すぎると誤差が大きいので３から
+            
             p0,p1,p2 = conlist[i],conlist[(i-n)%ncon],conlist[(i+n)%ncon]
             v1 = (p2[0]-p1[0],p2[1]-p1[1]) # p1p2 ベクトル
             p3 = ((p1[0]+p2[0])/2,(p1[1]+p2[1])/2) # p3 = p1とp2の中点
             v2 = (p3[0]-p0[0],p3[1]-p0[1]) # p0p3 ベクトル
-            nv1 = np.linalg.norm(v1) # p1p2 の長さ
-            nv2 = np.linalg.norm(v2) # p0p3 の長さ
-            if nv2 > 0 and nv1 > 0:
-                data.append(abs(np.dot(v1,v2)/nv1/nv2))
+            pv1 = v1[0] - 1j*v1[1] # v1 の複素表現  画像データは下がプラスなので虚成分を反転して考えないといけない
+            pv2 = v2[0] - 1j*v2[1] # v2 の複素表現 
+            nv1 = abs(pv1) # v1 の長さ
+            nv2 = abs(pv2) # v2 の長さ
+            if nv2 > 3 and nv1 > 3: # 距離が近すぎると誤差が大きいので３以上
+                if isBottom: # そこの場合は凹部は選ばない 
+                    ph1 = cmath.phase(pv1) # v1 の偏角
+                    ph2 = cmath.phase(pv2) # v2 の偏角
+                    ang2 = ph2 - ph1 if ph2 > ph1 else ph2 - ph1 + 2*cmath.pi # v1 と v2 のなす角（ラジアン）
+                    if ang2 < cmath.pi : # 凸の場合　cos の値をペナルティとする＝直角ならペナルティ０
+                        data.append(abs(np.dot(v1,v2)/nv1/nv2))
+                    else: # 凹の場合はペナルティ1
+                        data.append(1.0)
+                else: # Top
+                    data.append(abs(np.dot(v1,v2)/nv1/nv2))
         if len(data) == 0:
             return -1
         else:
@@ -662,7 +675,7 @@ def findTips(img,con=[],top=0.1,bottom=0.8,topCD=0.5,bottomCD=0.5,mode=2):
             if conlist[i][1] - y0 >= top*h: # バウンディングボックス上端からの距離
                 val = -1
             else:
-                val = calcval(i,irrend=int(topCD*HL))
+                val = calcval(i,irrend=int(topCD*HL),isBottom=False)
             symtops.append(val)
         m = np.max(symtops) # 探索対象のうちの最大評価値
         for i in range(ncon):
@@ -683,7 +696,7 @@ def findTips(img,con=[],top=0.1,bottom=0.8,topCD=0.5,bottomCD=0.5,mode=2):
             if conlist[i][1] - y0 < bottom*h: # バウンディングボックス上端からの距離
                 val = -1
             else:
-                val = calcval(i,irrend=int(0.5*HL)) # bottomCD
+                val = calcval(i,irrend=int(bottomCD*HL),isBottom=True) 
             symbottoms.append(val)
         m = np.max(symbottoms) # 探索対象のうちの最大評価値
         for i in range(ncon):
