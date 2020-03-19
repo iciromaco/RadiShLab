@@ -29,12 +29,16 @@ Radish Shape Analysis Laboratory
 </div>
 
 ### 輪郭線分割
+<div align="center">
 <!-- <video src="https://www.youtube.com/watch?v=geLT5e6Tkqg" width=512 align='center'><img src="https://img.youtube.com/vi/geLT5e6Tkqg/0.jpg" width=512></video>） -->
 
-![ddd](https://user-images.githubusercontent.com/24559785/76141224-10004e00-605a-11ea-9c36-a27888906e22.png)
+<img src="https://user-images.githubusercontent.com/24559785/76141224-10004e00-605a-11ea-9c36-a27888906e22.png">
+</div>
 
 ### ベジエ曲線のあてはめ
+<div align="center">
 <img src="https://user-images.githubusercontent.com/24559785/77037479-cc5ff980-69f4-11ea-9bc8-1087dbd5b50d.png" width=240><img src="https://user-images.githubusercontent.com/24559785/77037483-cec25380-69f4-11ea-965f-1588d982d4f5.png" width=240>
+</div>
 
 ----
 
