@@ -195,7 +195,7 @@ Google Colaboratory のプログラムは、通常はクラウド上の仮想Lin
 
 ----
 
-## Author
+## &copy; 2017-2020 
 - Seiichiro Dan： Osaka Gakuin Univ.
 - Yumiko Dan, Yasuko Yoshida： Kobe Univ.
 
