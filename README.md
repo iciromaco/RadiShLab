@@ -48,6 +48,7 @@ Radish Shape Analysis Laboratory
 ### N008 中心軸の記述
 <div align="center">
 <img src="https://user-images.githubusercontent.com/24559785/77162115-8f782d80-6aee-11ea-8452-1b220e8adaef.png" width=480>
+<img src="https://user-images.githubusercontent.com/24559785/77162548-8dfb3500-6aef-11ea-8b48-42697d2dd459.png" width=480>
 </div>
 
 ----
