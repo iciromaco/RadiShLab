@@ -154,7 +154,7 @@ If you run them on Google Colaboratory, upload and run the notebook.
 
 ----
 
-## Author
+## © 2017-2020
 - Seiichiro Dan： Osaka Gakuin Univ.
 - Yumiko Dan, Yasuko Yoshida： Kobe Univ.
 
