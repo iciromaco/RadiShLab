@@ -42,12 +42,12 @@ Radish Shape Analysis Laboratory
 
 ### N007 曲率解析
 <div align="center">
-<img src="https://user-images.githubusercontent.com/24559785/77162234-d5cd8c80-6aee-11ea-8ccd-b62609ba2425.png">
+<img src="https://user-images.githubusercontent.com/24559785/77162234-d5cd8c80-6aee-11ea-8ccd-b62609ba2425.png" width=480>
 </div>
 
 ### N008 中心軸の記述
 <div align="center">
-<img src="https://user-images.githubusercontent.com/24559785/77162115-8f782d80-6aee-11ea-8452-1b220e8adaef.png">
+<img src="https://user-images.githubusercontent.com/24559785/77162115-8f782d80-6aee-11ea-8452-1b220e8adaef.png" width=480>
 </div>
 
 ----
