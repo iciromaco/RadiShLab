@@ -557,12 +557,12 @@ def drawContours(canvas,con,color=255,thickness=1):
 def curvature(func): # func は sympy 形式の t の関数（fx,fy）のペア
     t= symbols('t')
     fx,fy = func
-    dx = diff(fx)
-    dy = diff(fy)
-    ddx = diff(dx)
-    ddy = diff(dy)
-    k = (dx*ddy - dy*ddy)/(dx*dx + dy*dy)**(3/2)
-    return k*k
+    dx = diff(fx,t)
+    dy = diff(fy,t)
+    ddx = diff(dx,t)
+    ddy = diff(dy,t)
+    k = (dx*ddy - dy*ddx)/(dx*dx + dy*dy)**(3/2)
+    return -k # 画像の座標系は数学の座標系とｙ方向が逆なので正負が反転する
 
 # (22) 輪郭中の曲率最大点のインデックスと輪郭データを返す
 def maxCurvatureP(rdimg,con=[],cuttop = 0, cutbottom = 0.8, sband = 0.25, N=8):
@@ -636,18 +636,31 @@ def findTips(img,con=[],top=0.1,bottom=0.8,topCD=0.5,bottomCD=0.5,mode=2):
     HL = (ncon+len(getContour(img1)))//4 #  平滑化図形の輪郭長
     
     # 対称性評価関数
-    def calcval(i,irrend):
+    import cmath
+    def calcval(i,irrend,isBottom=False):
         data = []
         vc = 0
         for n in range(3,irrend): # 距離が近すぎると誤差が大きいので３から
+            
             p0,p1,p2 = conlist[i],conlist[(i-n)%ncon],conlist[(i+n)%ncon]
             v1 = (p2[0]-p1[0],p2[1]-p1[1]) # p1p2 ベクトル
             p3 = ((p1[0]+p2[0])/2,(p1[1]+p2[1])/2) # p3 = p1とp2の中点
             v2 = (p3[0]-p0[0],p3[1]-p0[1]) # p0p3 ベクトル
-            nv1 = np.linalg.norm(v1) # p1p2 の長さ
-            nv2 = np.linalg.norm(v2) # p0p3 の長さ
-            if nv2 > 0 and nv1 > 0:
-                data.append(abs(np.dot(v1,v2)/nv1/nv2))
+            pv1 = v1[0] - 1j*v1[1] # v1 の複素表現  画像データは下がプラスなので虚成分を反転して考えないといけない
+            pv2 = v2[0] - 1j*v2[1] # v2 の複素表現 
+            nv1 = abs(pv1) # v1 の長さ
+            nv2 = abs(pv2) # v2 の長さ
+            if nv2 > 3 and nv1 > 3: # 距離が近すぎると誤差が大きいので３以上
+                if isBottom: # そこの場合は凹部は選ばない 
+                    ph1 = cmath.phase(pv1) # v1 の偏角
+                    ph2 = cmath.phase(pv2) # v2 の偏角
+                    ang2 = ph2 - ph1 if ph2 > ph1 else ph2 - ph1 + 2*cmath.pi # v1 と v2 のなす角（ラジアン）
+                    if ang2 < cmath.pi : # 凸の場合　cos の値をペナルティとする＝直角ならペナルティ０
+                        data.append(abs(np.dot(v1,v2)/nv1/nv2))
+                    else: # 凹の場合はペナルティ1
+                        data.append(1.0)
+                else: # Top
+                    data.append(abs(np.dot(v1,v2)/nv1/nv2))
         if len(data) == 0:
             return -1
         else:
@@ -662,7 +675,7 @@ def findTips(img,con=[],top=0.1,bottom=0.8,topCD=0.5,bottomCD=0.5,mode=2):
             if conlist[i][1] - y0 >= top*h: # バウンディングボックス上端からの距離
                 val = -1
             else:
-                val = calcval(i,irrend=int(topCD*HL))
+                val = calcval(i,irrend=int(topCD*HL),isBottom=False)
             symtops.append(val)
         m = np.max(symtops) # 探索対象のうちの最大評価値
         for i in range(ncon):
@@ -683,7 +696,7 @@ def findTips(img,con=[],top=0.1,bottom=0.8,topCD=0.5,bottomCD=0.5,mode=2):
             if conlist[i][1] - y0 < bottom*h: # バウンディングボックス上端からの距離
                 val = -1
             else:
-                val = calcval(i,irrend=int(0.5*HL)) # bottomCD
+                val = calcval(i,irrend=int(bottomCD*HL),isBottom=True) 
             symbottoms.append(val)
         m = np.max(symbottoms) # 探索対象のうちの最大評価値
         for i in range(ncon):
@@ -748,7 +761,7 @@ def getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy,dtopdr=3,dbtmdr=3,mode=2
         return conLeft,conRight
 
 # (25) 与えられたダイコン画像の輪郭を左右に分割する
-def getCntPairWithImg(rdimg,top=0.1,bottom=0.9,topCD=1.0,bottomCD=0.5,dtopdr=3,dbtmdr=3,mode=2):
+def getCntPairWithImg(rdimg,top=0.1,bottom=0.9,topCD=0.9,bottomCD=0.2,dtopdr=3,dbtmdr=3,mode=2):
     # drimg: ダイコンの画像
     # top,bottom,topCD：findTips() に与えるパラメータ
     # dtopdr,dbtmdr:　getCntPairWithCntImg() に与えるパラメータ
@@ -779,6 +792,46 @@ from sympy import diff,Symbol,Matrix,symbols,solve,simplify,binomial
 from sympy.abc import a,b,c
 from sympy import var
 from statistics import mean
+
+#  稠密なパラメータを得る（点列は一定間隔にならないので、点列が一定間隔になるようなパラメータ列を求める）
+def getDenseParameters(func,n_samples=0,span=0):
+        # func 曲線のパラメータ表現 = (fx,fy)
+        # n_samples 必要なパラメータ数 = サンプル数
+        # span 稠密さの係数　1 なら 候補パラメータの刻みが１画素以内に収まるように　２なら２画素以内に…
+        if func == None:  # 近似式が与えられていない場合
+            return np.linspace(0,1,n_samples)
+        else:
+            fx,fy = func
+            dfx,dfy = diff(fx),diff(fy)
+            if span == 0: # 稠密さの係数が与えられていない場合はサンプル10点ででおおざっぱに全長を見積もって決める
+                ss = np.linspace(0,1,10)
+                ps = np.array([[int(float(fx.subs('t',s))),int(float(fy.subs('t',s)))] for s in ss])
+                axlength = cv2.arcLength(ps, closed=False) # 経路長
+                span = axlength/(n_samples-1)/3 # 経路長が実際の長さより短めの値に算出される。その３分の１なので実際のサンプル間の長さの３分の１以下になる
+            para = [0.0] # 候補パラメータを格納するリスト　
+            bzpoints = [[int(float(fx.subs('t',0))),int(float(fy.subs('t',0)))]] # パラメータに対応する座標のリスト
+            ss = 0.0 
+            while ss < 1:
+                absdx = abs(dfx.subs('t',ss)) # x微係数
+                absdy = abs(dfy.subs('t',ss)) # y微係数
+                absd = np.sqrt(float(absdx**2 + absdy**2)) # 傾き
+                pstep = span/absd if absd > 0 else 1/n_samples # 傾きの逆数＝ｘかｙが最大span移動するだけのパラメータ変化
+                ss += 0.7*pstep # span を超えないよう、７掛けで控えめにパラメータを増やす　
+                ss = 1.0 if ss > 1 else ss
+                para.append(ss)  # リストへ追加
+                bzpoints.append([int(float(fx.subs('t',ss))),int(float(fy.subs('t',ss)))]) # ss に対応する曲線上の点をリストに追加
+            bzpoints = np.array(bzpoints)
+            axlength = cv2.arcLength(bzpoints, closed=False) # 弧長
+            lengths = np.array([0]+[cv2.arcLength(bzpoints[:i+1],closed=False)  for i in range(1,len(bzpoints))]) # 各点までの弧長の配列
+            tobefound = np.linspace(0,axlength,n_samples) # 全長をサンプルの数で区切る
+            ftpara = [0.0]
+            i = 1
+            for slength in tobefound[1:-1]:
+                while lengths[i] < slength:
+                    i += 1
+                ftpara.append(float(para[i]))
+            ftpara.append(float(para[-1]))
+            return ftpara
 
 class BezierCurve: 
     # インスタンス変数
@@ -854,33 +907,9 @@ class BezierCurve:
         if len(samples)==0: # 標本点を与えずにベジエ曲線の一般式として使うこともできる
             return
         if prefunc != None:  # 近似式が与えられている場合
-            para = []
-            bzpoints = []
-            ss = 0.0
-            fx,fy = prefunc
-            dfx,dfy = diff(fx),diff(fy)
-            while ss < 1:
-                absdx = abs(dfx.subs('t',ss)) # x微係数
-                absdy = abs(dfy.subs('t',ss)) # y微係数
-                absd = max(absdx,absdy)
-                pstep = 1/absd if absd > 0 else 1/len(samples)  # 傾きの逆数＝ｘかｙが最大1移動するだけのパラメータ変化
-                ss += 0.7*pstep
-                ss = 1.0 if ss > 1 else ss
-                para.append(ss)  # パラメータのリスト
-                bzpoints.append([int(float(fx.subs('t',ss))),int(float(fy.subs('t',ss)))]) # para に対応する曲線上の点
-            bzpoints = np.array(bzpoints)
-            axlength = cv2.arcLength(bzpoints, closed=False) # 弧長
-            lengths = np.array([cv2.arcLength(bzpoints[:i+1],closed=False)  for i in range(len(bzpoints))]) # 各点までの弧長の配列
-            tobefound = np.linspace(0,axlength,len(samples)) # 全長をサンプルの数で区切る
-            ftpara = [0.0]
-            i = 1
-            for slength in tobefound[1:]:
-                while lengths[i] < slength:
-                    i += 1
-                ftpara.append(float(para[i]))
-            return  ftpara
+            return getDenseParameters(func=prefunc,n_samples=len(samples),span=0)
 
-        else: # パラメータが与えられていない場合、0～1をリニアにサンプル数で刻む
+        else: # パラメータが与えられていない場合、0～1をリニアに各サンプル点までので経路長で刻む
             axlength = np.array(cv2.arcLength(samples, False)) # 点列に沿って測った総経路長
             # 各サンプル点の始点からの経路長の全長に対する比を、各点のベジエパラメータの初期化とする
             return [cv2.arcLength(samples[:i+1],False)  for i in range(len(samples))]/axlength
@@ -1282,6 +1311,38 @@ def pltsaveimage(savepath,prefix):
             os.remove(savepath)
         print("TEST",savepath)
         plt.savefig(savepath)
+
+# (31)
+
+def getAverageBezline(img,N=6,n_samples=32,Amode=0,maxTry = 0):
+    # img 画像
+    # N ベジエ近似の次数
+    # n_samples 左右輪郭線から取るサンプル点の数
+    # Amode 近似方法 N006参照
+    # maxTry Amode=1のときの、最大繰り返し回数
+    
+    # 左右の輪郭を抽出
+    conLeft,conRight = rd.getCntPairWithImg(img,dtopdr=1,dbtmdr=1)
+    # 輪郭点を（チェインの並び順に）等間隔に n_samples 個サンプリングする。
+    #左右の輪郭点をベジエ近似する
+    cntL = rd.getSamples(conLeft,N=n_samples,mode='Equidistant')
+    cntR = rd.getSamples(conRight,N=n_samples,mode='Equidistant')
+    
+    # ベジエ曲線のインスタンスを生成
+    bezL = rd.BezierCurve(N=N,samples=cntL)
+    bezR = rd.BezierCurve(N=N,samples=cntR)
+    
+    # 左右をそれぞれベジエ 曲線で近似し、その平均として中心軸を仮決定
+    if Amode == 0:
+        cpl,fL = bezL.fit0()
+        cpr,fR = bezR.fit0()
+    else:
+        cpl,fL = bezL.fit1(maxTry)
+        cpr,fR = bezR.fit1(maxTry)
+        
+    fC = (fL+fR)/2
+    cpc = [x for x in (np.array(cpl)+np.array(cpr))/2]
+    return cpl,cpr,cpc, fL,fR,fC,cntL,cntR
 
 
 # (-1)変数データのストアとリストア

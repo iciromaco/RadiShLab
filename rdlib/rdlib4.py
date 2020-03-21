@@ -1345,8 +1345,6 @@ def getAverageBezline(img,N=6,n_samples=32,Amode=0,maxTry = 0):
     return cpl,cpr,cpc, fL,fR,fC,cntL,cntR
 
 
-
-
 # (-1)変数データのストアとリストア
 import pickle
 # 変数内データを pickle 形式で保存
