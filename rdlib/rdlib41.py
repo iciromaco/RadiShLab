@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # from sympy import *
-from sympy import diff,Symbol,Matrix,symbols,solve,simplify,binomial
+from sympy import diff,Symbol,Matrix,symbols,solve,simplify,binomial,Abs,im,re
 from sympy.abc import a,b,c
 # init_session()
 from sympy import var
@@ -1288,7 +1288,7 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
                 plt.plot([x0,x1],[y0,y1],color = n2c(ct[9]))  # orange
                 
         elif ladder == 'normal':
-            # 中心軸上に設定したサンプル点における法線と両輪郭の交点のリストを求める(予定)。
+            # 中心軸上に設定したサンプル点における法線と両輪郭の交点のリストを求める。
             plot20lx = PosL[:,0]
             plot20ly = PosL[:,1]
             plot20cx = PosC[:,0]
@@ -1316,8 +1316,7 @@ def pltsaveimage(savepath,prefix):
         print("TEST",savepath)
         plt.savefig(savepath)
 
-# (31)
-
+# (31) 画像の両側と仮の中心線のベジエ曲線を返す関数
 def getAverageBezline(img,N=6,n_samples=32,Amode=0,maxTry = 0):
     # img 画像
     # N ベジエ近似の次数
@@ -1326,15 +1325,15 @@ def getAverageBezline(img,N=6,n_samples=32,Amode=0,maxTry = 0):
     # maxTry Amode=1のときの、最大繰り返し回数
     
     # 左右の輪郭を抽出
-    conLeft,conRight = rd.getCntPairWithImg(img,dtopdr=1,dbtmdr=1)
+    conLeft,conRight = getCntPairWithImg(img,dtopdr=1,dbtmdr=1)
     # 輪郭点を（チェインの並び順に）等間隔に n_samples 個サンプリングする。
     #左右の輪郭点をベジエ近似する
-    cntL = rd.getSamples(conLeft,N=n_samples,mode='Equidistant')
-    cntR = rd.getSamples(conRight,N=n_samples,mode='Equidistant')
+    cntL = getSamples(conLeft,N=n_samples,mode='Equidistant')
+    cntR = getSamples(conRight,N=n_samples,mode='Equidistant')
     
     # ベジエ曲線のインスタンスを生成
-    bezL = rd.BezierCurve(N=N,samples=cntL)
-    bezR = rd.BezierCurve(N=N,samples=cntR)
+    bezL = BezierCurve(N=N,samples=cntL)
+    bezR = BezierCurve(N=N,samples=cntR)
     
     # 左右をそれぞれベジエ 曲線で近似し、その平均として中心軸を仮決定
     if Amode == 0:
@@ -1347,6 +1346,150 @@ def getAverageBezline(img,N=6,n_samples=32,Amode=0,maxTry = 0):
     fC = (fL+fR)/2
     cpc = [x for x in (np.array(cpl)+np.array(cpr))/2]
     return cpl,cpr,cpc, fL,fR,fC,cntL,cntR
+
+# (32) 中心線の法線と輪郭の交点を数式処理により求める
+def crossPointsLRonEx(fl,fr,fc,t0):
+        # fl,fr,fc 左側、右側、中心線のパラメトリック曲線
+        # t0 曲線上の位置を特定するパラメータ
+        t = symbols('t')
+        fcx,fcy = fc
+        flx,fly = fl
+        frx,fry = fr
+        dcx,dcy = diff(fcx,t),diff(fcy,t)
+        x0 = float(fcx.subs(t,t0)) # (x0,y0) 中心軸上の点
+        y0 = float(fcy.subs(t,t0))
+        dx0 = float(dcx.subs(t,t0)) # dx/dt
+        dy0 = float(dcy.subs(t,t0)) # dy/dt
+       
+        ans = solve(-dx0/dy0*(frx-x0)+ y0-fry,t) # 法線とベジエ輪郭の交点を求める
+        ansR = [re(i) for i in ans if float(Abs(im(i)))<0.00000001] 
+        # ↑理論的には、im(i) == 0  でいいのだが、数値計算誤差で虚部が０とならず、微小な値となる現象に現実的な対応
+        sr = [i for i in ansR if  i<=1.03 and -0.03<=i] # ０から１までの範囲の解を抽出 
+        rdata = [int(float(frx.subs(t,sr[0]))),int(float(fry.subs(t,sr[0])))] if sr !=[] else [np.inf,np.inf]
+        
+        ans = solve(-dx0/dy0*(flx-x0)+y0-fly,t) # 法線とベジエ輪郭の交点を求める
+        ansL = [re(i) for i in ans if float(Abs(im(i)))<0.00000001]
+        sl = [i for i in ansL if i<=1.03 and -0.03<=i]
+        ldata = [int(float(flx.subs(t,sl[0]))),int(float(fly.subs(t,sl[0])))] if sl !=[] else [np.inf,np.inf]
+        
+        return ldata,rdata
+
+
+# (32) 中心線の法線と輪郭の交点を図的処理により求める
+def crossPointsLRonImg(img,fc,t0,debugmode=False):
+    # fc 中心線のパラメトリック曲線
+    # t0 曲線上の位置を特定するパラメータ
+    t = symbols('t')
+    fcx,fcy = fc
+    dcx,dcy = diff(fcx,t),diff(fcy,t)
+    x0 = int(float(fcx.subs(t,t0))) # (x0,y0) 中心軸上の点
+    y0 = int(float(fcy.subs(t,t0)))
+    dx0 = float(dcx.subs(t,t0)) # dx/dt
+    dy0 = float(dcy.subs(t,t0)) # dy/dt
+
+    # 法線と輪郭の交点を図的に求める　
+    (crpLx,crpLy),(crpRx,crpRy) = crossPointsLRonImg0(img,x0,y0,dx0,dy0)
+    
+    # 異常判定
+    Llength2 = (crpLx-x0)*(crpLx-x0)+(crpLy-y0)*(crpLy-y0)
+    Rlength2 = (crpRx-x0)*(crpRx-x0)+(crpRy-y0)*(crpRy-y0)
+        
+    # あまりに大きな値は異常　 正規化の設定上、半径が150を超えることはない
+    if Llength2 > 22500:
+        if debugmode: print("tooLongErr")
+        crpRx,crpRy = np.inf,np.inf
+        Llength2 = np.inf
+    if Rlength2 > 22500:
+        if debugmode: print("tooLongErr")
+        crpLx,crpLy = np.inf,np.inf
+        Rlength2 = np.inf
+
+    # 左右のバランスから考えた異常値
+    if Rlength2 != np.inf and Llength2/Rlength2 < 0.01: #  左が右の1%に満たない長さである -> 片方だけ異常値として扱う
+            if debugmode: print("L radius too short",a)
+            crpLx,crpLy = np.inf, np.inf
+    elif Llength2 != np.inf and Rlength2/Llength2 < 0.01: #  右が左の1%に満たない長さである -> 異常値として扱う
+            if debugmode: print("R radius too short",a)
+            crpRx,crpry = np.inf, np.inf
+    # 以上のチェックに引っかからなければそのまま登録する
+    return [crpLx,crpLy],[crpRx,crpRy]
+
+# 1点を通る直線（x0,y0を通り傾きdy/dx)と輪郭画像の交点を求める
+def crossPointsLRonImg0(img,x0,y0,dx,dy):
+    # 輪郭線を描いた画像を用意する
+    con = getContour(img)
+    rdcimg = np.zeros_like(img)  # 描画キャンバスの準備
+    cv2.drawContours(rdcimg,con, -1, 255,thickness=1)
+    canvas1 = rdcimg.copy()/255  # 輪郭線を描いたキャンバス
+    canvas2 = np.zeros_like(rdcimg) # 白紙の描画キャンバス
+    # (x0,y0) 中心軸上の点
+    # dy/dx  その点での軸線の傾き
+    if dx == 0:
+        print("端点断面が垂直になっていますので処理を続けられません")
+        sys.exit()
+
+    acc = - dy/dx if dx != 0 else np.inf # 法線の傾き 
+    (lx,rx) = (-4*x0,6*x0) if dx != 0 else (x0,x0)     # x0 から 左に -10*x0 離れた点と右に 10*x0 離れた点を結ぼうとしている
+    ly = y0 - 5*x0/acc if dx !=0 else 0 # dx==0 の時は上ではねているが、将来のため
+    ry = y0 + 5*x0/acc if dx !=0 else 320 
+    lx,rx = int(round(float(lx))), int(round(float(rx)))
+    ly,ry = int(round(float(ly))), int(round(float(ry)))
+    
+    canvas2 = cv2.line(canvas2,(lx,ly),(rx,ry),1,2) # 幅3（2*2-1）の直線を明るさ１で描く
+    canvas = canvas1 + canvas2
+
+    cross_pointsL = np.where(canvas[:,:int(x0)]==2) # 左の交点　　　重なった場所は値が２となっている.
+    cross_pointsR = np.where(canvas[:,int(x0):]==2) # 右の交点　　　重なった場所は値が２となっている.
+
+    if len(cross_pointsL[0]) == 0:
+        crpLy,crpLx = np.inf,np.inf
+    elif len(cross_pointsL[0]) == 1: # 唯一なら決まり
+        crpLy,crpLx = cross_pointsL[0][0],cross_pointsL[1][0]
+    else:
+        diff = np.array([dx*dx+dy*dy for (dx,dy) in zip(cross_pointsL[1]-x0,cross_pointsL[0]-y0)])
+        difforder = np.argsort(diff)
+        min1x = cross_pointsL[1][difforder[0]] # 最短 
+        min2x = cross_pointsL[1][difforder[1]] #　２位
+        min1y = cross_pointsL[0][difforder[0]] # 最短 
+        min2y = cross_pointsL[0][difforder[1]] #　２位           
+        if abs(min1x-min2x) > 1 or abs((min1y-min2y)) > 1: # 最短と2位が近傍関係にないなら最短で決まり
+            crpLy,crpLx = min1y,min1x
+        else: # 最短と２位が隣接点の場合、どちらが法線と直交かで決める
+            dotp1 = (min1x-x0)*dx+(min1y-y0)*dy # 内積
+            dotp1 = abs(dotp1/np.sqrt(diff[difforder[0]]))
+            dotp2 = (min2x-x0)*dx+(min2y-y0)*dy
+            dotp2 = abs(dotp2/np.sqrt(diff[difforder[1]]))
+            if dotp1 <= dotp2: # 小さい方がより法線上にあると判断する
+                #print("L1win2","x0y0",x0,y0,"min1",min1x,min1y,"min1",min2x,min2y)
+                crpLy,crpLx = min1y,min1x
+            else:
+                #print("LOoops 2win1","x0y0",x0,y0,"min1",min1x,min1y,"min1",min2x,min2y)
+                crpLy,crpLx = min2y,min2x
+
+    if len(cross_pointsR[0]) == 0:
+        crpRy,crpRx = np.inf,np.inf
+    elif len(cross_pointsR[0]) == 1: # 唯一なら決まり
+        crpRy,crpRx = cross_pointsR[0][0],cross_pointsR[1][0]
+    else:
+        diff = np.array([dx*dx+dy*dy for (dx,dy) in zip(cross_pointsR[1]-x0,cross_pointsR[0]-y0)])
+        difforder = np.argsort(diff)
+        min1x = cross_pointsR[1][difforder[0]] # 最短 
+        min2x = cross_pointsR[1][difforder[1]] #　２位
+        min1y = cross_pointsR[0][difforder[0]] # 最短 
+        min2y = cross_pointsR[0][difforder[1]] #　２位           
+        if abs(min1x-min2x) > 1 or abs((min1y-min2y)) > 1: # 最短と2位が近傍関係にないなら最短で決まり
+            crpRy,crpRx = min1y,min1x
+        else: # 最短と２位が隣接点の場合、どちらが法線と直交かで決める
+            dotp1 = (min1x-x0)*dx+(min1y-y0)*dy # 内積
+            dotp1 = abs(dotp1/np.sqrt(diff[difforder[0]]))
+            dotp2 = (min2x-x0)*dx+(min2y-y0)*dy
+            dotp2 = abs(dotp2/np.sqrt(diff[difforder[1]]))
+            if dotp1 <= dotp2:
+                crpRy,crpRx = min1y,min1x
+            else:
+                crpRy,crpRx = min2y,min2x
+
+    return (crpLx,crpLy),(crpRx+x0,crpRy)
 
 
 # (-1)変数データのストアとリストア
