@@ -41,13 +41,18 @@ Radish Shape Analysis Laboratory
 <img src="https://user-images.githubusercontent.com/24559785/77162234-d5cd8c80-6aee-11ea-8ccd-b62609ba2425.png" width=480>
 </div>
 
-### N008 Description of Object Axis and Measuring Width
+### N008 Description of Object Axis
 <div align="center">
 <img src="https://user-images.githubusercontent.com/24559785/77162115-8f782d80-6aee-11ea-8452-1b220e8adaef.png" width=480>
 <img src="https://user-images.githubusercontent.com/24559785/77162548-8dfb3500-6aef-11ea-8b48-42697d2dd459.png" width=480>
 <img src="https://user-images.githubusercontent.com/24559785/77229405-1d2c4980-6bd1-11ea-85a8-95e35b0feefb.png" width=480>
 </div>
 
+### N009 Shape Reconstruction and  Width Mesurement
+<div align="center">
+<img src="https://user-images.githubusercontent.com/24559785/77229405-1d2c4980-6bd1-11ea-85a8-95e35b0feefb.png" width=480>
+
+<img src="https://user-images.githubusercontent.com/24559785/77253072-85dff880-6c9b-11ea-95d4-83857770259f.png" width=200><img src="https://user-images.githubusercontent.com/24559785/77253074-86788f00-6c9b-11ea-81b2-03c4be000fa6.png" width=200><img src="https://user-images.githubusercontent.com/24559785/77253071-84aecb80-6c9b-11ea-89e1-bc02b5719a1b.png" width=200></div>
 
 ----
 
