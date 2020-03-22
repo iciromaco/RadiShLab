@@ -52,10 +52,10 @@ Radish Shape Analysis Laboratory
 
 
 <img src="https://user-images.githubusercontent.com/24559785/77229405-1d2c4980-6bd1-11ea-85a8-95e35b0feefb.png" width=480>
-</div>
+
 
 #### 形状補正と計測
-<img src="https://user-images.githubusercontent.com/24559785/77253072-85dff880-6c9b-11ea-95d4-83857770259f.png" width=200><img src="https://user-images.githubusercontent.com/24559785/77253074-86788f00-6c9b-11ea-81b2-03c4be000fa6.png" width=200><img src="https://user-images.githubusercontent.com/24559785/77253071-84aecb80-6c9b-11ea-89e1-bc02b5719a1b.png" width=200>
+<img src="https://user-images.githubusercontent.com/24559785/77253072-85dff880-6c9b-11ea-95d4-83857770259f.png" width=200><img src="https://user-images.githubusercontent.com/24559785/77253074-86788f00-6c9b-11ea-81b2-03c4be000fa6.png" width=200><img src="https://user-images.githubusercontent.com/24559785/77253071-84aecb80-6c9b-11ea-89e1-bc02b5719a1b.png" width=200></div>
 ----
 
 # :high_brightness:Lazy Way:high_brightness: 
