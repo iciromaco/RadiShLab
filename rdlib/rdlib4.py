@@ -1288,7 +1288,7 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
                 plt.plot([x0,x1],[y0,y1],color = n2c(ct[9]))  # orange
                 
         elif ladder == 'normal':
-            # 中心軸上に設定したサンプル点における法線と両輪郭の交点のリストを求める(予定)。
+            # 中心軸上に設定したサンプル点における法線と両輪郭の交点のリストを求める。
             plot20lx = PosL[:,0]
             plot20ly = PosL[:,1]
             plot20cx = PosC[:,0]
