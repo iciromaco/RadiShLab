@@ -590,21 +590,9 @@ def maxCurvatureP(rdimg,con=[],cuttop = 0, cutbottom = 0.8, sband = 0.25, N=8):
     drawContours(canvas,con) # 輪郭を描く
     canvas[int(y0 + cuttop*h):int(y0 + cutbottom*h),:] = 0 # 指定範囲を黒で塗りつぶす
     # 輪郭の輪郭を抽出
-    contours, hierarchy = cv2findContours34(canvas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)    
-    maxcnt_i = np.argmax(np.array([len(c) for c in contours])) # 最も長い輪郭データの番号
-    # 幅１の図形の輪郭なので、データが折り返しになっている
-    cnt0 = contours[maxcnt_i].squeeze() # 最も長い輪郭
 
-    i1 = 0
-    for i in range(int(len(cnt0))-1):
-        if np.all(cnt0[i-1] == cnt0[i+1]) or np.all(cnt0[i-2] == cnt0[i+1]): 
-            i0,i1= i1,i
-    cnt0 = cnt0[i0:i1+1]
-    if cnt0[0][1] > cnt0[-1][1]: 
-        cnt0 = cnt0[::-1]
-
-    samples = getSamples(cnt0,N=len(cnt0)//3,mode='Equidistant')
-    bez = BezierCurve(N=N,samples=samples) # 7次近似固定
+    cnt0 = openAContour(getContour(canvas))
+    bez = BezierCurve(N=N,samples=cnt0) # 7次近似固定
     cps,[fx,fy] = bez.fit0() # ベジエ近似
     t= symbols('t')
     kf = curvature([fx,fy]) # 曲率関数を得る
