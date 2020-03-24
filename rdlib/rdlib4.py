@@ -447,6 +447,8 @@ def rotateAndCutMargin(img,deg,c_x,c_y):
         # アフィン変換の適用
         bigimg = cv2.warpAffine(bigimg, mat, (0,0),1)
 
+    _ret,bigimg = cv2.threshold(bigimg,127,255,cv2.THRESH_BINARY) # 再２値化
+
     # 再び最小矩形を求めて切り出す。
     _nLabels, _labelImages, data, _center = cv2.connectedComponentsWithStats(bigimg) 
     ami = np.argmax(data[1:,4])+1 # もっとも面積の大きい連結成分のラベル番号　（１のはずだが念の為）
@@ -465,7 +467,7 @@ def getNormSil(img,tiltzero=True,mr=1.5,unitSize=UNIT):
     
     if tiltzero: # 傾き補正する
         img = tiltZeroImg(img)
-        
+    
     return makeUnitImage(img,mr=mr,unitSize=UNIT)
     
 # (15) 長辺の mr 倍サイズの枠の中央に対象を配置した画像を返す
@@ -478,6 +480,7 @@ def makeUnitImage(img,mr=1.5,unitSize=UNIT):
     y0 = int((mr*unitSize-rsh)/2)
     canvas = np.zeros((int(mr*unitSize),int(mr*unitSize)),np.uint8) # キャンバスの確保
     canvas[y0:y0+rsh,x0:x0+rsw] = cv2.resize(img,(rsw,rsh)) # リサイズして中央にはめ込み
+    _ret,canvas = cv2.threshold(canvas,127,255,cv2.THRESH_BINARY)
     return canvas
     
 # (16) 近似楕円の軸方向が水平垂直となるように回転補正した画像を求める
@@ -794,7 +797,7 @@ from sympy import var
 from statistics import mean
 
 #  稠密なパラメータを得る（点列は一定間隔にならないので、点列が一定間隔になるようなパラメータ列を求める）
-def getDenseParameters(func,n_samples=0,span=0,needlength=False):
+def getDenseParameters(func,n_samples=0,span=0):
         # func 曲線のパラメータ表現 = (fx,fy)
         # n_samples 必要なパラメータ数 = サンプル数
         # span 稠密さの係数　1 なら 候補パラメータの刻みが１画素以内に収まるように　２なら２画素以内に…
@@ -825,19 +828,13 @@ def getDenseParameters(func,n_samples=0,span=0,needlength=False):
             lengths = np.array([0]+[cv2.arcLength(bzpoints[:i+1],closed=False)  for i in range(1,len(bzpoints))]) # 各点までの弧長の配列
             tobefound = np.linspace(0,axlength,n_samples) # 全長をサンプルの数で区切る
             ftpara = [0.0]
-            found = [0.0]
             i = 1
             for slength in tobefound[1:-1]:
                 while lengths[i] < slength:
                     i += 1
                 ftpara.append(float(para[i]))
-                found.append(lengths[i])
             ftpara.append(float(para[-1]))
-            found.append(axlength)
-            if needlength:
-                return ftpara,found
-            else:
-                return ftpara
+            return ftpara
 
 class BezierCurve: 
     # インスタンス変数
@@ -1381,7 +1378,7 @@ def crossPointsLRonEx(fl,fr,fc,t0):
         return ldata,rdata
 
 
-# (33) 中心線の法線と輪郭の交点を図的処理により求める
+# (32) 中心線の法線と輪郭の交点を図的処理により求める
 def crossPointsLRonImg(img,fc,t0,debugmode=False):
     # fc 中心線のパラメトリック曲線
     # t0 曲線上の位置を特定するパラメータ
@@ -1420,7 +1417,7 @@ def crossPointsLRonImg(img,fc,t0,debugmode=False):
     # 以上のチェックに引っかからなければそのまま登録する
     return [crpLx,crpLy],[crpRx,crpRy]
 
-# (34) 1点を通る直線（x0,y0を通り傾きdy/dx)と輪郭画像の交点を求める
+# 1点を通る直線（x0,y0を通り傾きdy/dx)と輪郭画像の交点を求める
 def crossPointsLRonImg0(img,x0,y0,dx,dy):
     # 輪郭線を描いた画像を用意する
     con = getContour(img)

@@ -447,6 +447,8 @@ def rotateAndCutMargin(img,deg,c_x,c_y):
         # アフィン変換の適用
         bigimg = cv2.warpAffine(bigimg, mat, (0,0),1)
 
+    _ret,bigimg = cv2.threshold(bigimg,127,255,cv2.THRESH_BINARY) # 再２値化
+
     # 再び最小矩形を求めて切り出す。
     _nLabels, _labelImages, data, _center = cv2.connectedComponentsWithStats(bigimg) 
     ami = np.argmax(data[1:,4])+1 # もっとも面積の大きい連結成分のラベル番号　（１のはずだが念の為）

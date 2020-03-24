@@ -1,8 +1,8 @@
 '''
-Interactive segmentation tool with grabCut
+Interactive segmentation tool with mRadish
 
 Usage:
-   python -m iGrabit
+   python -m mRadish
 
 '''
 import cv2
@@ -48,11 +48,11 @@ GRC_RES ={
 FILEMENUS = {'Open':"開く",'Save':"保存",'ScreenShot':"スクリーンショット",'Quit':"終了"}
 PREFMENUS = {'ToggleSave':"保存対象:orig",'ToggleThickness':"描線の太さ:1"}
 
-DUMMYIMGBIN = '/res/paprika.pkl'
-# DUMMYIMGBIN = '/res/Primrose.pkl'
+DUMMYIMGBIN = 'res/nezuko.pkl'
 BUTTONH = 32
-DUMMYIMG = rd.loadPkl(DUMMYIMGBIN)
-picdic = rd.loadPkl('./res/picdic.pkl')
+check = rd.loadPkl(DUMMYIMGBIN)
+DUMMYIMG = cv2.cvtColor(rd.loadPkl(DUMMYIMGBIN), cv2.COLOR_GRAY2BGR)
+picdic = rd.loadPkl("/res/picdic.pkl")
 SAVEDIR = './results' # 'SaveDirFixed:True' の場合の保存場所  
 
 BUTTONH = 32 # hight of menu and buttons
@@ -87,7 +87,7 @@ CON_COLOR = (100,255,200,255) # 輪郭線描画色
 Builder.load_string('''
 #:set BH 32
 #:set dummypath './res/testpics/demoimg.jpg'
-<GrabCutConsole>:
+<mRadishConsole>:
     FloatLayout:
         BoxLayout:
             size_hint: None,None
@@ -215,12 +215,12 @@ Builder.load_string('''
                 ToggleButton:
                     id: rdreform # reform flag
                     text: "RF"
-                    on_press: root.grabcut0()
+                    on_press: root.mRadish0()
                     group: "rdreform"
                     state: "down"
                 Button:
-                    id: grabcut
-                    on_press: root.grabcut()
+                    id: mRadish
+                    on_press: root.mRadish()
                     Image:
                         center_x: self.parent.center_x
                         center_y: self.parent.center_y
@@ -262,27 +262,46 @@ def cv2kvtexture(img, force3 = True):
     return texture
 
 # Main Widget
-class GrabCutConsole(BoxLayout):
+class mRadishConsole(BoxLayout):
     windowsize = DUMMYIMG.shape[1]*2, DUMMYIMG.shape[0]+2*BUTTONH # 初期ウィンドウサイズ
     pictexture = {key:cv2kvtexture(picdic[key],force3 = False) for key in picdic}
     touchud = [] # touch.ud の記憶場所
 
     def __init__(self,**kwargs):
-        super(GrabCutConsole,self).__init__(**kwargs)
+        super(mRadishConsole,self).__init__(**kwargs)
         self.fState = 0 # 枠指定の状態 0:初期、1:1点指定済み、2:指定完了
         self.canvasgroups = []
         self.conthick = CON_THICK
         self.tobesaved = 'orig'
-        self.currentOpendir = os.getcwd() # カレントオープンディレクトリ
-        self.currentSavedir = self.currentOpendir # カレントセーブディレクトリ
+        self.currentOpendir = self.currentSavedir = os.getcwd() # カレントオープンディレクトリ
+        self.fixsavedir = True
         self.setsrcimg(DUMMYIMG,setfState=0)
-        self.rect = (0,0,1,1) # 切り出し枠
-        self.fp1 = [0,0] # 切り出し枠枠の1点目の座標
+        self.autoTips()
+        self.rect = (0,0,1,1) # 切り出し枠 # 不要
+        self.fp1 = [0,0] # 切り出し枠枠の1点目の座標 # 不要
         self.pointsize = PENSIZE # ペンサイズ
         self.pensizeimage()
         self.ids['message'].text = GRC_RES['OpenImage']
         self.dialogflag = False # ファイルオープンダイアログを開いているというフラグ
         Clock.schedule_interval(self.update, 0.1) # ウィンドウサイズの監視固定化
+
+    # 自動で上下端点を見つけると同時に輪郭情報を保存する
+    def autoTips(self):
+        img = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2GRAY)
+        con,topTip,bottomTip,_stops,_smbtms = rd.findTips(img,con=[],top=0.1,bottom=0.8,topCD=0.5,bottomCD=0.5,mode=2)
+        self.con = con
+        self.con2 = img.shape[0]*[[]]
+        for [[x,y]] in con:
+            self.con2[y].append(x)
+        self.topTip = tuple(con[topTip][0])
+        self.bottomTip = tuple(con[bottomTip][0])
+        canvas = self.srcimg.copy()
+        cv2.circle(canvas,self.topTip,1,(0,0,255),-1)
+        cv2.circle(canvas,self.topTip,5,(0,0,255),1)
+        cv2.circle(canvas,self.bottomTip,1,(0,0,255),-1)
+        cv2.circle(canvas,self.bottomTip,5,(0,0,255),1)        
+        self.srctexture = cv2kvtexture(canvas)
+        self.ids['srcimg'].texture = self.srctexture
 
     # サイズが大きすぎると画面表示できないので表面上リサイズ
     def sizefilter(self,srcimg):
@@ -296,6 +315,11 @@ class GrabCutConsole(BoxLayout):
 
     # 入力画像をセット
     def setsrcimg(self,srcimg,setfState=0):
+        if len(srcimg.shape) == 2:
+            self.srcimg = cv2.cvtColor(srcimg,cv2.COLOR_GRAY2BGR)
+        else:
+            print("Warning! not monochrome")
+        if srcimg(srcimg>0).min() == 255*
         self.fState = setfState
         if setfState == 0: # オリジナルの保存
             self.origin = srcimg.copy()
@@ -321,7 +345,7 @@ class GrabCutConsole(BoxLayout):
         self.canvasgroups = []
         self.resetMode() # mode ボタンを全て非選択に
         gryimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2GRAY) # グレイ画像作成
-        self.mask = np.zeros(srcimg.shape[:2],np.uint8) # GrabCut 用マスクの初期化
+        self.mask = np.zeros(srcimg.shape[:2],np.uint8) # mRadish 用マスクの初期化
         self.maskStack = [self.mask.copy()] # マスクのバックアップ
         self.silhouette = smask = rd.getMajorWhiteArea(gryimg,binary=True) # シルエット画像作成
         outimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2BGRA) # アルファチャネル追加
@@ -413,7 +437,6 @@ class GrabCutConsole(BoxLayout):
             PREFMENUS['ToggleSave'] = PREFMENUS['ToggleSave'][:-4]+self.tobesaved             
         self.ids['sp1'].values = (PREFMENUS[i] for i in PREFMENUS.keys())
 
-
     # ファイルウィンドウをポップした状態からの復帰
     def dismiss_popup(self):
         self._popup.dismiss()
@@ -426,6 +449,8 @@ class GrabCutConsole(BoxLayout):
             if len(filepath)>0:
                 self.ids['path0'].text = filepath[0]
                 srcimg = rd.imread(filepath[0])
+                if len(srcimg.shape) == 2:
+                    srcimg = cv2.cvtColor(srcimg, cv2.COLOR_GRAY2BGR)
                 self.setsrcimg(srcimg,setfState=0)
                 self.currentOpendir = os.path.dirname(filepath[0])
             self.dismiss_popup()
@@ -574,6 +599,7 @@ class GrabCutConsole(BoxLayout):
         h,w = self.srcimg.shape[:2]
         m = self.margin
         ud = touch.ud
+        candx = self.con2[touch.y] if (touch.y - int((h+BUTTONH) < 
         x = touch.x if touch.x < w + 2*m else touch.x - (w + 2*m)
         
         if self.nowFraming(): # 枠設定中
@@ -674,7 +700,7 @@ class GrabCutConsole(BoxLayout):
                 self.ids['framing'].state = "normal"
                 self.fState = 2
             self.remove_widget(ud['label'])
-            self.grabcut()    
+            self.mRadish()    
         else:
             touch.ungrab(self)
 
@@ -688,11 +714,11 @@ class GrabCutConsole(BoxLayout):
         label.size = label.texture_size[0] + 20, label.texture_size[1] + 20
 
     # 平滑化モードボタンのふるまい
-    def grabcut0(self):
-        self.grabcut() # モードをトグルした上で grabcut
+    def mRadish0(self):
+        self.mRadish() # モードをトグルした上で mRadish
 
     # セグメンテーション
-    def grabcut(self):
+    def mRadish(self):
         if self.fState < 2:
             return
         elif self.fState == 2:
@@ -713,12 +739,12 @@ class GrabCutConsole(BoxLayout):
         bgdmodel = np.zeros((1,65),np.float64)
         fgdmodel = np.zeros((1,65),np.float64)
         if (self.frame_or_mask == 0): 
-            cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
+            cv2.mRadish(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
             self.frame_or_mask = 1
         elif (self.frame_or_mask == 1):
             if (np.where((self.mask==1) + (self.mask==3),255,0).astype('uint8')).sum() == 0: # 前景候補がない
                 self.mask[rect[1]:rect[1]+rect[3],rect[0]:rect[0]+rect[2]] = 1
-            cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_MASK)
+            cv2.mRadish(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_MASK)
         mask2 = np.where((self.mask==1) + (self.mask==3),255,0).astype('uint8')
         if self.ids['rdreform'].state == 'down':
             mask2 = rd.RDreform(mask2) # デフォルトで平滑化　詳細は rdlib4.py参照
@@ -734,16 +760,16 @@ class GrabCutConsole(BoxLayout):
         self.ids['message'].text = GRC_RES['Finished']
 
 # アプリケーションメイン 
-class GrabCut(App):
+class mRadish(App):
     title = 'Touchtracer'
 
     def build(self):
-        mywidget = GrabCutConsole()
+        mywidget = mRadishConsole()
         sp0 = (FILEMENUS[i] for i in FILEMENUS.keys())
         mywidget.ids['sp0'].values = sp0
         sp1 = (PREFMENUS[i] for i in PREFMENUS.keys())
         mywidget.ids['sp1'].values = sp1      
-        self.title = 'GrabCut'
+        self.title = 'mRadish'
         self.icon = 'res/picdicpics/ic99_radishB.png'
         return mywidget
 
@@ -752,4 +778,4 @@ class GrabCut(App):
 
     
 if __name__ == "__main__":
-    GrabCut().run()
+    mRadish().run()
