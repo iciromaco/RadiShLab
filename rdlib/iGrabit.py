@@ -57,7 +57,7 @@ SAVEDIR = './results' # 'SaveDirFixed:True' の場合の保存場所
 
 BUTTONH = 32 # hight of menu and buttons
 PENSIZE = 3 # size of drawing pen
-MAXHIGHT = 640 # 高さがこのサイズを超える画像は強制的にこのサイズ以下になるよう1/2,1/4にリサイズします
+MAXHIGHT = 640 # 高さがこのサイズを超える画像は強制的にこのサイズ以下になるようリサイズします
 MINWW = 800 # ウィンドウ幅の下限　画像幅がこの値の半分以下の場合は幅マージンを加えます
 MM = 5 # 枠指定した際、枠から MM ピクセルは背景としてマスクを作る　よって枠指定するときは対象からMMピクセルは離すこと
 

@@ -474,12 +474,20 @@ def getNormSil(img,tiltzero=True,mr=1.5,unitSize=UNIT):
 def makeUnitImage(img,mr=1.5,unitSize=UNIT):
     # 長辺が UNIT ピクセルになるよう縮小し、(mrxUNIT)x(mrxUNIT)の画像の中央に配置する。
     h,w = img.shape[:2]
-    s_r = unitSize/w if w > h else unitSize/h #  縮小率    
-    rsh,rsw = int(s_r*h),int(s_r*w) # リサイズ後のサイズ
-    x0 = int((mr*unitSize-rsw)/2) # はめ込みの基準点
-    y0 = int((mr*unitSize-rsh)/2)
-    canvas = np.zeros((int(mr*unitSize),int(mr*unitSize)),np.uint8) # キャンバスの確保
-    canvas[y0:y0+rsh,x0:x0+rsw] = cv2.resize(img,(rsw,rsh)) # リサイズして中央にはめ込み
+    if w > h:
+        rsh = int(round(h * UNIT/w))
+        rsw = UNIT
+    else:
+        rsh = UNIT
+        rsw = int(round(w * UNIT/h))
+    rimg = cv2.resize(img,(rsw,rsh)) # リサイズの実行
+
+    MSIZE = int((UNIT*(mr-1))//2)+1 # マージン
+    IMGSIZE = UNIT+2*MSIZE # 画像サイズ
+    x0 = int((IMGSIZE-rsw)//2) # はめ込みの基準点
+    y0 = int((IMGSIZE-rsh)//2) 
+    canvas = np.zeros((IMGSIZE,IMGSIZE),np.uint8) # キャンバスの確保
+    canvas[y0:y0+rsh,x0:x0+rsw] = rimg # リサイズして中央にはめ込み
     return canvas
     
 # (16) 近似楕円の軸方向が水平垂直となるように回転補正した画像を求める

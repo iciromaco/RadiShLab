@@ -57,7 +57,7 @@ SAVEDIR = './results' # 'SaveDirFixed:True' の場合の保存場所
 
 BUTTONH = 32 # hight of menu and buttons
 PENSIZE = 3 # size of drawing pen
-MAXHIGHT = 640 # 高さがこのサイズを超える画像は強制的にこのサイズ以下になるよう1/2,1/4にリサイズします
+UNITSIZE =  256 # 高さがこのサイズを超える画像は強制的にこのサイズにリサイズ
 MINWW = 800 # ウィンドウ幅の下限　画像幅がこの値の半分以下の場合は幅マージンを加えます
 MM = 5 # 枠指定した際、枠から MM ピクセルは背景としてマスクを作る　よって枠指定するときは対象からMMピクセルは離すこと
 
@@ -266,6 +266,7 @@ class mRadishConsole(BoxLayout):
     windowsize = DUMMYIMG.shape[1]*2, DUMMYIMG.shape[0]+2*BUTTONH # 初期ウィンドウサイズ
     pictexture = {key:cv2kvtexture(picdic[key],force3 = False) for key in picdic}
     touchud = [] # touch.ud の記憶場所
+    margin = int(1.2*UNITSIZE) - UNITSIZE
 
     def __init__(self,**kwargs):
         super(mRadishConsole,self).__init__(**kwargs)
@@ -277,8 +278,8 @@ class mRadishConsole(BoxLayout):
         self.fixsavedir = True
         self.setsrcimg(DUMMYIMG,setfState=0)
         self.autoTips()
-        self.rect = (0,0,1,1) # 切り出し枠 # 不要
-        self.fp1 = [0,0] # 切り出し枠枠の1点目の座標 # 不要
+        # self.rect = (0,0,1,1) # 切り出し枠 # 不要
+        # self.fp1 = [0,0] # 切り出し枠枠の1点目の座標 # 不要
         self.pointsize = PENSIZE # ペンサイズ
         self.pensizeimage()
         self.ids['message'].text = GRC_RES['OpenImage']
@@ -303,10 +304,10 @@ class mRadishConsole(BoxLayout):
         self.srctexture = cv2kvtexture(canvas)
         self.ids['srcimg'].texture = self.srctexture
 
-    # サイズが大きすぎると画面表示できないので表面上リサイズ
+    # 画像サイズはUNITSIZE*1.2で固定
     def sizefilter(self,srcimg):
-        h,w = srcimg.shape[:2]
-        height = min(MAXHIGHT,h)
+
+
         self.resizeratio = h/height
         if h != height:
             h = int(h/self.resizeratio)
@@ -315,21 +316,27 @@ class mRadishConsole(BoxLayout):
 
     # 入力画像をセット
     def setsrcimg(self,srcimg,setfState=0):
-        if len(srcimg.shape) == 2:
-            self.srcimg = cv2.cvtColor(srcimg,cv2.COLOR_GRAY2BGR)
+        # setfState : 0 枠指定前　3 
+        if len(srcimg.shape) == 2: # もともとグレイ
+            gryimg = srcimg.copy()
         else:
-            print("Warning! not monochrome")
-        if srcimg(srcimg>0).min() == 255*
-        self.fState = setfState
-        if setfState == 0: # オリジナルの保存
-            self.origin = srcimg.copy()
-            self.srcimg = self.sizefilter(srcimg) # 大きすぎる画像は強制的に縮小して処理する
-        else:
-            self.srcimg = srcimg.copy()
+            gryimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2GRAY)         
+        _ret,bwimg = cv2.threshold(gryimg,127,255,cv2.THRESH_BINARY) # 単純２値化
+        # 傾き補正
+        bwimg = rd.tiltZeroImg(bwimg) # 傾き補正
+        bwimg = rd.makeUnitImage(bwimg,mr=1.2,unitSize=UNITSIZE) # マージン20%
+        _ret,bwimg = cv2.threshold(bwimg,127,255,cv2.THRESH_BINARY)
+
+        self.srcimg = cv2.cvtColor(bwimg,cv2.COLOR_GRAY2BGR) # 表示用ソース画像
         self.srctexture = cv2kvtexture(self.srcimg)
         self.ids['srcimg'].texture = self.srctexture
-        h,w = self.srcimg.shape[:2]
-        self.margin = (MINWW - 2*w)//4 if 2*w < MINWW else 0  # ウィンドウ幅はある程度必要なので確保
+
+        self.origin = srcimg.copy() # リセット用の初期画像保存
+
+        self.fState = setfState
+
+        con = rd.getContour(bwimg)
+
         self.initAll(setfState=setfState)
 
     # モードボタンの初期化
@@ -344,17 +351,18 @@ class mRadishConsole(BoxLayout):
             self.canvas.remove_group(ids)  # 登録された描画情報を除去
         self.canvasgroups = []
         self.resetMode() # mode ボタンを全て非選択に
-        gryimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2GRAY) # グレイ画像作成
-        self.mask = np.zeros(srcimg.shape[:2],np.uint8) # mRadish 用マスクの初期化
-        self.maskStack = [self.mask.copy()] # マスクのバックアップ
-        self.silhouette = smask = rd.getMajorWhiteArea(gryimg,binary=True) # シルエット画像作成
-        outimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2BGRA) # アルファチャネル追加
-        outimg[:,:,3] = (127*(smask//255)) + 64 # 黒領域の透明化
-        outimg = rd.draw2(smask,outimg,thickness=self.conthick,color=CON_COLOR) # 輪郭描画
-        self.ids['outimg'].texture = cv2kvtexture(outimg,force3=False) # 仮結果画像
+        # gryimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2GRAY) # グレイ画像作成
+        # self.mask = np.zeros(srcimg.shape[:2],np.uint8) # mRadish 用マスクの初期化
+        # self.maskStack = [self.mask.copy()] # マスクのバックアップ
+        # self.silhouette = smask = rd.getMajorWhiteArea(gryimg,binary=True) # シルエット画像作成
+        # outimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2BGRA) # アルファチャネル追加
+        # outimg[:,:,3] = (127*(smask//255)) + 64 # 黒領域の透明化
 
-        srcimg = rd.draw2(smask,self.srcimg,thickness=self.conthick,color=CON_COLOR)
+        srcimg = rd.draw2(srcimg,srcimg,thickness=self.conthick,color=CON_COLOR)
         self.ids['srcimg'].texture = cv2kvtexture(srcimg,force3=False)        
+
+        outimg = srcimg.copy()
+        self.ids['outimg'].texture = cv2kvtexture(outimg,force3=False) # 仮結果画像
 
         self.fState = setfState # 枠指定の状態初期化
         self.frame_or_mask = 0 # 0 -> mask は初期状態 1 -> セット済み
@@ -599,7 +607,15 @@ class mRadishConsole(BoxLayout):
         h,w = self.srcimg.shape[:2]
         m = self.margin
         ud = touch.ud
-        candx = self.con2[touch.y] if (touch.y - int((h+BUTTONH) < 
+        imgy = BUTTONH+h-1-touch.y
+        if imgy < m:
+            candx = self.con2[self.margin]  
+        elif  imgy < h - (self, parameter_list):
+            pass:
+                else:
+            candx = self.con2[touch.y]
+
+
         x = touch.x if touch.x < w + 2*m else touch.x - (w + 2*m)
         
         if self.nowFraming(): # 枠設定中
