@@ -68,7 +68,9 @@ Radish Shape Analysis Laboratory
 Google Colaboratory で試してみてください。
 - 開発環境のインストール不要
 - ブラウザさえあれば実行可能、スマホやタブレットでも実行可能
+<div align="center">
 <img src="https://user-images.githubusercontent.com/24559785/76582358-5b62a280-6519-11ea-87ad-5b7a3ef90f24.gif" width=300>
+</div>
 
 1. このリポジトリの zip をダウンロードし、解凍。フォルダ名を「RadiShLab」に書き換え、自分の Google Drive 直下に保存する。  
 ![repositoryZipDownload](https://user-images.githubusercontent.com/24559785/76692365-dacab000-6698-11ea-943b-dcb2d3fcd4e9.png)
@@ -80,8 +82,9 @@ Google Colaboratory で試してみてください。
 
 Google ドライブに保存したファイルにアクセスしますので、許可が必要になります。
 
+<div align="center">
 <img src="https://user-images.githubusercontent.com/24559785/76583297-315eaf80-651c-11ea-8ab7-ef47db3aa9bb.gif" width=500>
-
+</div>
 ----
 # Developer's way
 > 自分のパソコン上に開発環境を構築して実行してみたい方、GUIツールも使いたい方
