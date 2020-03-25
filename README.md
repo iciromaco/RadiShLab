@@ -189,7 +189,9 @@ conda install Pillow numpy jupyter matplotlib seaborn sympy scikit-learn pandas
 ____
 
 ## RadiShLab 自体のインストール
-![repositoryZipDownload](https://user-images.githubusercontent.com/24559785/76692365-dacab000-6698-11ea-943b-dcb2d3fcd4e9.png)
+<div align="center">
+<img src="https://user-images.githubusercontent.com/24559785/76692365-dacab000-6698-11ea-943b-dcb2d3fcd4e9.png">
+</div>
 
 このリポジトリのzipをダウンロードして任意のディレクトリに解凍するだけです．
 
