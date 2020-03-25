@@ -4,6 +4,11 @@ Radish Shape Analysis Laboratory
 
 ## Description
 
+
+<div align="center">
+<img src="https://user-images.githubusercontent.com/24559785/77537055-cd0afb00-6ee0-11ea-8f60-166a8fb5eba2.gif" width=600>
+</div>
+
 **RadiShLab** is RadiShLab is a collection of programs for shape analysis o radishes written in the programming language python.
 
   - Generatation of silhouette images from radish photos  
