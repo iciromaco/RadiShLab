@@ -22,7 +22,9 @@ from kivy.factory import Factory
 from kivy.uix.popup import Popup
 from kivy.graphics.texture import Texture
 from kivy.clock import Clock
-from kivy.graphics import Color, Rectangle, Point, GraphicException
+from kivy.graphics import Color, Rectangle, Line, Ellipse, Point, GraphicException
+
+from sympy import diff,symbols,solve,Abs,im,re
 
 sys.path.append('./rdlib')
 import pprint
@@ -36,17 +38,15 @@ Config.set('input', 'mouse', 'mouse,disable_multitouch')
 
 GRC_RES ={
 'OpenImage':'File メニューで画像を開いてください',
-'TopLeft':'対象を枠で囲み指定します。左上の点を指定してください',
-'BottomRight':'対象を枠で囲み指定します。右下の点を指定してください',
-'Confirm':'選択できたらCutボタンを押してください',
-'OnCutting':'カット中です。しばらくお待ちください',
-'Finished':'満足できるまで何度かCutをクリック or 1234でヒント情報を追加してCut',
-'Marking0':'Mark sure BG 確実に背景となる領域をマーク',
-'Marking1':'Mark sure FG 確実に対象である領域をマーク'
+'TopTip':'上端の位置を調整し、OKなら Enter キーを押してください', # State 0
+'BottomTip':'下端の位置を調整し、OKなら Enter キーを押してください', # State 1
+'LeftSide':'左側計算中。表示されたら Enter を押してください', # State 2
+'RightSide':'右側計算中。表示されたら Enter を押してください', # State 3
+'AxisCalc':'中心軸計算中。表示されたら Enter を押してください', # State 4
+'Reform':'補正形状計算中。しばらくお待ちください。'  # State 5
 }
 
 FILEMENUS = {'Open':"開く",'Save':"保存",'ScreenShot':"スクリーンショット",'Quit':"終了"}
-PREFMENUS = {'ToggleSave':"保存対象:orig",'ToggleThickness':"描線の太さ:1"}
 
 DUMMYIMGBIN = 'res/nezuko.pkl'
 BUTTONH = 32
@@ -55,10 +55,10 @@ DUMMYIMG = cv2.cvtColor(rd.loadPkl(DUMMYIMGBIN), cv2.COLOR_GRAY2BGR)
 picdic = rd.loadPkl("/res/picdic.pkl")
 SAVEDIR = './results' # 'SaveDirFixed:True' の場合の保存場所  
 
-BUTTONH = 32 # hight of menu and buttons
+BUTTONH = 64 # hight of menu and buttons
 PENSIZE = 3 # size of drawing pen
 UNITSIZE =  256 # 高さがこのサイズを超える画像は強制的にこのサイズにリサイズ
-MINWW = 800 # ウィンドウ幅の下限　画像幅がこの値の半分以下の場合は幅マージンを加えます
+MINWW = 640 # ウィンドウ幅の下限　画像幅がこの値の半分以下の場合は幅マージンを加えます
 MM = 5 # 枠指定した際、枠から MM ピクセルは背景としてマスクを作る　よって枠指定するときは対象からMMピクセルは離すこと
 
 # Conversion from hexadecimal color representation to floating vector representation
@@ -81,7 +81,7 @@ DRAW_FG = {'color' : WHITE, 'val' : 1}
 DRAW_COLORS = [DRAW_BG,DRAW_FG]
 
 CON_THICK = 1 # 輪郭線描画線の太さ
-CON_COLOR = (100,255,200,255) # 輪郭線描画色
+CON_COLOR = (0,255,0,255) # 輪郭線描画色
 
 # デザイン定義
 Builder.load_string('''
@@ -102,11 +102,6 @@ Builder.load_string('''
                     id: sp0
                     text: 'File'
                     on_text: root.do_filemenu()
-                Spinner:
-                    size_hint_x: 0.2
-                    id: sp1
-                    text: 'Preferences'
-                    on_text: root.do_prefmenu()
                 Label:
                     size_hint_x: 1
                     id: message
@@ -137,94 +132,7 @@ Builder.load_string('''
                 text: dummypath
                 font_size: 12
                 size_hint_x: 0.8
-            BoxLayout:
-                size_hint_x: 1.0
-                orientation: 'horizontal'
-                Button:
-                    id: allclear
-                    text: "AC"
-                    on_press: root.resetAll()
-                Button:
-                    id: eraser
-                    on_press: root.undoDraw1()
-                    Image:
-                        center_x: self.parent.center_x
-                        center_y: self.parent.center_y
-                        texture: root.pictexture['eraser']
-                ToggleButton:
-                    id: framing
-                    group: "mode"
-                    state : "down"
-                    on_press: root.startFraming()
-                    Image:
-                        center_x: self.parent.center_x
-                        center_y: self.parent.center_y
-                        texture: root.pictexture['frame']
-                ToggleButton:
-                    id: mark0 # Sure Background
-                    group: "mode"
-                    on_press: root.on_markup(0)
-                    Image:
-                        center_x: self.parent.center_x
-                        center_y: self.parent.center_y
-                        texture: root.pictexture['zero']
-                ToggleButton:
-                    id: mark1 # Sure Foreground
-                    group: "mode"
-                    on_press: root.on_markup(1)
-                    Image:
-                        center_x: self.parent.center_x
-                        center_y: self.parent.center_y
-                        texture: root.pictexture['one']
-                Button:
-                    id: rot90
-                    on_press: root.rotateImage(90)
-                    Image:
-                        center_x: self.parent.center_x
-                        center_y: self.parent.center_y
-                        texture: root.pictexture['rot90']
-                Button:
-                    id: rot270
-                    on_press: root.rotateImage(270)
-                    Image:
-                        center_x: self.parent.center_x
-                        center_y: self.parent.center_y
-                        texture: root.pictexture['rot270']
-                Button:
-                    id: plus
-                    on_press: root.thicknessUpDown(1)
-                    Image:
-                        center_x: self.parent.center_x
-                        center_y: self.parent.center_y
-                        texture: root.pictexture['plus']
-                BoxLayout:
-                    size_hint: None,None
-                    size: BH,BH
-                    Image:
-                        id: dotsize
-                        center_x: self.parent.center_x
-                        center_y: self.parent.center_y
-                        texture: 
-                Button:
-                    id: minus
-                    on_press: root.thicknessUpDown(-1)
-                    Image:
-                        center_x: self.parent.center_x
-                        center_y: self.parent.center_y
-                        texture: root.pictexture['minus']
-                ToggleButton:
-                    id: rdreform # reform flag
-                    text: "RF"
-                    on_press: root.mRadish0()
-                    group: "rdreform"
-                    state: "down"
-                Button:
-                    id: mRadish
-                    on_press: root.mRadish()
-                    Image:
-                        center_x: self.parent.center_x
-                        center_y: self.parent.center_y
-                        texture: root.pictexture['cut']
+
 ''')
 
 # Returns a sequence of points [x1, y1, x2, y2, ...] other than both ends, 
@@ -261,6 +169,98 @@ def cv2kvtexture(img, force3 = True):
     texture.blit_buffer(img2.tostring(), colorfmt=colorfmt)
     return texture
 
+# 計算不能箇所のデータの補間
+def interporation(plist):
+    while np.sum(plist) == np.inf: # np.inf を含むなら除去を繰り返す
+        for i in range(len(plist)):
+            if np.sum(plist[i]) == np.inf :
+                if (i !=0 and i !=len(plist)-1) and np.sum(plist[i-1]+plist[i+1]) != np.inf: # 当該は無限で、前後は無限ではない場合
+                    plist = np.r_[plist[0:i],[[int(round(((plist[i-1]+plist[i+1])/2)[0])),
+                                              int(round(((plist[i-1]+plist[i+1])/2)[1]))]],plist[i+1:]]
+                elif len(plist[i:])>=3 and np.sum(plist[i+1]+plist[i+2]) != np.inf:
+                    plist = np.r_[plist[0:i],[plist[i+2]-2*(plist[i+2]-plist[i+1])],plist[i+1:]]
+                elif len(plist[0:i])>=2 and np.sum(plist[i-1]+plist[i-2]) != np.inf:
+                    plist = np.r_[plist[0:i],[plist[i-2]-2*(plist[i-2]-plist[i-1])],plist[i+1:]]
+    return plist
+
+# 補正形状を求める
+def reformRadish(img,N=8,fl=None,fr=None,fc=None,n_samples=32):
+
+    lpoints2,rpoints2,cpoints,dpc = NormalLadder30(img,fl,fr,fc,n_samples=n_samples)
+
+    # 各サンプル点における幅を求める
+    lpoints2 = interporation(lpoints2)
+    rpoints2 = interporation(rpoints2)
+    width = []
+    for [lx,ly],[rx,ry] in zip(lpoints2,rpoints2):
+        w = np.sqrt((lx-rx)*(lx-rx)+(ly-ry)*(ly-ry))
+        width.append(w)
+
+    # 各サンプル点までの距離を求める
+    dp,lengths = rd.getDenseParameters(fc,n_samples=128,span=0,needlength=True)
+    found = [0.0]
+    i = 1
+    for n in range(1,len(dpc)-1):
+        t = dpc[n]
+        while dp[i] < t:
+            i = i+1
+        if t == dp[i]:
+            found.append(lengths[i])
+        else:
+            found.append(((dp[i]-t)*lengths[i-1]+(t-dp[i-1])*lengths[i])/(dp[i]-dp[i-1]))
+    found.append(lengths[-1])
+
+    width = [0]+width+[0] # 少し姑息だが　端点を閉じる目的　
+    found = [found[0]]+found+[found[-1]]
+        
+    # 形状補正データのサンプルの生成
+    samples = np.array([[int(round(l)),int(round(w))] for l,w in zip(width,found)])
+    
+    bez = rd.BezierCurve(N=N,samples=samples) # インスタンス生成
+    cps,fc = bez.fit0()
+    # 結果の描画
+    return cps,fc
+
+# 図的解法で求めた垂線による断面を描画するプログラム
+def NormalLadder30(img,fl,fr,fc,n_samples=32):
+    t = symbols('t')
+    dpl = rd.getDenseParameters(fl,n_samples=n_samples,span=0) #  均等間隔になるようなパラメータセットを求める
+    dpr = rd.getDenseParameters(fr,n_samples=n_samples,span=0) #  均等間隔になるようなパラメータセットを求める
+    spl = lpoints = np.array([[int(float(fl[0].subs(t,s))),int(float(fl[1].subs(t,s)))] for s in dpl])
+    spr = rpoints = np.array([[int(float(fr[0].subs(t,s))),int(float(fr[1].subs(t,s)))] for s in dpr])
+    
+    fcx,fcy = fc
+    cpoints = [] # 左右の対応点を結ぶ線分と中心線の交点
+    dpc = [] # その点のパラメータ
+    for [xl,yl],[xr,yr] in zip(spl,spr):
+        print('.',end='')
+        ans = solve((xr-fcx)*(fcy-yl)-(fcx-xl)*(yr-fcy),t) # 左右の等間隔点を結ぶ線分と中心線の交点
+        ansR = [re(i) for i in ans if float(Abs(im(i)))<0.00000001] # 解の実部
+        sc = [i for i in ansR if i<=1.02 and -0.02<=i] # ０から１までの範囲の解を抽出 
+        cpoints.append([int(float(fcx.subs(t,sc[0]))),int(float(fcy.subs(t,sc[0])))] if sc !=[] else [np.inf,np.inf])
+        dpc.append(sc[0] if sc !=[] else np.inf)
+    if dpc[0] == np.inf:
+        dpc[0] = 0
+        cpoints[0] = [int(float(fc[0].subs(t,0))),int(float(fc[1].subs(t,0)))]
+    if dpc[-1] == np.inf:
+        dpc[-1] = 1
+        cpoints[-1] = [int(float(fc[0].subs(t,1))),int(float(fc[1].subs(t,1)))]
+    cpoints = np.array(cpoints)
+    
+    # 上端点における法線は両サイドと交差しないことが多いので計算せずに端点をそのまま採用
+    lpoints2 = [[int(float(fl[0].subs(t,0))),int(float(fl[1].subs(t,0)))]]
+    rpoints2 = [[int(float(fr[0].subs(t,0))),int(float(fr[1].subs(t,0)))]]
+    for t0 in dpc[1:-1]:
+        ldata,rdata = rd.crossPointsLRonImg(img,fc,t0) # 中心線 fcのパラメータ t0の点の法線と画像輪郭の交点を図的に求める
+        lpoints2.append(ldata)
+        rpoints2.append(rdata)
+    # 下端点における端点も計算せずにそのまま採用
+    lpoints2.append([int(float(fl[0].subs(t,1))),int(float(fl[1].subs(t,1)))])
+    rpoints2.append([int(float(fr[0].subs(t,1))),int(float(fr[1].subs(t,1)))])
+    lpoints2 = np.array(lpoints2)
+    rpoints2 = np.array(rpoints2)
+    return lpoints2,rpoints2,cpoints,dpc
+
 # Main Widget
 class mRadishConsole(BoxLayout):
     windowsize = DUMMYIMG.shape[1]*2, DUMMYIMG.shape[0]+2*BUTTONH # 初期ウィンドウサイズ
@@ -276,113 +276,201 @@ class mRadishConsole(BoxLayout):
         self.tobesaved = 'orig'
         self.currentOpendir = self.currentSavedir = os.getcwd() # カレントオープンディレクトリ
         self.fixsavedir = True
-        self.setsrcimg(DUMMYIMG,setfState=0)
-        self.autoTips()
-        # self.rect = (0,0,1,1) # 切り出し枠 # 不要
-        # self.fp1 = [0,0] # 切り出し枠枠の1点目の座標 # 不要
-        self.pointsize = PENSIZE # ペンサイズ
-        self.pensizeimage()
-        self.ids['message'].text = GRC_RES['OpenImage']
+        self.setsrcimg(DUMMYIMG)
         self.dialogflag = False # ファイルオープンダイアログを開いているというフラグ
-        Clock.schedule_interval(self.update, 0.1) # ウィンドウサイズの監視固定化
+        self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
+        self._keyboard.bind(on_key_down=self._on_keyboard_down)
+        Clock.schedule_interval(self.update, 0.01) # ウィンドウサイズの監視固定化
+
+    # 画像上の座標(imgx,imgy) に対応する canvas 座標を返す
+    def imgC2kivyC(self,imgx,imgy,offset=0):
+        m = self.margin # canvas のマージン
+        h,w = self.srcimg.shape[:2]
+        kx = imgx + m + offset
+        ky = BUTTONH + h - imgy - 1
+        return kx,ky
+
+    #  canvas 座標に対応する画像上の座標(imgx,imgy) 返す
+    def kivyC2imgC(self,kx,ky):
+        m = self.margin # canvas のマージン
+        h,w = self.srcimg.shape[:2]
+        imgx = kx - m
+        imgy = BUTTONH + h - 1 - ky
+        return imgx,imgy
 
     # 自動で上下端点を見つけると同時に輪郭情報を保存する
     def autoTips(self):
-        img = cv2.cvtColor(self.srcimg,cv2.COLOR_BGR2GRAY)
+        img = self.srcimg
         con,topTip,bottomTip,_stops,_smbtms = rd.findTips(img,con=[],top=0.1,bottom=0.8,topCD=0.5,bottomCD=0.5,mode=2)
         self.con = con
-        self.con2 = img.shape[0]*[[]]
-        for [[x,y]] in con:
-            self.con2[y].append(x)
-        self.topTip = tuple(con[topTip][0])
-        self.bottomTip = tuple(con[bottomTip][0])
-        canvas = self.srcimg.copy()
-        cv2.circle(canvas,self.topTip,1,(0,0,255),-1)
-        cv2.circle(canvas,self.topTip,5,(0,0,255),1)
-        cv2.circle(canvas,self.bottomTip,1,(0,0,255),-1)
-        cv2.circle(canvas,self.bottomTip,5,(0,0,255),1)        
-        self.srctexture = cv2kvtexture(canvas)
-        self.ids['srcimg'].texture = self.srctexture
+        self.topTip = topTip
+        self.bottomTip = bottomTip
+        self.drawTips()       
 
-    # 画像サイズはUNITSIZE*1.2で固定
-    def sizefilter(self,srcimg):
-
-
-        self.resizeratio = h/height
-        if h != height:
-            h = int(h/self.resizeratio)
-            w = int(w/self.resizeratio)
-        return cv2.resize(srcimg,(w,h))
+    # 軸端マークを描く
+    def drawTips(self):
+        h,w = self.srcimg.shape[:2]
+        m = self.margin
+        [[tpx,tpy]] = self.con[self.topTip]
+        [[btx,bty]] = self.con[self.bottomTip]
+        ktpx,ktpy = self.imgC2kivyC(tpx,tpy)
+        kbtx,kbty = self.imgC2kivyC(btx,bty)
+        if self.fState == 0:
+            tpx,tpy = ktpx,ktpy
+        else:
+            tpx,tpy = kbtx,kbty
+        with self.canvas:
+            self.canvas.remove_group("a")
+            self.ud = [Color(0, 1, 0, mode='rgba'),
+                Rectangle(pos=(tpx, BUTTONH), size=(1, h),group="a"), # クロスカーソル 縦
+                Rectangle(pos=(0, tpy), size=(w+2*m, 1),group="a"), # クロスカーソル　横
+                # Rectangle(pos=(ktpx+w+2*m, BUTTONH), size=(1, h),group="a"),
+                Color(1, 0, 0, mode='rgba'),
+                Line(circle=(ktpx, ktpy, 1),width=2,group="a"),
+                Line(circle=(ktpx, ktpy, 8),group="a"),
+                Line(circle=(kbtx, kbty, 1),width=2,group="a"),
+                Line(circle=(kbtx, kbty, 8),group="a") ]
 
     # 入力画像をセット
-    def setsrcimg(self,srcimg,setfState=0):
+    def setsrcimg(self,srcimg):
+        saved = self.children[:]
+        self.clear_widgets()
+        self.canvas.clear()
+        for widget in saved:
+            self.add_widget(widget)
+
         # setfState : 0 枠指定前　3 
         if len(srcimg.shape) == 2: # もともとグレイ
             gryimg = srcimg.copy()
         else:
-            gryimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2GRAY)         
+            gryimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2GRAY)  
         _ret,bwimg = cv2.threshold(gryimg,127,255,cv2.THRESH_BINARY) # 単純２値化
-        # 傾き補正
         bwimg = rd.tiltZeroImg(bwimg) # 傾き補正
-        bwimg = rd.makeUnitImage(bwimg,mr=1.2,unitSize=UNITSIZE) # マージン20%
-        _ret,bwimg = cv2.threshold(bwimg,127,255,cv2.THRESH_BINARY)
-
-        self.srcimg = cv2.cvtColor(bwimg,cv2.COLOR_GRAY2BGR) # 表示用ソース画像
-        self.srctexture = cv2kvtexture(self.srcimg)
-        self.ids['srcimg'].texture = self.srctexture
-
-        self.origin = srcimg.copy() # リセット用の初期画像保存
-
-        self.fState = setfState
-
-        con = rd.getContour(bwimg)
-
-        self.initAll(setfState=setfState)
-
-    # モードボタンの初期化
-    def resetMode(self):
-        for tb in ['mark0','mark1','framing']:
-            self.ids[tb].state = 'normal'
-
-    # 画像読み込み後の初期化
-    def initAll(self,setfState=0):
-        srcimg = self.srcimg
-        for ids in self.canvasgroups:
-            self.canvas.remove_group(ids)  # 登録された描画情報を除去
-        self.canvasgroups = []
-        self.resetMode() # mode ボタンを全て非選択に
-        # gryimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2GRAY) # グレイ画像作成
-        # self.mask = np.zeros(srcimg.shape[:2],np.uint8) # mRadish 用マスクの初期化
-        # self.maskStack = [self.mask.copy()] # マスクのバックアップ
-        # self.silhouette = smask = rd.getMajorWhiteArea(gryimg,binary=True) # シルエット画像作成
-        # outimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2BGRA) # アルファチャネル追加
-        # outimg[:,:,3] = (127*(smask//255)) + 64 # 黒領域の透明化
-
-        srcimg = rd.draw2(srcimg,srcimg,thickness=self.conthick,color=CON_COLOR)
-        self.ids['srcimg'].texture = cv2kvtexture(srcimg,force3=False)        
-
-        outimg = srcimg.copy()
-        self.ids['outimg'].texture = cv2kvtexture(outimg,force3=False) # 仮結果画像
-
-        self.fState = setfState # 枠指定の状態初期化
-        self.frame_or_mask = 0 # 0 -> mask は初期状態 1 -> セット済み
-        if setfState == 0:
-            self.ids['framing'].state = "down"
-        elif setfState == 3:
-            self.ids['mark0'].state = 'down'
+        bwimg = rd.makeUnitImage(bwimg,mr=1.2,unitSize=UNITSIZE) # マージン20%でサイズを正規化
+        _ret,bwimg = cv2.threshold(bwimg,127,255,cv2.THRESH_BINARY) # 2階調化
+        self.srcimg = bwimg
+        self.srctexture = cv2kvtexture(bwimg) # ソース画像のテクスチャを生成
+        self.outimg = cv2.cvtColor(bwimg,cv2.COLOR_GRAY2BGR)//2
+        self.outtexture = cv2kvtexture(self.outimg)
+        self.resetAll()
 
     # 画像読み込み直後の状態まで戻す
     def resetAll(self):
-        self.setsrcimg(self.origin.copy(),setfState=0)
+        self.ids['srcimg'].texture = self.srctexture # ソース画像のテクスチャを表示
+        self.ids['outimg'].texture = self.outtexture # 仮結果画像
+        self.autoTips() # 先端位置を自動決定
+        self.drawTips() # 先端位置を描画
+        self.fState = 0 # フェーズを端点未決定にセット
+        self.ids['message'].text =  GRC_RES['TopTip']  
 
-    # ペンサイズの増減
-    def pensizeimage(self):
-        pensize = self.pointsize
-        pimg = np.ones((32,32,4),np.uint8)*200
-        pimg[:,:,3] = 100
-        cv2.circle(pimg,(16,16),pensize,(255,255,255,255),-1)
-        ptxt = cv2kvtexture(pimg,force3=False)
-        self.ids['dotsize'].texture = ptxt
+    # キーボードイベント処理
+    def _on_keyboard_down(self, keyboard, keycode, text, modifiers, samples=32,N=8):
+        h,w = self.srcimg.shape[:2]
+        m = self.margin
+        conn = len(self.con)
+        f = self.imgC2kivyC
+
+        self.update(0.001)
+
+        if self.fState == 0:
+            tip = self.topTip # 上端の輪郭番号
+            [[tx,ty]] = self.con[tip] 
+        elif self.fState == 1:
+            tip = self.bottomTip # 下端の輪郭番号
+            [[tx,ty]] = self.con[tip]
+
+
+        if self.fState == 0:
+            if keycode[1] == 'enter':
+                self.fState = 1
+                self.ids['message'].text =  GRC_RES['BottomTip'] 
+                self.drawTips()
+            else:
+                if keycode[1] == 'right' or keycode[1] == 'up':
+                    tip = (tip-1) % conn
+                elif keycode[1] == 'left' or keycode[1] == 'down':
+                    tip = (tip+1) % conn
+                self.topTip = tip
+                self.drawTips() # 描画
+        elif self.fState == 1:
+            if keycode[1] == 'enter':
+                self.fState = 2
+                self.ids['message'].text =  GRC_RES['LeftSide']
+
+                con = rd.getContour(self.srcimg)
+                rdcimg = np.zeros_like(self.srcimg)  # 描画キャンバスの準備
+                cv2.drawContours(rdcimg,con,-1,255,thickness=1)
+                [[dtopx,dtopy]] = self.con[self.topTip]
+                [[dbtmx,dbtmy]] = self.con[self.bottomTip]
+                conLeft,conRight = rd.getCntPairWithCntImg(rdcimg,dtopx,dtopy,dbtmx,dbtmy)    
+                Left = self.Left = rd.getSamples(conLeft,N=samples,mode='Equidistant')
+                Right = self.Right = rd.getSamples(conRight,N=samples,mode='Equidistant')
+                bezL = rd.BezierCurve(N=N,samples=Left)
+                cpsL,self.fL = bezL.fit0()
+                fL = self.fL
+                Lpoints = list(np.array([f(x,y,w+2*m) for [x,y] in cpsL]).flatten())
+                with self.canvas:
+                    Color(0.8, 0.62, 0.27, mode='rgba')
+                    Line(bezier=(list(Lpoints)),width=2)
+            else:
+                if keycode[1] == 'right' or keycode[1] == 'up':
+                    tip = (tip+1) % conn
+                elif keycode[1] == 'left' or keycode[1] == 'down':
+                    tip = (tip-1) % conn
+                self.bottomTip = tip
+                self.drawTips() # 描画
+        elif self.fState == 2 and keycode[1] == 'enter':
+            self.fState = 3
+            self.ids['message'].text = GRC_RES['RightSide']
+            Right = self.Right
+            bezR = rd.BezierCurve(N=N,samples=Right)
+            cpsR,self.fR = bezR.fit0()
+            fR = self.fR
+            Rpoints = list(np.array([f(x,y,w+2*m) for [x,y] in cpsR]).flatten())
+            with self.canvas:
+                Color(0.27, 0.8, 0.5, mode='rgba')
+                Line(bezier=Rpoints,width=2)
+        elif self.fState == 3 and keycode[1] == 'enter':
+            self.fState = 4
+            self.ids['message'].text =  GRC_RES['AxisCalc'] 
+            fl = self.fL
+            fr = self.fR
+            fc = (fl+fr)/2
+            dp = rd.getDenseParameters(fc,n_samples=samples,span=0)
+            samples = [[int(float(fc[0].subs('t',s))),int(float(fc[1].subs('t',s)))] for s in dp]
+            samples = np.array(samples)
+            bezC = rd.BezierCurve(N=4,samples = samples,prefunc=fc)
+            cps,newfc = bezC.fit0()
+            self.fC = newfc
+            Cpoints = list(np.array([f(x,y,w+2*m) for [x,y] in cps]).flatten())
+            with self.canvas:
+                Color(1, 0, 0, mode='rgba')
+                Line(bezier=Cpoints,width=2)
+            self.ids['message'].text =  GRC_RES['Reform'] 
+        elif self.fState == 4 and keycode[1] == 'enter':
+            self.fState = 5
+            self.ids['message'].text =  GRC_RES['Reform'] 
+            fl = self.fL
+            fr = self.fR
+            fc = self.fC
+            cps,fc = reformRadish(self.srcimg,N=8,fl=fl,fr=fr,fc=fc,n_samples=samples)
+            gx,gy,(x0,y0,_w,_h,a) = rd.getCoG(self.srcimg)
+            FpointsL = list(np.array([f(-x/2,y+y0,w+m) for [x,y] in cps]).flatten())
+            FpointsR = list(np.array([f(x/2,y+y0,w+m) for [x,y] in cps]).flatten())
+            with self.canvas:
+                Color(1, 1, 1, mode='rgba')
+                Line(bezier=FpointsL,width=2)
+                Line(bezier=FpointsR,width=2)
+            self.fState = 6
+            self.ids['message'].text =  GRC_RES['OpenImage'] 
+        else:
+            self.ids['message'].text =  GRC_RES['OpenImage'] 
+        return 
+
+    def _keyboard_closed(self):
+        self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+        self._keyboard = None
+
 
     # ウィンドウサイズを固定化
     def update(self, dt):
@@ -391,26 +479,19 @@ class mRadishConsole(BoxLayout):
         h,w = self.srcimg.shape[:2]
         Window.size = (2*w+4*self.margin,h+2*BUTTONH)
         if self.fState == 0:
-            self.ids['message'].text =  GRC_RES['TopLeft'] # メッセージ表示
+            self.ids['message'].text =  GRC_RES['TopTip'] 
         elif self.fState == 1:
-            self.ids['message'].text =  GRC_RES['BottomRight'] # メッセージ表示            
+            self.ids['message'].text =  GRC_RES['BottomTip']             
+        elif self.fState == 2:
+            self.ids['message'].text =  GRC_RES['LeftSide'] 
+        elif self.fState == 3:
+            self.ids['message'].text = GRC_RES['RightSide']
+        elif self.fState == 4:
+            self.ids['message'].text =  GRC_RES['AxisCalc'] 
+        elif self.fState == 5:
+            self.ids['message'].text =  GRC_RES['Reform'] 
         else:
-            marking = self.nowMarking()
-            if marking < 0:
-                self.ids['message'].text =  GRC_RES['Finished'] # メッセージ表示
-            else:
-                self.ids['message'].text = GRC_RES['Marking%d' % (marking)]
-
-    # 画像を９０度回転
-    def rotateImage(self,rot=90):
-        if self.fState >= 2:
-            return
-        img = self.origin
-        if rot == 90:
-            img = img.transpose(1,0,2)[::-1,:,:]
-        else:
-            img = img.transpose(1,0,2)[:,::-1,:]
-        self.setsrcimg(img,setfState=0)
+            self.ids['message'].text =  GRC_RES['OpenImage'] 
 
     # メニュー処理
     def do_filemenu(self):
@@ -459,7 +540,7 @@ class mRadishConsole(BoxLayout):
                 srcimg = rd.imread(filepath[0])
                 if len(srcimg.shape) == 2:
                     srcimg = cv2.cvtColor(srcimg, cv2.COLOR_GRAY2BGR)
-                self.setsrcimg(srcimg,setfState=0)
+                self.setsrcimg(srcimg)
                 self.currentOpendir = os.path.dirname(filepath[0])
             self.dismiss_popup()
 
@@ -477,7 +558,7 @@ class mRadishConsole(BoxLayout):
             if filename !='':
                 path = os.path.join(dir, filename) # パスを合成
                 path1 = os.path.splitext(path) # パスを拡張子より前と拡張子に分解
-                if not path1[1].lower() in ['.png','.jpg']:
+                if not path1constran.lower() in ['.png','.jpg']:
                     path = path1[0]+'.png' # 強制的に png に変更
                 oh,ow = self.origin.shape[:2]
                 img = np.zeros((oh,ow),np.uint8)
@@ -505,276 +586,6 @@ class mRadishConsole(BoxLayout):
         content.ids['filechooser'].path = self.currentSavedir
         self._popup.open()
 
-    # マウスカーソルが入力画像内にあるかどうかのテスト
-    def isInCanvas(self,touch):
-        x = touch.x
-        y = touch.y
-        h,w = self.srcimg.shape[:2]
-        m = self.margin
-        l = y >= BUTTONH and y < h + BUTTONH 
-        l = l and ((m <= x and x < w + m) or (w + 3*m <= x and x < 2*w + 3*m))
-        return l
-
-    # 枠付けの開始
-    def startFraming(self):
-        if self.fState >= 2:
-            self.ids['framing'].state = "normal"
-        else:
-            self.ids['framing'].state = "down"
-
-    # 枠付け中であるかどうかの判定
-    def nowFraming(self):
-        return self.fState < 2 and self.ids['framing'].state == "down" 
-
-    # マーキングの切り替え
-    def on_markup(self,ret):
-        if self.fState < 2:
-            self.ids['mark%d' % ret].state = "normal"
-            self.ids['framing'].state = "down"
-        else:
-            if self.ids['mark%d' % ret].state == "down":
-                self.ids['message'].text = GRC_RES['Marking%d' % (ret)]
-
-    # マーキング中であるかどうかの判定
-    def nowMarking(self):
-        ret = -1
-        for n in range(2):
-            if self.ids['mark%d' % n].state == 'down':
-                ret = n
-        return ret
-
-    # マーキング　ヒント情報の描画
-    def drawPoint(self,points,colorvalue):
-        m = self.margin
-        for idx in range(0,len(points),2):
-            x = int(points[idx])
-            y = self.srcimg.shape[0]+BUTTONH-int(points[idx+1])
-            # cv2.circle(self.workimg,(x,y),self.pointsize,colorvalue['color'],-1)
-            cv2.circle(self.mask,(x-m,y),self.pointsize,colorvalue['val'],-1)
-
-    # マーキングのアンドゥ
-    def undoDraw1(self):
-        lastid = self.popCV()
-        if lastid == False:
-            self.setsrcimg(self.origin,setfState=0)
-            return
-        elif lastid == "0":
-            self.fState = 0
-        elif lastid == "1":
-            self.fState = 1
-        else:
-            self.fState = 3
-        self.popMask()
-        if self.fState < 2: 
-            self.ids['framing'].state = "down"
-            self.frame_or_mask = 0
-
-    # ペンサイズの増減
-    def thicknessUpDown(self, diff):
-        pointsize = self.pointsize + diff
-        if pointsize > 0 and pointsize < 31: 
-            self.pointsize = pointsize
-        self.pensizeimage()
-
-    # 描画履歴情報のプッシュ・ポップ
-    def pushCV(self,id):
-        self.pushMask()  # マスクもプッシュ
-        self.canvasgroups.append(id)
-
-    def popCV(self):
-        if len(self.canvasgroups) == 0:
-            return False
-        lastid = self.canvasgroups.pop()
-        self.canvas.remove_group(lastid)
-        return lastid  
-
-    # マスク情報のプッシュ・ポップ
-    def pushMask(self):
-        self.maskStack.append(self.mask.copy())
-
-    def popMask(self):
-        if len(self.maskStack) == 1:
-            self.mask = self.maskStack[0].copy()
-        else:
-            self.mask = self.maskStack.pop().copy()
-
-    # マウスイベントの処理
-    def on_touch_down(self, touch):
-        if Widget.on_touch_down(self, touch) or not self.isInCanvas(touch): 
-            # ボタンなどのウィジット上でタッチした場合は処理をスルー
-            return
-        
-        h,w = self.srcimg.shape[:2]
-        m = self.margin
-        ud = touch.ud
-        imgy = BUTTONH+h-1-touch.y
-        if imgy < m:
-            candx = self.con2[self.margin]  
-        elif  imgy < h - (self, parameter_list):
-            pass:
-                else:
-            candx = self.con2[touch.y]
-
-
-        x = touch.x if touch.x < w + 2*m else touch.x - (w + 2*m)
-        
-        if self.nowFraming(): # 枠設定中
-            g = str(self.fState) 
-            with self.canvas:
-                # Color(ud['color'], 1, 1, mode='hsv', group=g)
-                Color(0, 1, 0, mode='rgba',group=g)
-                ud['cross'] = [
-                    Rectangle(pos=(x, BUTTONH), size=(1, h), group=g), # クロスカーソル 縦
-                    Rectangle(pos=(0, touch.y), size=(2*(w+2*m), 1), group=g), # クロスカーソル　横
-                    Rectangle(pos=(x+w+2*m, BUTTONH), size=(1, h), group=g)]
-            ud['label'] = Label(size_hint=(None, None))
-            self.update_touch_label(ud['label'], touch)
-            self.add_widget(ud['label'])
-        else:
-            mark = self.nowMarking()
-            if mark < 0: # not on marking
-                return
-
-            ud['group'] = g = str(touch.uid)
-            ps = self.pointsize 
-
-            with self.canvas:
-                exec(COLORS[mark])
-                # ud['drawings'] = Point(points=(touch.x, touch.y), source='res/picdicpics/particle.png',
-                ud['drawings'] = [Point(points=(x, touch.y), source='res/picdicpics/ic12_pennib.png', 
-                                      pointsize=ps, group=g),
-                                 Point(points=(x+w+2*m, touch.y), source='res/picdicpics/ic15_pennib64.png',
-                                      pointsize=ps, group=g)]                                  
-                self.drawPoint(ud['drawings'][0].points,colorvalue=DRAW_COLORS[mark])
-        self.pushCV(g)
-        touch.grab(self) # ドラッグの追跡を指定            
-        return True
-
-    def on_touch_move(self,touch):
-        # 入力画像内でドラッグが開始されて、継続して画像内でドラッグが続いているかどうかのチェック
-        if (touch.grab_current is not self) or (not self.isInCanvas(touch)):
-            return
-
-        h,w = self.srcimg.shape[:2]
-        m = self.margin
-        ud = touch.ud
-        x = touch.x if touch.x < w + 2*m else touch.x - (w + 2*m)
-
-        if self.nowFraming(): # 枠設定中
-            ud['cross'][0].pos = x, BUTTONH
-            ud['cross'][1].pos = 0, touch.y
-            ud['cross'][2].pos = x + w + 2*m, BUTTONH                
-            self.update_touch_label(ud['label'], touch)
-        else:
-            mark = self.nowMarking()
-            if mark < 0:
-                return
-
-            ud['group'] = g = str(mark) 
-            ps = self.pointsize
-
-            while True:
-                try:
-                    pts = ud['drawings'][0].points
-                    oldx, oldy = pts[-2], pts[-1]
-                    break
-                except:
-                    index -= 1
-
-            # カーソル移動が早すぎて間が飛んだ時のための補間処理
-            points = calculate_points(oldx, oldy, x, touch.y, steps=ps)
-            if points:
-                try:
-                    lp0 = ud['drawings'][0].add_point # add_point関数 を lp と alias している
-                    lp1 = ud['drawings'][1].add_point #
-                    for idx in range(0, len(points), 2):
-                        lp0(points[idx], points[idx + 1])
-                        lp1(points[idx]+w+2*m, points[idx + 1])
-                except GraphicException:
-                    pass
-
-                self.drawPoint(ud['drawings'][0].points,colorvalue=DRAW_COLORS[mark])
-            
-    def on_touch_up(self, touch):
-        if touch.grab_current is not self or (not self.isInCanvas(touch)):
-            return    
-
-        h,w = self.srcimg.shape[:2]
-        m = self.margin        
-        ud = touch.ud
-
-        if self.nowFraming(): # 枠設定中
-            if self.fState == 0: # １点目未設定
-                self.fp1[0] = int(ud['cross'][0].pos[0]-m)
-                self.fp1[1] = int((h+BUTTONH)-ud['cross'][1].pos[1])
-                # self.ids['message'].text =  GRC_RES['BottomRight']
-                self.fState = 1 # 1点目確定
-            elif self.fState == 1:
-                p2x = int(ud['cross'][0].pos[0]-m)
-                p2y = int((h+BUTTONH)-ud['cross'][1].pos[1])
-                self.rect = (min(self.fp1[0],p2x),min(self.fp1[1],p2y),abs(self.fp1[0]-p2x),abs(self.fp1[1]-p2y))
-                self.ids['framing'].state = "normal"
-                self.fState = 2
-            self.remove_widget(ud['label'])
-            self.mRadish()    
-        else:
-            touch.ungrab(self)
-
-    # 座標表示
-    def update_touch_label(self, label, touch):
-        h,w = self.srcimg.shape[:2]
-        m = self.margin
-        label.text = '(%d, %d)' % (touch.x-m, (h + BUTTONH) - touch.y)
-        label.texture_update()
-        label.pos = touch.pos
-        label.size = label.texture_size[0] + 20, label.texture_size[1] + 20
-
-    # 平滑化モードボタンのふるまい
-    def mRadish0(self):
-        self.mRadish() # モードをトグルした上で mRadish
-
-    # セグメンテーション
-    def mRadish(self):
-        if self.fState < 2:
-            return
-        elif self.fState == 2:
-            (x,y,w,h) = self.rect
-            if min(w,h) < 4*MM: # 矩形が小さすぎる
-                self.undoDraw1()
-                return
-            rr = self.resizeratio
-            self.cropRect = (int(rr*x),int(rr*y),int(rr*w),int(rr*h))
-            (x,y,w,h) = self.cropRect
-            self.srcimg = self.origin[y:y+h,x:x+w]
-            self.setsrcimg(self.srcimg,setfState=3)
-            self.rect = (MM,MM,w-2*MM,h-2*MM)
-        h,w = self.srcimg.shape[:2]
-        self.ids['message'].text =  GRC_RES['OnCutting']
-        rect = self.rect
-        img = self.srcimg.copy()
-        bgdmodel = np.zeros((1,65),np.float64)
-        fgdmodel = np.zeros((1,65),np.float64)
-        if (self.frame_or_mask == 0): 
-            cv2.mRadish(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
-            self.frame_or_mask = 1
-        elif (self.frame_or_mask == 1):
-            if (np.where((self.mask==1) + (self.mask==3),255,0).astype('uint8')).sum() == 0: # 前景候補がない
-                self.mask[rect[1]:rect[1]+rect[3],rect[0]:rect[0]+rect[2]] = 1
-            cv2.mRadish(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_MASK)
-        mask2 = np.where((self.mask==1) + (self.mask==3),255,0).astype('uint8')
-        if self.ids['rdreform'].state == 'down':
-            mask2 = rd.RDreform(mask2) # デフォルトで平滑化　詳細は rdlib4.py参照
-        else:
-            mask2 = rd.getMajorWhiteArea(mask2) # 最大白領域のみ抽出
-        outimg = cv2.cvtColor(img,cv2.COLOR_BGR2BGRA)
-        outimg[:,:,3] = (127*(mask2//255))+64
-        outimg = rd.draw2(mask2,outimg,thickness=self.conthick,color=CON_COLOR)
-        self.ids['outimg'].texture = cv2kvtexture(outimg,force3=False)
-        srcimg = rd.draw2(mask2,self.srcimg,thickness=self.conthick,color=CON_COLOR)
-        self.ids['srcimg'].texture = cv2kvtexture(srcimg,force3=False)        
-        self.silhouette = mask2
-        self.ids['message'].text = GRC_RES['Finished']
-
 # アプリケーションメイン 
 class mRadish(App):
     title = 'Touchtracer'
@@ -783,15 +594,13 @@ class mRadish(App):
         mywidget = mRadishConsole()
         sp0 = (FILEMENUS[i] for i in FILEMENUS.keys())
         mywidget.ids['sp0'].values = sp0
-        sp1 = (PREFMENUS[i] for i in PREFMENUS.keys())
-        mywidget.ids['sp1'].values = sp1      
+  
         self.title = 'mRadish'
         self.icon = 'res/picdicpics/ic99_radishB.png'
         return mywidget
 
     def on_pause(self):
         return True
-
     
 if __name__ == "__main__":
     mRadish().run()
