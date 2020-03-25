@@ -7,6 +7,10 @@ Radish Shape Analysis Laboratory
 
 ## Description
 
+<div align="center">
+<img src="https://user-images.githubusercontent.com/24559785/77537055-cd0afb00-6ee0-11ea-8f60-166a8fb5eba2.gif" width=400>
+</div>
+
 - **RadiShLab** は プログラミング言語 python で記述されたダイコンの形状解析のためのプログラム集です。
 - jupyter notebook 形式の実行できるノートを公開します。（N001,N002〜）
 
