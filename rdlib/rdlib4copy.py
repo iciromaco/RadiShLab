@@ -792,6 +792,7 @@ def getSamples(cont,N=20,mode='Equidistant'):
 #from sympy.abc import a,b,c
 #from sympy import var
 
+
 #  稠密なパラメータを得る（点列は一定間隔にならないので、点列が一定間隔になるようなパラメータ列を求める）
 def getDenseParameters(func,n_samples=0,span=0,needlength=False):
         # func 曲線のパラメータ表現 = (fx,fy)
@@ -802,26 +803,23 @@ def getDenseParameters(func,n_samples=0,span=0,needlength=False):
         else:
             fx,fy = func
             dfx,dfy = diff(fx),diff(fy)
-            nfx,nfy = lambdify('t', fx, "numpy"),lambdify('t', fy, "numpy")
-            ndfx,ndfy = lambdify('t', dfx, "numpy"),lambdify('t', dfy, "numpy")
-
             if span == 0: # 稠密さの係数が与えられていない場合はサンプル10点ででおおざっぱに全長を見積もって決める
                 ss = np.linspace(0,1,10)
-                ps = np.array([[int(nfx(s)),int(nfy(s))] for s in ss])
+                ps = np.array([[int(float(fx.subs('t',s))),int(float(fy.subs('t',s)))] for s in ss])
                 axlength = cv2.arcLength(ps, closed=False) # 経路長
                 span = axlength/(n_samples-1)/3 # 経路長が実際の長さより短めの値に算出される。その３分の１なので実際のサンプル間の長さの３分の１以下になる
             para = [0.0] # 候補パラメータを格納するリスト　
-            bzpoints = [[int(nfx(0)),int(nfy(0))]] # パラメータに対応する座標のリスト
+            bzpoints = [[int(float(fx.subs('t',0))),int(float(fy.subs('t',0)))]] # パラメータに対応する座標のリスト
             ss = 0.0 
             while ss < 1:
-                absdx = abs(ndfx(ss)) # x微係数
-                absdy = abs(ndfy(ss)) # y微係数
+                absdx = abs(dfx.subs('t',ss)) # x微係数
+                absdy = abs(dfy.subs('t',ss)) # y微係数
                 absd = np.sqrt(float(absdx**2 + absdy**2)) # 傾き
                 pstep = span/absd if absd > 0 else 1/n_samples # 傾きの逆数＝ｘかｙが最大span移動するだけのパラメータ変化
                 ss += 0.7*pstep # span を超えないよう、７掛けで控えめにパラメータを増やす　
                 ss = 1.0 if ss > 1 else ss
                 para.append(ss)  # リストへ追加
-                bzpoints.append([int(nfx(ss)),int(nfy(ss))]) # ss に対応する曲線上の点をリストに追加
+                bzpoints.append([int(float(fx.subs('t',ss))),int(float(fy.subs('t',ss)))]) # ss に対応する曲線上の点をリストに追加
             bzpoints = np.array(bzpoints)
             axlength = cv2.arcLength(bzpoints, closed=False) # 弧長
             lengths = np.array([0]+[cv2.arcLength(bzpoints[:i+1],closed=False)  for i in range(1,len(bzpoints))]) # 各点までの弧長の配列
@@ -993,6 +991,47 @@ class BezierCurve:
             else:
                 return ts[n-1],ts[n+1]
 
+        # 曲線 linefunc(t) 上で座標(x,y) に最も近い点のパラメータを2分サーチして探す関数
+        '''
+        def nearest(x,y,curvefunc,pmin,pmax,dcount=7):
+
+            (funcX,funcY) = curvefunc # funcX,funcY は 't' の関数
+            # x,y 座標、pmin,pmax 探索範囲、dcount 再起呼び出しの残り回数
+            t = symbols('t')
+                        
+            mid = (pmin+pmax)/2
+            p = np.array([x,y])
+
+            # sympy 表現の座標を数値化
+            def us(p):
+                x,y = p
+                return np.array([float(x),float(y)])
+
+            ps = funcX.subs(t,pmin),funcY.subs(t,pmin) # パラメータ最小点
+            pm = funcX.subs(t,mid),funcY.subs(t,mid)  # 中間パラメータ点
+            pe = funcX.subs(t,pmax),funcY.subs(t,pmax)  # パラメータ最大点
+            ls = np.linalg.norm(us(ps) - p) # 
+            lm = np.linalg.norm(us(pm) - p)
+            le = np.linalg.norm(us(pe) - p)
+
+            # 再帰終了判定 おおむね1ピクセル以内に収まったかどうか
+            xv = abs((pmax-pmin)*diff(funcX,'t').subs(t,mid)) # x の範囲 
+            yv = abs((pmax-pmin)*diff(funcY,'t').subs(t,mid)) # y の範囲
+            # 1ピクセル以内の変動しかないか、分割回数が指定回数に到達したら探索終了
+            if max(xv,yv) < 1.0 or dcount == 0 :
+                m = min([ls,lm,le])
+                if m == ls:
+                    return pmin
+                elif m == le:
+                    return pmax
+                else:
+                    return mid
+            else:
+                if ls < le:
+                    return nearest(x,y,curvefunc,pmin,mid,dcount-1)
+                else:
+                    return nearest(x,y,curvefunc,mid,pmax,dcount-1)  
+        '''
         # 曲線 linefunc(t) 上で座標(x,y) に最も近い点のパラメータを2分サーチして探す関数 Numpy化で高速化 2021.04.04
         def nearest(x,y,curvefunc,pmin,pmax,dcount=7):
             # x,y 座標、pmin,pmax 探索範囲、dcount 再起呼び出しの残り回数
@@ -1038,6 +1077,7 @@ class BezierCurve:
             # 関数と導関数を numpy 関数化　（高速化目的）
             (funcX,funcY) = (lambdify(t, funcX, "numpy"),lambdify(t, funcY, "numpy")) 
             (diffX,diffY) = (lambdify(t, diffX, "numpy"),lambdify(t, diffY, "numpy")) 
+            print(funcX,diffX)
             return nearestNp(p,funcX,funcY,diffX,diffY,pmin,pmax,dcount=dcount)
 
         if stt == end:
@@ -1064,10 +1104,10 @@ class BezierCurve:
 
         # 当てはめ誤差の平均値を算出する関数
         def meanerr(fx,fy,ts): 
-            t = symbols('t')
-            nfx,nfy = lambdify(t, fx, "numpy"),lambdify(t, fy, "numpy")
-            onps = [[nfx(ts[i]),nfy(ts[i])] for i in range(len(ts)) ] 
+            onps = [[float(fx.subs(t,ts[i])),float(fy.subs(t,ts[i]))] for i in range(len(ts)) ] 
             return mean([np.sqrt((sps[i][0]-onps[i][0])**2+(sps[i][1]-onps[i][1])**2) for i in range(len(sps))]) 
+        
+        t = symbols('t')
 
         # #######################
         # Itterations start here フィッティングのメインプログラム
@@ -1262,9 +1302,8 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
     # 左輪郭の描画
     if bezL != None:
         if len(cntL) > 0 : tplins50 = np.linspace(stt, end, 5*len(cntL))
-        nbezXl,nbezYl = lambdify(t, bezXl, "numpy"),lambdify(t, bezYl, "numpy")
-        plotx = [nbezXl(tp) for tp in tplins50 ]
-        ploty = [nbezYl(tp) for tp in tplins50 ]
+        plotx = [bezXl.subs(t,tp) for tp in tplins50 ]
+        ploty = [bezYl.subs(t,tp) for tp in tplins50 ]
         plt.plot(plotx,ploty,color = n2c(ct[0]),label=bzlabel) # red
     if len(cntL) >0:
         plt.scatter(cntL[:,0],cntL[:,1],color =n2c(ct[3]),marker = '.') #  サンプル点 blue
@@ -1274,9 +1313,8 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
     # 右輪郭の描画
     if bezR != None:
         if len(cntR) > 0 : tplins50 = np.linspace(stt, end, 5*len(cntR))
-        nbezXr,nbezYr = lambdify(t, bezXr, "numpy"),lambdify(t, bezYr, "numpy")
-        plotx = [nbezXr(tp) for tp in tplins50 ]
-        ploty = [nbezYr(tp) for tp in tplins50 ]
+        plotx = [bezXr.subs(t,tp) for tp in tplins50 ]
+        ploty = [bezYr.subs(t,tp) for tp in tplins50 ]
         plt.plot(plotx,ploty,color = n2c(ct[1])) # red  
     if len(cntR)  > 0: 
         plt.scatter(cntR[:,0],cntR[:,1],color = n2c(ct[4]),marker = '.') #  サンプル点 blue
@@ -1286,9 +1324,8 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
     # 中心軸の描画
     if bezC != None:
         if len(cntC) > 0 : tplins50 = np.linspace(stt, end, 5*len(cntC))
-        nbezXc,nbezYc = lambdify(t, bezXc, "numpy"),lambdify(t, bezYc, "numpy")
-        plotx = [nbezXc(tp) for tp in tplins50 ]
-        ploty = [nbezYc(tp) for tp in tplins50 ]
+        plotx = [bezXc.subs(t,tp) for tp in tplins50 ]
+        ploty = [bezYc.subs(t,tp) for tp in tplins50 ]
         plt.plot(plotx,ploty,color = n2c(ct[2])) # red
         if len(cntC) > 0:
             plt.scatter(cntC[:,0],cntC[:,1],color = n2c(ct[5]),marker = '.') #  サンプル点 blue
@@ -1298,10 +1335,10 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
                 
         # ラダーの描画
         if  ladder== 'lr':  # 左右の同じパラメータ値の点を結ぶだけ
-            plotSPlx = [nbezXl(tp) for tp in tplinsSP ]
-            plotSPly = [nbezYl(tp) for tp in tplinsSP ]
-            plotSPrx = [nbezXr(tp) for tp in tplinsSP ]
-            plotSPry = [nbezYr(tp) for tp in tplinsSP ]       
+            plotSPlx = [bezXl.subs(t,tp) for tp in tplinsSP ]
+            plotSPly = [bezYl.subs(t,tp) for tp in tplinsSP ]
+            plotSPrx = [bezXr.subs(t,tp) for tp in tplinsSP ]
+            plotSPry = [bezYr.subs(t,tp) for tp in tplinsSP ]       
             for x0,x1,y0,y1 in zip(plotSPlx,plotSPrx,plotSPly,plotSPry):
                 plt.plot([x0,x1],[y0,y1],color = n2c(ct[9]))  # orange
                 
