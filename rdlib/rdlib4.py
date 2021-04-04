@@ -1217,7 +1217,7 @@ def n2c(name):
 def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],cpc=[], 
              cntL=[],cntR=[],cntC=[], ladder=None,PosL=[],PosR=[],PosC=[],saveImage=False,savepath="",
                  resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange'],
-                 figsize=(6,6),dpi=100,layout="111",bzlabel = ""):
+                 figsize=(6,6),dpi=100,layout="111",bzlabel = "",linestyle='solid'):
         
     # rdimg 入力画像、stt,end 曲線の描画範囲、
     # bezL,bezR,bezC ベジエ曲線、cpl,cpr,cpc 制御点
@@ -1234,14 +1234,18 @@ def drawBez(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],
 
     drawBez0(rdimg,stt=stt,end=end,bezL=bezL,bezR=bezR,bezC=bezC,cpl=cpl,cpr=cpr,cpc=cpc, 
             cntL=cntL,cntR=cntR,cntC=cntC, ladder=ladder,PosL=PosL,PosR=PosR,PosC=PosC,saveImage=saveImage,savepath=savepath,
-                resolution=resolution,n_ladder=n_ladder,ct=ct,bzlabel = bzlabel)
+                resolution=resolution,n_ladder=n_ladder,ct=ct,bzlabel = bzlabel,linestyle=linestyle)
                 
 # (29)-2 # 重ね書き用
 def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[],cpc=[], 
              cntL=[],cntR=[],cntC=[], ladder=None,PosL=[],PosR=[],PosC=[],saveImage=False,savepath="",
                  resolution=128,n_ladder=20,ct=['red','red','red','blue','blue','blue','purple','red','rikyugreen','orange'],
-                 bzlabel = ""):
-
+                 bzlabel = "",linestyle='solid'):
+    if type(linestyle) == int:
+      if 0 < linestyle and linestyle < 4: 
+          linestyle = ["solid", "dashed", "dashdot", "dotted"][linestyle]
+      else:
+          linestyle = 'solid'
     # いわゆる自乗誤差の一般式
     s,t= symbols('s,t')
     
@@ -1265,7 +1269,7 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
         nbezXl,nbezYl = lambdify(t, bezXl, "numpy"),lambdify(t, bezYl, "numpy")
         plotx = [nbezXl(tp) for tp in tplins50 ]
         ploty = [nbezYl(tp) for tp in tplins50 ]
-        plt.plot(plotx,ploty,color = n2c(ct[0]),label=bzlabel) # red
+        plt.plot(plotx,ploty,color = n2c(ct[0]),label=bzlabel,linestyle=linestyle) # red
     if len(cntL) >0:
         plt.scatter(cntL[:,0],cntL[:,1],color =n2c(ct[3]),marker = '.') #  サンプル点 blue
     if len(cpl) > 0: # 制御点
@@ -1277,7 +1281,7 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
         nbezXr,nbezYr = lambdify(t, bezXr, "numpy"),lambdify(t, bezYr, "numpy")
         plotx = [nbezXr(tp) for tp in tplins50 ]
         ploty = [nbezYr(tp) for tp in tplins50 ]
-        plt.plot(plotx,ploty,color = n2c(ct[1])) # red  
+        plt.plot(plotx,ploty,color = n2c(ct[1]),linestyle=linestyle) # red  
     if len(cntR)  > 0: 
         plt.scatter(cntR[:,0],cntR[:,1],color = n2c(ct[4]),marker = '.') #  サンプル点 blue
     if len(cpr) > 0:
@@ -1289,7 +1293,7 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
         nbezXc,nbezYc = lambdify(t, bezXc, "numpy"),lambdify(t, bezYc, "numpy")
         plotx = [nbezXc(tp) for tp in tplins50 ]
         ploty = [nbezYc(tp) for tp in tplins50 ]
-        plt.plot(plotx,ploty,color = n2c(ct[2])) # red
+        plt.plot(plotx,ploty,color = n2c(ct[2]),linestyle=linestyle) # red
         if len(cntC) > 0:
             plt.scatter(cntC[:,0],cntC[:,1],color = n2c(ct[5]),marker = '.') #  サンプル点 blue
         if len(cpc) > 0:
