@@ -4,9 +4,10 @@ from PIL import Image
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+from statistics import mean
 
 # from sympy import *
-from sympy import diff,Symbol,Matrix,symbols,solve,simplify,binomial,Abs,im,re
+from sympy import diff,Symbol,Matrix,symbols,solve,simplify,binomial,Abs,im,re,lambdify
 from sympy.abc import a,b,c
 # init_session()
 from sympy import var
@@ -787,10 +788,10 @@ def getSamples(cont,N=20,mode='Equidistant'):
         return cont[list(map(int,np.linspace(0, len(cont)-1,N)))]
 
 #  (27) N次ベジエフィッティング
-from sympy import diff,Symbol,Matrix,symbols,solve,simplify,binomial
-from sympy.abc import a,b,c
-from sympy import var
-from statistics import mean
+#from sympy import diff,Symbol,Matrix,symbols,solve,simplify,binomial
+#from sympy.abc import a,b,c
+#from sympy import var
+
 
 #  稠密なパラメータを得る（点列は一定間隔にならないので、点列が一定間隔になるようなパラメータ列を求める）
 def getDenseParameters(func,n_samples=0,span=0,needlength=False):
@@ -991,6 +992,7 @@ class BezierCurve:
                 return ts[n-1],ts[n+1]
 
         # 曲線 linefunc(t) 上で座標(x,y) に最も近い点のパラメータを2分サーチして探す関数
+        '''
         def nearest(x,y,curvefunc,pmin,pmax,dcount=7):
 
             (funcX,funcY) = curvefunc # funcX,funcY は 't' の関数
@@ -1029,6 +1031,54 @@ class BezierCurve:
                     return nearest(x,y,curvefunc,pmin,mid,dcount-1)
                 else:
                     return nearest(x,y,curvefunc,mid,pmax,dcount-1)  
+        '''
+        # 曲線 linefunc(t) 上で座標(x,y) に最も近い点のパラメータを2分サーチして探す関数 Numpy化で高速化 2021.04.04
+        def nearest(x,y,curvefunc,pmin,pmax,dcount=7):
+            # x,y 座標、pmin,pmax 探索範囲、dcount 再起呼び出しの残り回数
+            # ベジエ曲線の関数を記号式から numpy 関数式に変換
+
+            def us(p):
+                x,y = p
+                return np.array([float(x),float(y)])
+
+            def nearestNp(p,funcX,funcY,diffX,diffY,pmin,pmax,dcount=7):
+                # sympy 表現の座標を数値化
+
+                mid = mid = (pmin+pmax)/2 # pmin と pmax のパラメータの平均
+                ps = funcX(pmin),funcY(pmin) # パラメータ最小点
+                pm = funcX(mid),funcY(mid)  # 中間パラメータ点
+                pe = funcX(pmax),funcY(pmax)  # パラメータ最大点
+                ls = np.linalg.norm(us(ps) - p) # pmin と p の距離
+                lm = np.linalg.norm(us(pm) - p) # pmid と p の距離
+                le = np.linalg.norm(us(pe) - p)# pmax と p の距離 
+
+                # 再帰終了判定 おおむね1ピクセル以内に収まったかどうか
+                xv = abs((pmax-pmin)*diffX(mid)) # x の範囲 
+                yv = abs((pmax-pmin)*diffY(mid)) # y の範囲
+                # 1ピクセル以内の変動しかないか、分割回数が指定回数に到達したら探索終了
+                if max(xv,yv) < 1.0 or dcount == 0 :
+                    m = min([ls,lm,le])
+                    if m == ls:
+                        return pmin
+                    elif m == le:
+                        return pmax
+                    else:
+                        return mid
+                else:
+                    if ls < le:
+                        return nearestNp(p,funcX,funcY,diffX,diffY,pmin,mid,dcount-1)
+                    else:
+                        return nearestNp(p,funcX,funcY,diffX,diffY,mid,pmax,dcount-1)
+
+            p = np.array([x,y])
+            t = symbols('t')
+            (funcX,funcY) = curvefunc # funcX,funcY は 't' の関数
+            (diffX,diffY) = (diff(funcX,'t'),diff(funcY,'t')) # 導関数
+            # 関数と導関数を numpy 関数化　（高速化目的）
+            (funcX,funcY) = (lambdify(t, funcX, "numpy"),lambdify(t, funcY, "numpy")) 
+            (diffX,diffY) = (lambdify(t, diffX, "numpy"),lambdify(t, diffY, "numpy")) 
+            print(funcX,diffX)
+            return nearestNp(p,funcX,funcY,diffX,diffY,pmin,pmax,dcount=dcount)
 
         if stt == end:
             return ts
