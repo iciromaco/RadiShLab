@@ -210,10 +210,13 @@ Google Colaboratory のプログラムは、通常はクラウド上の仮想Lin
 
 ----
 
-## &copy; 2017-2020 
+## &copy; 2017-202 
 - Seiichiro Dan： Osaka Gakuin Univ.
 - Yumiko Dan, Yasuko Yoshida： Kobe Univ.
 
+----
+更新記録    
+(April 4, ２０２１) rdlib4.py ベジエ曲線上でサンプル点の最寄りの位置を計算する関数　nearest() において、曲線の記述を sympy から numpy関数に変換して計算することで５０％以上の時間短縮。    
 ____
 
 ## Related Links
