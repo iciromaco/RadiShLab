@@ -11,6 +11,11 @@ from sympy import diff,Symbol,Matrix,symbols,solve,simplify,binomial,Abs,im,re,l
 from sympy.abc import a,b,c
 # init_session()
 from sympy import var
+
+import tensorflow as tf
+from keras import optimizers
+from scipy.special import comb
+
 # px,py =var('px:4'),var('py:4')
 
 # OpenCV のファイル入出力が2バイト文字パス名に対応していないための対処
@@ -41,7 +46,7 @@ def imwrite(filename, img, params=None):
 
 def assertglobal(params,verbose=False):
     global CONTOURS_APPROX, HARRIS_PARA, CONTOURS_APPROX, SHRINK, \
-            HARRIS_PARA, GAUSSIAN_RATE1, GAUSSIAN_RATE2, UNIT, RPARA, PATIENCE
+            HARRIS_PARA, GAUSSIAN_RATE1, GAUSSIAN_RATE2, UNIT, RPARA, PATIENCE,PATIENCET,ERRORTOLERANCE
     for item in params:
         if item == 'UNIT':
             UNIT = params[item] # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
@@ -60,7 +65,11 @@ def assertglobal(params,verbose=False):
         elif item == 'RPARA':
             RPARA = params[item] # 見込みでサーチ候補から外す割合
         elif item == 'PATIENCE':
-            PATIENCE = params[item] # 見込みでサーチ候補から外す割合
+            PATIENCE = params[item] # 曲線当てはめの際にこの回数誤差が増えたら処理を打ち切る
+        elif item == 'PATIENCET':
+            PATIENCET = params[item] # tensorflow版曲線当てはめの際にこの回数誤差が増えたら処理を打ち切る
+        elif item == 'ERRORTOLERANCE':
+            ERRORTOLERANCE = params[item] # 曲線当てはめで目標とする平均誤差          
         # if verbose:
         #     print(item, "=", params[item])
 
@@ -72,7 +81,9 @@ assertglobal(params = {
     'GAUSSIAN_RATE2':0.1, # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
     'UNIT':256, # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
     'RPARA':1.0, # 見込みサーチのサーチ幅全体に対する割合 ３０なら左に３０％右に３０％の幅を初期探索範囲とする
-    'PATIENCE':1 # ベジエ曲線あてはめで、この回数続けて誤差が増えてしまったら探索を打ち切る
+    'PATIENCE':1, # ベジエ曲線あてはめで、この回数続けて誤差が増えてしまったら探索を打ち切る
+    'PATIENCET':10, # tensorflow版ベジエ曲線あてはめで、この回数続けて最小が更新されなかったら探索を打ち切る
+    'ERRORTOLERANCE':0.75, # 曲線当てはめで目標とする平均誤差
 })
 
 
@@ -1133,7 +1144,7 @@ class BezierCurve:
             return bestcps,bestfunc
 
     # 段階的ベジエ近似　    
-    def fit2(self,Nfrom=3,Nto=12, maxTry = 10,prefunc = None,errorThres=0.5,withError=False,tpara=[],withFig=False):
+    def fit2(self,Nfrom=3,Nto=12, maxTry = 10,prefunc = None,errorThres=0.75,withError=False,tpara=[],withFig=False):
         # Nfrom 近似開始次数
         # Nto 最大近似次数 Nto < Nfrom  の場合は誤差しきい値による打ち切り
         # maxTry 各次数での繰り返し回数
@@ -1150,7 +1161,140 @@ class BezierCurve:
             abez = BezierCurve(N=Ncurrent,samples=self.samples, prefunc = func)
             print(Ncurrent,end="")
             # 最大 maxTry 回あてはめを繰り返す
-            cps,func,err = abez.fit1(maxTry=maxTry,withError=True,tpara=ts)
+            cps,func,err = abez.fit1(maxTry=maxTry if Ncurrent < Nto else 2*maxTry,withError=True,tpara=ts)
+            ts = abez.ts
+            # 次数を上げてインスタンス生成
+        if withError:
+            return cps,func,Ncurrent,err
+        else:
+            return cps,func
+
+    # fit1 の tensorflowによる実装
+    def fit1T(self,maxTry=0,withError=False,tpara=[], lr=0.01, mode=1):
+        # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
+        # withError 誤差情報を返すかどうか
+        # tpara  fit0() にわたす初期パラメータ値
+        # mode 0: 制御点とパラメータを両方同時に tensorflow で最適化する
+        # mode 1: パラメータの最適化は tensorflow で、制御点はパラメータを固定して未定係数法で解く
+        # fit1T では priority=distance のみ考え、span は考慮しない
+        sps = self.samples
+        x_data = [x for [x,y] in sps]
+        y_data = [y for [x,y] in sps]
+        N = self.N
+        # #######################
+        # Itterations start here フィッティングのメインプログラム
+        # #######################
+        trynum = 0 # 繰り返し回数
+        rmcounter = 0 # エラー増加回数のカウンター
+        priority = BezierCurve.AsymptoticPriority
+
+        cps,func = self.fit0(tpara=tpara) # レベル０フィッティングを実行
+        [fx,fy] = bestfunc = func
+        bestcps = cps
+    
+        minerror = np.Inf # 当てはめ誤差  
+        if BezierCurve.debugmode: print("initial error:{:.5f}".format(minerror))
+
+        opt = tf.optimizers.Adam(learning_rate=lr)
+        ts = bestts = self.ts.copy()
+
+        # tensorflow の変数
+        if mode == 0:
+            Px = tf.Variable([cps[i+1][0] for i in range(N-1)], dtype='float32')
+            Py = tf.Variable([cps[i+1][1] for i in range(N-1)], dtype='float32')
+        ts = tf.Variable(ts)
+
+        while True:
+            print(".",end='')
+            tsold = ts.numpy()
+            # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
+            with tf.GradientTape() as t:
+                vs = 1-ts
+                # ts**0 と (1-ts)**0 を含めると微係数が nan となるのでループから外している
+                bezfx = vs**N*cps[0][0]
+                bezfy = vs**N*cps[0][1]
+                for i in range(1,N):
+                    if mode == 0:
+                        bezfx = bezfx + comb(N,i)*vs**(N-i)*ts**i*Px[i-1]
+                        bezfy = bezfy + comb(N,i)*vs**(N-i)*ts**i*Py[i-1]
+                    elif mode == 1:
+                        bezfx = bezfx + comb(N,i)*vs**(N-i)*ts**i*cps[i][0]
+                        bezfy = bezfy + comb(N,i)*vs**(N-i)*ts**i*cps[i][1]                            
+                bezfx = bezfx + ts**N*cps[N][0]
+                bezfy = bezfy + ts**N*cps[N][1]
+                meanerrx = tf.reduce_mean((bezfx - x_data)*(bezfx - x_data))
+                meanerry = tf.reduce_mean((bezfy - y_data)*(bezfy - y_data))
+                meanerr = tf.add(meanerrx,meanerry)      
+            if mode == 0:            
+                gt = t.gradient(meanerr,[ts,Px,Py])
+                opt.apply_gradients(zip(gt,[ts,Px,Py]))
+                for i in range(1,N):
+                  cps[i][0]=Px[i-1].numpy()
+                  cps[i][1]=Py[i-1].numpy()
+                func = self.setCPs(cps)
+            elif mode == 1:
+                gt = t.gradient(meanerr,[ts])
+                opt.apply_gradients(zip(gt,[ts]))
+                cps,func = self.fit0(tpara=ts.numpy()) 
+
+            if meanerr.numpy() < minerror : 
+                bestts = ts.numpy() # 今までで一番よかったパラメータセットを更新
+                bestfunc = func # 今までで一番よかった関数式を更新
+                minerror = meanerr.numpy() # 最小誤差を更新
+                bestcps = cps # 最適制御点リストを更新
+
+            # drift = mean([np.sqrt((ts[i].numpy()-bestts[i])**2) for i in range(len(bestts))])*100
+            # cpsdrift = mean([np.sqrt((cps[i][0]-bestcps[i][0])**2+(cps[i][1]-bestcps[i][1])**2) for i in range(len(cps))])
+            # あてはめ誤差を求める
+
+            # 繰り返し判定調整量
+            thresrate = 1.0 if trynum <= 100 else 1.0001**(trynum-100) # 繰り返しが10回を超えたら条件を緩めていく
+            #if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f} > {:.5f}), drift:{:.5f},cpsdrift:{:.5f} > {:.3f}".format(trynum,meanerr.numpy(),abs(meanerr.numpy()-olderror),\
+            #                                                BezierCurve.errorThres,drift,cpsdrift,BezierCurve.driftThres*thresrate))
+            if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f}) rmcounter {})".format(trynum,meanerr.numpy(),minerror,rmcounter))
+
+            rmcounter = 0 if meanerr.numpy() <= minerror else rmcounter + 1 # エラー増加回数のカウントアップ　減り続けているなら０
+            if meanerr.numpy() < ERRORTOLERANCE*thresrate or rmcounter > PATIENCET:
+            # PATIENCET回続けてエラーが増加したらあきらめる デフォルトは１、つまりすぐあきらめる
+                if BezierCurve.debugmode: 
+                    if rmcounter > PATIENCET: print("W") 
+                    else: print("M")
+                break
+
+            trynum += 1
+            if maxTry > 0 and trynum >= maxTry:
+                break
+
+        self.ts = bestts
+        print("")
+        if withError:
+            return bestcps,bestfunc,minerror
+        else:
+            return bestcps,bestfunc
+
+    # 段階的ベジエ近似　tensorflow版    
+    def fit2T(self,Nfrom=3,Nto=12, testTry = 30, maxTry=100, prefunc = None,errorThres=0.75,lr=0.005, withError=False,tpara=[],withFig=False):
+        # Nfrom 近似開始次数
+        # Nto 最大近似次数 Nto < Nfrom  の場合は誤差しきい値による打ち切り
+        # maxTry 各次数での繰り返し回数
+        # prefunc 初期近似関数
+        # errorThres 打ち切り誤差
+        # withError 誤差と次数を返すかどうか
+
+        Ncurrent = Nfrom - 1
+        func = prefunc
+        ts = tpara
+        err = errorThres + 1
+        while Ncurrent < Nto and errorThres < err :
+            Ncurrent = Ncurrent + 1
+            abez = BezierCurve(N=Ncurrent,samples=self.samples, prefunc = func)
+            print(Ncurrent,end="")
+            # testTry 回あてはめを繰り返してエラーを確認する
+            cps,func,err = abez.fit1T(maxTry=testTry, lr=lr, withError=True,tpara=ts)
+            lc = 1
+            while err < errorThres *3*0.9**lc and lc*testTry < maxTry :
+              cps,func,err = abez.fit1T(maxTry=testTry if lc*testTry < maxTry else maxTry - lc*testTry , lr=lr, withError=True,tpara=abez.ts)
+              lc +=1
             ts = abez.ts
             # 次数を上げてインスタンス生成
         if withError:
