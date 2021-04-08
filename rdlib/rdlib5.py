@@ -1156,6 +1156,7 @@ class BezierCurve:
         func = prefunc
         ts = tpara
         err = errorThres + 1
+        results = {}
         while Ncurrent < Nto and  errorThres < err :
             Ncurrent = Ncurrent + 1
             abez = BezierCurve(N=Ncurrent,samples=self.samples, prefunc = func)
@@ -1163,14 +1164,15 @@ class BezierCurve:
             # 最大 maxTry 回あてはめを繰り返す
             cps,func,err = abez.fit1(maxTry=maxTry if Ncurrent < Nto else 2*maxTry,withError=True,tpara=ts)
             ts = abez.ts
+            results[str(Ncurrent)]=(cps,func,err)
             # 次数を上げてインスタンス生成
         if withError:
-            return cps,func,Ncurrent,err
+            return Ncurrent,results
         else:
             return cps,func
 
     # fit1 の tensorflowによる実装
-    def fit1T(self,maxTry=0,withError=False,tpara=[], lr=0.01, mode=1):
+    def fit1T(self,maxTry=0,withError=False,tpara=[], lr=0.005, mode=1):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withError 誤差情報を返すかどうか
         # tpara  fit0() にわたす初期パラメータ値
@@ -1285,6 +1287,7 @@ class BezierCurve:
         func = prefunc
         ts = tpara
         err = errorThres + 1
+        results = {}
         while Ncurrent < Nto and errorThres < err :
             Ncurrent = Ncurrent + 1
             abez = BezierCurve(N=Ncurrent,samples=self.samples, prefunc = func)
@@ -1296,9 +1299,10 @@ class BezierCurve:
               cps,func,err = abez.fit1T(maxTry=testTry if lc*testTry < maxTry else maxTry - lc*testTry , lr=lr, withError=True,tpara=abez.ts)
               lc +=1
             ts = abez.ts
+            results[str(Ncurrent)]=(cps,func,err)
             # 次数を上げてインスタンス生成
         if withError:
-            return cps,func,Ncurrent,err
+            return Ncurrent,results
         else:
             return cps,func
 
