@@ -216,7 +216,8 @@ Google Colaboratory のプログラムは、通常はクラウド上の仮想Lin
 
 ----
 更新記録    
-- April 4,2021, rdlib4.py ベジエ曲線上でサンプル点の最寄りの位置を計算する関数　nearest() において、曲線の記述を sympy から numpy関数に変換して計算することで５０％以上の時間短縮。    
+- April 4,2021, rdlib4.py ベジエ曲線上でサンプル点の最寄りの位置を計算する関数　nearest() において、曲線の記述を sympy から numpy関数に変換して計算することで５０％以上の時間短縮。
+- April 8,2021, rdlib5.py 追加。当てはめ関数のtensorflow版を追加。fit1T, fit2T. N006 のライブラリを rdlib5.py に置き換え。
 ____
 
 ## Related Links
