@@ -859,8 +859,8 @@ class BezierCurve:
     # ts 標本点に対するベジエパラメータ
 
     # クラス変数
-    driftThres = 0.03 # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
-    errorThres = 0.01 # 繰り返しを打ち切る誤差変化量
+    # driftThres = 0.01 # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
+    # errorThres = 0.01 # 繰り返しを打ち切る誤差変化量
     dCount = 7 # ２分探索の打ち切り回数　（5以上が望ましい）
     debugmode = False
     openmode = False
@@ -1115,12 +1115,12 @@ class BezierCurve:
                 minerror = error # 最小誤差を更新
                 bestcps = cps # 最適制御点リストを更新
             # 繰り返し判定調整量
-            thresrate = 1.0 if trynum <= 10 else 1.1**(trynum-10) # 繰り返しが10回を超えたら条件を緩めていく
-            if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f} > {:.5f}), drift:{:.5f} > {:.3f}".format(trynum,error,abs(error-olderror),\
-                                                            BezierCurve.errorThres,drift,BezierCurve.driftThres*thresrate))
+            thresrate = 1.0 if trynum <= 50 else 1.001**(trynum-50) # 繰り返しが10回を超えたら条件を緩めていく
+            if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f})({:.5f} > {:.5f}), drift:{:.5f} > {:.3f}".format(trynum,error,ERRORTOLERANCE*thresrate,abs(error-olderror),\
+                                                            BezierCurve.errorThres,drift,BezierCurve.driftThres))
 
             rmcounter = 0 if error < olderror else rmcounter + 1 # エラー増加回数のカウントアップ　減り続けているなら０
-            if rmcounter > PATIENCE or (drift < BezierCurve.driftThres*thresrate  and abs(olderror - error) < BezierCurve.errorThres):
+            if error < ERRORTOLERANCE*thresrate or rmcounter > PATIENCE or (drift < BezierCurve.driftThres  and abs(olderror - error) < BezierCurve.errorThres):
             # PATIENCE回続けてエラーが増加したらあきらめる デフォルトは１、つまりすぐあきらめる
                 if BezierCurve.debugmode: 
                     if rmcounter > PATIENCE: print("W") 
@@ -1250,14 +1250,14 @@ class BezierCurve:
             # あてはめ誤差を求める
 
             # 繰り返し判定調整量
-            thresrate = 1.0 if trynum <= 100 else 1.0001**(trynum-100) # 繰り返しが10回を超えたら条件を緩めていく
+            thresrate = 1.0 if trynum <= 100 else 1.0001**(trynum-100) # 繰り返しが100回を超えたら条件を緩めていく
             #if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f} > {:.5f}), drift:{:.5f},cpsdrift:{:.5f} > {:.3f}".format(trynum,meanerr.numpy(),abs(meanerr.numpy()-olderror),\
             #                                                BezierCurve.errorThres,drift,cpsdrift,BezierCurve.driftThres*thresrate))
             if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f}) rmcounter {})".format(trynum,meanerr.numpy(),minerror,rmcounter))
 
             rmcounter = 0 if meanerr.numpy() <= minerror else rmcounter + 1 # エラー増加回数のカウントアップ　減り続けているなら０
             if meanerr.numpy() < ERRORTOLERANCE*thresrate or rmcounter > PATIENCET:
-            # PATIENCET回続けてエラーが増加したらあきらめる デフォルトは１、つまりすぐあきらめる
+            # PATIENCET回続けてエラーが増加したらあきらめる デフォルトは１0
                 if BezierCurve.debugmode: 
                     if rmcounter > PATIENCET: print("W") 
                     else: print("M")
@@ -1315,7 +1315,7 @@ class BezierCurve:
         print("debugmode:",BezierCurve.debugmode)
         
     # パラメータのセットと表示　引数なしで呼ぶ出せば初期化
-    def setParameters(priority = 'distance', driftThres=0.03,errorThres=0.01, dCount=7,debugmode=False,openmode=False):
+    def setParameters(priority = 'distance', driftThres=0.01,errorThres=0.01, dCount=7,debugmode=False,openmode=False):
 
         BezierCurve.AsymptoticPriority = priority # パラメータ割り当てフェーズにおける評価尺度
 
