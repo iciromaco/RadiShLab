@@ -81,7 +81,7 @@ assertglobal(params = {
     'GAUSSIAN_RATE2':0.1, # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
     'UNIT':256, # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
     'RPARA':1.0, # 見込みサーチのサーチ幅全体に対する割合 ３０なら左に３０％右に３０％の幅を初期探索範囲とする
-    'PATIENCE':1, # ベジエ曲線あてはめで、この回数続けて誤差が増えてしまったら探索を打ち切る
+    'PATIENCE':10, # ベジエ曲線あてはめで、この回数続けて誤差が増えてしまったら探索を打ち切る
     'PATIENCET':10, # tensorflow版ベジエ曲線あてはめで、この回数続けて最小が更新されなかったら探索を打ち切る
     'ERRORTOLERANCE':0.75, # 曲線当てはめで目標とする平均誤差
 })
@@ -1121,7 +1121,7 @@ class BezierCurve:
 
             rmcounter = 0 if error < olderror else rmcounter + 1 # エラー増加回数のカウントアップ　減り続けているなら０
             if error < ERRORTOLERANCE*thresrate or rmcounter > PATIENCE or (drift < BezierCurve.driftThres  and abs(olderror - error) < BezierCurve.errorThres):
-            # PATIENCE回続けてエラーが増加したらあきらめる デフォルトは１、つまりすぐあきらめる
+            # PATIENCE回続けてエラーが増加したらあきらめる デフォルトは１0、
                 if BezierCurve.debugmode: 
                     if rmcounter > PATIENCE: print("W") 
                     else: print("M")
@@ -1250,7 +1250,7 @@ class BezierCurve:
             # あてはめ誤差を求める
 
             # 繰り返し判定調整量
-            thresrate = 1.0 if trynum <= 100 else 1.0001**(trynum-100) # 繰り返しが100回を超えたら条件を緩めていく
+            thresrate = 1.0 if trynum <= 100 else 1.001**(trynum-100) # 繰り返しが100回を超えたら条件を緩めていく
             #if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f} > {:.5f}), drift:{:.5f},cpsdrift:{:.5f} > {:.3f}".format(trynum,meanerr.numpy(),abs(meanerr.numpy()-olderror),\
             #                                                BezierCurve.errorThres,drift,cpsdrift,BezierCurve.driftThres*thresrate))
             if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f}) rmcounter {})".format(trynum,meanerr.numpy(),minerror,rmcounter))
