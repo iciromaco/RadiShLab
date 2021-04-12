@@ -46,7 +46,7 @@ def imwrite(filename, img, params=None):
 
 def assertglobal(params,verbose=False):
     global CONTOURS_APPROX, HARRIS_PARA, CONTOURS_APPROX, SHRINK, \
-            HARRIS_PARA, GAUSSIAN_RATE1, GAUSSIAN_RATE2, UNIT, RPARA # , PATIENCE,PATIENCET,ERRORTOLERANCE
+            HARRIS_PARA, GAUSSIAN_RATE1, GAUSSIAN_RATE2, UNIT, RPARA # , PATIENCE,PATIENCET,err_th
     for item in params:
         if item == 'UNIT':
             UNIT = params[item] # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
@@ -68,7 +68,7 @@ def assertglobal(params,verbose=False):
         #    PATIENCE = params[item] # 曲線当てはめの際にこの回数誤差が増えたら処理を打ち切る
         #elif item == 'PATIENCET':
         #    PATIENCET = params[item] # tensorflow版曲線当てはめの際にこの回数誤差が増えたら処理を打ち切る
-        #elif item == 'ERRORTOLERANCE':
+        #elif item == 'err_th':
         #    ERRORTOLERANCE = params[item] # 曲線当てはめで目標とする平均誤差          
         # if verbose:
         #     print(item, "=", params[item])
@@ -1059,10 +1059,11 @@ class BezierCurve:
         return ts
 
     # ベジエ近似　パラメータの繰り返し再調整あり
-    def fit1(self,maxTry=0,withError=False,tpara=[],PATIENCE=10,ERRORTOLERANCE=0.75):
+    def fit1(self,maxTry=0,withErr=False,tpara=[],pat=10,err_th=0.75):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
-        # withError 誤差情報を返すかどうか
+        # withErr 誤差情報を返すかどうか
         # tpara  fit0() にわたす初期パラメータ値
+        # 
         sps = self.samples
         
         # 当てはめ誤差の平均値を算出する関数
@@ -1121,10 +1122,10 @@ class BezierCurve:
 
             rmcounter = 0 if error <= minerror else rmcounter + 1 # エラー増加回数のカウントアップ　減り続けているなら０
             # if error < ERRORTOLERANCE*thresrate or rmcounter > PATIENCE or (drift < BezierCurve.driftThres  and abs(olderror - error) < BezierCurve.errorThres):
-            if error < ERRORTOLERANCE*thresrate or rmcounter > PATIENCE:
-            # PATIENCE回続けてエラーが増加したらあきらめる デフォルトは１、つまりすぐあきらめる
+            if error < err_th*thresrate or rmcounter > pat:
+            # pat回続けてエラーが増加したらあきらめる デフォルトは１、つまりすぐあきらめる
                 if BezierCurve.debugmode: 
-                    if rmcounter > PATIENCE: print("W") 
+                    if rmcounter > pat: print("W") 
                     else: print("M")
                 if priority == 'hyblid':
                     rmcounter = 0
@@ -1139,20 +1140,22 @@ class BezierCurve:
 
             olderror = error
             trynum += 1
+            if trynum %100 == 0:
+                print("")
             if maxTry > 0 and trynum >= maxTry:
                 break
 
         self.ts = bestts
         print("")
-        if withError:
+        if withErr:
             return bestcps,bestfunc,minerror
         else:
             return bestcps,bestfunc
 
     # fit1 の tensorflowによる実装
-    def fit1T(self,maxTry=0,withError=False,tpara=[], lr=0.005, mode=1,PATIENCE=10,ERRORTOLERANCE=0.75):
+    def fit1T(self,maxTry=0,withErr=False,tpara=[], lr=0.005, mode=1,pat=10,err_th=0.75):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
-        # withError 誤差情報を返すかどうか
+        # withErr 誤差情報を返すかどうか
         # tpara  fit0() にわたす初期パラメータ値
         # mode 0: 制御点とパラメータを両方同時に tensorflow で最適化する
         # mode 1: パラメータの最適化は tensorflow で、制御点はパラメータを固定して未定係数法で解く
@@ -1233,10 +1236,10 @@ class BezierCurve:
             if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f}) rmcounter {})".format(trynum,meanerr.numpy(),minerror,rmcounter))
 
             rmcounter = 0 if meanerr.numpy() <= minerror else rmcounter + 1 # エラー増加回数のカウントアップ　減り続けているなら０
-            if meanerr.numpy() < ERRORTOLERANCE*thresrate or rmcounter > PATIENCE:
-            # PATIENCE回続けてエラーが増加したらあきらめる デフォルトは１0
+            if meanerr.numpy() < err_th*thresrate or rmcounter > pat:
+            # pat回続けてエラーが増加したらあきらめる デフォルトは１0
                 if BezierCurve.debugmode: 
-                    if rmcounter > PATIENCE: print("W") 
+                    if rmcounter > pat: print("W") 
                     else: print("M")
                 break
             else:
@@ -1246,47 +1249,49 @@ class BezierCurve:
                   print(".",end='')
 
             trynum += 1
+            if trynum %100 == 0:
+                print("")
             if maxTry > 0 and trynum >= maxTry:
                 break
 
         self.ts = bestts
         print("")
-        if withError:
+        if withErr:
             return bestcps,bestfunc,minerror
         else:
             return bestcps,bestfunc
 
     # 段階的ベジエ近似　    
-    def fit2(self,mode=0,Nprolog=3,Nfrom=5, Nto=12, maxTry = 10,lr=0.005, prefunc = None,PATIENCE=10,ERRORTOLERANCE=0.75,withError=False,tpara=[],withFig=False):
+    def fit2(self,mode=0,Nprolog=3,Nfrom=5, Nto=12, maxTry = 10,lr=0.005, prefunc = None,pat=10,err_th=0.75,withErr=False,tpara=[],withFig=False):
         # mode 0 -> fit1() を使う, mode 1 -> fit1T()を使う
         # Nplolog 近似準備開始次数　この次数からNfrom-1までは maxTry 回数で打ち切る
         # Nfrom 近似開始次数　この次数以降は収束したら終了
         # Nto 最大近似次数 Nto < Nfrom  の場合は誤差しきい値による打ち切り
         # maxTry 各次数での繰り返し回数
         # prefunc 初期近似関数
-        # ERRORTOLERANCE 打ち切り誤差
-        # PATIENCE この回数エラーが減らない場合はあきらめる
-        # withError 誤差と次数を返すかどうか
+        # err_th 打ち切り誤差
+        # pat この回数エラーが減らない場合はあきらめる
+        # withErr 誤差と次数を返すかどうか
 
         Ncurrent = Nprolog - 1
         func = prefunc
         ts = tpara
-        err = ERRORTOLERANCE + 1
+        err = err_th + 1
         results = {}
-        while Ncurrent < Nto and  ERRORTOLERANCE < err :
+        while Ncurrent < Nto and  err_th < err :
             Ncurrent = Ncurrent + 1
             abez = BezierCurve(N=Ncurrent,samples=self.samples, prefunc = func)
             print(Ncurrent,end="")
             # 最大 maxTry 回あてはめを繰り返す
-            # cps,func,err = abez.fit1(maxTry=maxTry if Ncurrent < Nto else 2*maxTry,withError=True,tpara=ts)
+            # cps,func,err = abez.fit1(maxTry=maxTry if Ncurrent < Nto else 2*maxTry,withErr=True,tpara=ts)
             if mode == 0:
-                cps,func,err = abez.fit1(maxTry=maxTry if Ncurrent < Nfrom else 0,withError=True,tpara=ts,PATIENCE=PATIENCE,ERRORTOLERANCE=ERRORTOLERANCE)
+                cps,func,err = abez.fit1(maxTry=maxTry if Ncurrent < Nfrom else 0,withErr=True,tpara=ts,pat=pat,err_th=err_th)
             elif mode == 1:
-                cps,func,err = abez.fit1T(maxTry=maxTry if Ncurrent < Nfrom else 0,lr=lr,withError=True,tpara=ts,PATIENCE=PATIENCE,ERRORTOLERANCE=ERRORTOLERANCE)               
+                cps,func,err = abez.fit1T(maxTry=maxTry if Ncurrent < Nfrom else 0,lr=lr,withErr=True,tpara=ts,pat=pat,err_th=err_th)               
             ts = abez.ts
             results[str(Ncurrent)]=(cps,func,err)
             # 次数を上げてインスタンス生成
-        if withError:
+        if withErr:
             return Ncurrent,results
         else:
             return cps,func
