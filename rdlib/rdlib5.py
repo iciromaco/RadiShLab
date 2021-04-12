@@ -1183,10 +1183,12 @@ class BezierCurve:
         return ts
 
     # ベジエ近似　パラメータの繰り返し再調整あり
-    def fit1(self, maxTry=0, withErr=False, tpara=[], pat=10, err_th=0.75):
+    def fit1(self, maxTry=0, withErr=False, tpara=[], pat=10, err_th=0.75, threstune=1.001):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか
         # tpara  fit0() にわたす初期パラメータ値
+        #
+        # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
         #
         sps = self.samples
 
@@ -1208,9 +1210,9 @@ class BezierCurve:
         [fx, fy] = bestfunc = func
         bestcps = cps
 
-        olderror = minerror = meanerr(fx, fy, ts=self.ts)  # 当てはめ誤差
+        minerror = meanerr(fx, fy, ts=self.ts)  # 当てはめ誤差
         if BezierCurve.debugmode:
-            print("initial error:{:.5f}".format(olderror))
+            print("initial error:{:.5f}".format(minerror))
 
         ts = bestts = self.ts.copy()
 
@@ -1241,7 +1243,7 @@ class BezierCurve:
                 bestcps = cps  # 最適制御点リストを更新
             # 繰り返し判定調整量
             # 繰り返しが100回を超えたら条件を緩めていく
-            thresrate = 1.0 if trynum <= 100 else 1.001**(trynum-100)
+            thresrate = 1.0 if trynum <= 100 else threstune**(trynum-100)
             # if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f})({:.5f} > {:.5f}), drift:{:.5f} > {:.3f}".format(trynum,error,ERRORTOLERANCE*thresrate,abs(error-olderror),\
             #                                                BezierCurve.errorThres,drift,BezierCurve.driftThres))
             if BezierCurve.debugmode:
@@ -1250,7 +1252,7 @@ class BezierCurve:
 
             rmcounter = 0 if error <= minerror else rmcounter + 1  # エラー増加回数のカウントアップ　減り続けているなら０
             # if error < ERRORTOLERANCE*thresrate or rmcounter > PATIENCE or (drift < BezierCurve.driftThres  and abs(olderror - error) < BezierCurve.errorThres):
-            if error < err_th*thresrate or ((trynum > 100) and rmcounter > pat):
+            if error < err_th*thresrate or rmcounter > pat:
                 # pat回続けてエラーが増加したらあきらめる デフォルトは１、つまりすぐあきらめる
                 if BezierCurve.debugmode:
                     if rmcounter > pat:
@@ -1268,7 +1270,6 @@ class BezierCurve:
                 else:
                     print(".", end='')
 
-            olderror = error
             trynum += 1
             if trynum % 100 == 0:
                 print("")
@@ -1283,13 +1284,16 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # fit1 の tensorflowによる実装
-    def fit1T(self, maxTry=0, withErr=False, tpara=[], lr=0.005, mode=1, pat=10, err_th=0.75):
+    def fit1T(self, mode=1, maxTry=0, withErr=False, tpara=[], lr=0.03,  pat=10, err_th=0.75, threstune=1.001):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか
         # tpara  fit0() にわたす初期パラメータ値
         # mode 0: 制御点とパラメータを両方同時に tensorflow で最適化する
         # mode 1: パラメータの最適化は tensorflow で、制御点はパラメータを固定して未定係数法で解く
         # fit1T では priority=distance のみ考え、span は考慮しない
+        # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
+        # lr 0.03 Adam オプティマイザーの学習係数
+        # err_th 0.75  エラーの収束条件
         sps = self.samples
         x_data = [x for [x, y] in sps]
         y_data = [y for [x, y] in sps]
@@ -1364,7 +1368,7 @@ class BezierCurve:
 
             # 繰り返し判定調整量
             # 繰り返しが100回を超えたら条件を緩めていく
-            thresrate = 1.0 if trynum <= 100 else 1.001**(trynum-100)
+            thresrate = 1.0 if trynum <= 100 else threstune**(trynum-100)
             # if BezierCurve.debugmode: print("{} err:{:.5f}({:.5f} > {:.5f}), drift:{:.5f},cpsdrift:{:.5f} > {:.3f}".format(trynum,meanerr.numpy(),abs(meanerr.numpy()-olderror),\
             #                                                BezierCurve.errorThres,drift,cpsdrift,BezierCurve.driftThres*thresrate))
             if BezierCurve.debugmode:
@@ -1401,7 +1405,7 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # 段階的ベジエ近似
-    def fit2(self, mode=0, Nprolog=3, Nfrom=5, Nto=12, preTry=1000, maxTry=0, lr=0.03, prefunc=None, pat=10, err_th=0.75, withErr=False, tpara=[], withFig=False):
+    def fit2(self, mode=0, Nprolog=3, Nfrom=5, Nto=12, preTry=1000, maxTry=0, lr=0.03, prefunc=None, pat=10, err_th=0.75, threstune=threstune, withErr=False, tpara=[], withFig=False):
         # mode 0 -> fit1() を使う, mode 1 -> fit1T(mode=1)を使う, mode 2 -> fit1T(mode=0) を使う
         # Nplolog 近似準備開始次数　この次数からNfrom-1までは maxTry 回数で打ち切る
         # Nfrom 近似開始次数　この次数以降は収束したら終了
@@ -1425,13 +1429,13 @@ class BezierCurve:
             # cps,func,err = abez.fit1(maxTry=maxTry if Ncurrent < Nto else 2*maxTry,withErr=True,tpara=ts)
             if mode == 0:
                 cps, func, err = abez.fit1(
-                    maxTry=preTry if Ncurrent < Nfrom else maxTry, withErr=True, tpara=ts, pat=pat, err_th=err_th)
+                    maxTry=preTry if Ncurrent < Nfrom else maxTry, withErr=True, tpara=ts, pat=pat, err_th=err_th, threstune=threstune)
             elif mode == 1:
                 cps, func, err = abez.fit1T(
-                    mode=1, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, withErr=True, tpara=ts, pat=pat, err_th=err_th)
+                    mode=1, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, withErr=True, tpara=ts, pat=pat, err_th=err_th, threstune=threstune)
             elif mode == 2:
                 cps, func, err = abez.fit1T(
-                    mode=0, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, withErr=True, tpara=ts, pat=pat, err_th=err_th)
+                    mode=0, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, withErr=True, tpara=ts, pat=pat, err_th=err_th, threstune=threstune)
             ts = abez.ts
             results[str(Ncurrent)] = (cps, func, err)
             # 次数を上げてインスタンス生成
