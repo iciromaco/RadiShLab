@@ -51,7 +51,7 @@ def imwrite(filename, img, params=None):
 
 def assertglobal(params, verbose=False):
     global CONTOURS_APPROX, HARRIS_PARA, CONTOURS_APPROX, SHRINK, \
-        HARRIS_PARA, GAUSSIAN_RATE1, GAUSSIAN_RATE2, UNIT, RPARA  # , PATIENCE,PATIENCET,err_th
+        HARRIS_PARA, GAUSSIAN_RATE1, GAUSSIAN_RATE2, UNIT, RPARA  # , WANDB, PATIENCE,PATIENCET,err_th
     for item in params:
         if item == 'UNIT':
             UNIT = params[item]  # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
@@ -70,6 +70,8 @@ def assertglobal(params, verbose=False):
             GAUSSIAN_RATE2 = params[item]  # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
         elif item == 'RPARA':
             RPARA = params[item]  # 見込みでサーチ候補から外す割合
+        # elif item == 'WANDB':
+        #    WANDB = params[item]  # 見込みでサーチ候補から外す割合
         # elif item == 'PATIENCE':
         #    PATIENCE = params[item] # 曲線当てはめの際にこの回数誤差が増えたら処理を打ち切る
         # elif item == 'PATIENCET':
@@ -88,11 +90,11 @@ assertglobal(params={
     'GAUSSIAN_RATE2': 0.1,  # 仕上げに形状を整えるためのガウスぼかしの程度を決める係数
     'UNIT': 256,  # 最終的に長い方の辺をこのサイズになるよう拡大縮小する
     'RPARA': 1.0,  # 見込みサーチのサーチ幅全体に対する割合 ３０なら左に３０％右に３０％の幅を初期探索範囲とする
+    # 'WANDB':True # WANDB でログ
     # 'PATIENCE':10, # ベジエ曲線あてはめで、この回数続けて誤差が増えてしまったら探索を打ち切る
     # 'PATIENCET':10, # tensorflow版ベジエ曲線あてはめで、この回数続けて最小が更新されなかったら探索を打ち切る
     # 'ERRORTOLERANCE':0.75, # 曲線当てはめで目標とする平均誤差
 })
-
 
 # OpenCV バージョン３とバージョン４の輪郭抽出関数の違いを吸収する関数
 
@@ -674,8 +676,9 @@ def curvature(func):  # func は sympy 形式の t の関数（fx,fy）のペア
     ddx = diff(dx, t)
     ddy = diff(dy, t)
     k = (dx*ddy - dy*ddx)/(dx*dx + dy*dy)**(3/2)
-    return -k  # 画像の座標系は数学の座標系とｙ方向が逆なので正負が反転する
+    return -k
 
+# 画像の座標系は数学の座標系とｙ方向が逆なので正負が反転する
 # (22) 輪郭中の曲率最大点のインデックスと輪郭データを返す
 
 
@@ -709,8 +712,9 @@ def maxCurvatureP(rdimg, con=[], cuttop=0, cutbottom=0.8, sband=0.25, N=8):
     maxindex = np.array([np.linalg.norm(v) for v in con - [mx, my]]).argmin()
     return maxindex, con
 
-
 # (23) 中心軸端点の推定
+
+
 def findTips(img, con=[], top=0.1, bottom=0.8, topCD=0.5, bottomCD=0.5, mode=2):
     # 入力　
     #   img シルエット画像
@@ -722,7 +726,7 @@ def findTips(img, con=[], top=0.1, bottom=0.8, topCD=0.5, bottomCD=0.5, mode=2):
     #   bottomCD  中心軸下端点らしさの評価データを収集する範囲
     #   mode 0: 頭頂点のみ返す、1:尾端のみ返す、2:頭頂と尾端の両方を返す
     # 出力
-    #   con  輪郭点列
+    #   con 輪郭点列
     #   topTip  中心軸上端点の輪郭番号
     #   bottomTip 中心軸下端点の輪郭番号
     #   symtops,symbottoms 評価データ
@@ -892,7 +896,7 @@ def getCntPairWithImg(rdimg, top=0.1, bottom=0.9, topCD=0.9, bottomCD=0.2, dtopd
             rdcimg, dtopx, dtopy, dbtmx, dbtmy, dtopdr=dtopdr, dbtmdr=dbtmdr, mode=mode)
         return contAll
 
-#　(26) 座標リストから等間隔で指定した数の標本を抜き出す。
+# (26) 座標リストから等間隔で指定した数の標本を抜き出す。
 
 
 def getSamples(cont, N=20, mode='Equidistant'):
@@ -924,7 +928,7 @@ def getDenseParameters(func, n_samples=0, span=0, needlength=False):
         nfx, nfy = lambdify('t', fx, "numpy"), lambdify('t', fy, "numpy")
         ndfx, ndfy = lambdify('t', dfx, "numpy"), lambdify('t', dfy, "numpy")
 
-        if span == 0:  # 稠密さの係数が与えられていない場合はサンプル10点ででおおざっぱに全長を見積もって決める
+        if span == 0:  # 稠密さの係数が与えられていない場合はサンプル10点でおおざっぱに全長を見積もって決める
             ss = np.linspace(0, 1, 10)
             ps = np.array([[int(nfx(s)), int(nfy(s))] for s in ss])
             axlength = cv2.arcLength(ps, closed=False)  # 経路長
@@ -973,13 +977,12 @@ class BezierCurve:
     # クラス変数
     # xx driftThres = 0.01 # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
     # xx errorThres = 0.01 # 繰り返しを打ち切る誤差変化量
-    dCount = 7  # ２分探索の打ち切り回数　（5以上が望ましい）
+    dCount = 3  # ２分探索の打ち切り回数 （3以上が望ましい）
     debugmode = False
-    openmode = False
-    AsymptoticPriority = 'distance'  # パラメータ更新法　
+    AsymptoticPriority = 'distance'  # パラメータ更新法
     # 'distance':距離優先、'span':間隔優先
 
-    def __init__(self, N=5, samples=[], prefunc=None):
+    def __init__(self, N=5, samples=[], prefunc=None, wandb=None, openmode=False):
         self.samples = samples  # 標本点
         self.prefunc = prefunc  # パラメータ初期値
         # self.f  ベジエ曲線の式 = [fx,fy]
@@ -994,7 +997,7 @@ class BezierCurve:
         v = var('v')
         for i in range(N+1):     # 制御点のシンボルと成分の対応付け
             P[i] = Matrix([px[i], py[i]])
-        # N次のベジエ曲線の定義式制御点 P0～PN とパラメータ　　t　の関数として定義
+        # N次のベジエ曲線の定義式制御点 P0～PN とパラメータtの関数として定義
         v = 1-t
         bezf = Matrix([0, 0])
         for i in range(0, N+1):
@@ -1006,6 +1009,9 @@ class BezierCurve:
             self.samples = self.interporation(samples)
         # 初期パラメータのセット
         self.ts = self.assignPara2Samples(prefunc=prefunc)
+        # wandb のセット
+        BezierCurve.wandb = wandb
+        BezierCurve.openmode = openmode
 
     # 解なしの部分に np.inf が入っているのでその抜けを前後から推定してデータを埋める
     def interporation(self, plist):
@@ -1105,8 +1111,6 @@ class BezierCurve:
         # curvefunc 曲線の式
         # stt,end パラメータを割り当てる標本番号の最初と最後（最後は含まない）
 
-        t = symbols('t')
-
         sps = self.samples
         ts = bezierparameters
         f = curvefunc
@@ -1120,51 +1124,59 @@ class BezierCurve:
                 return ts[n-1], ts[n+1]
 
         # 曲線 linefunc(t) 上で座標(x,y) に最も近い点のパラメータを2分サーチして探す関数 Numpy化で高速化 2021.04.04
-        def nearest(x, y, curvefunc, pmin, pmax, dcount=7):
-            # x,y 座標、pmin,pmax 探索範囲、dcount 再起呼び出しの残り回数
+        def nearest(x, y, oldt, curvefunc, pmin, pmax, err_th=0.75, dcount=5):
+            # x,y 座標、oldt 暫定割り当てのパラメータ、pmin,pmax 探索範囲、dcount 再起呼び出しの残り回数
             # ベジエ曲線の関数を記号式から numpy 関数式に変換
 
             def us(p):
                 x, y = p
                 return np.array([float(x), float(y)])
 
-            def nearestNp(p, funcX, funcY, diffX, diffY, pmin, pmax, dcount=7):
+            def nearestNp(p, oldt, funcX, funcY, pmin, pmax, dcount=5):
+                # def nearestNp(p, oldt, funcX, funcY, diffX, diffY, pmin, pmax, dcount=5):
                 # sympy 表現の座標を数値化
-
-                mid = mid = (pmin+pmax)/2  # pmin と pmax のパラメータの平均
+                epsilon = 3e-04
                 ps = funcX(pmin), funcY(pmin)  # パラメータ最小点
-                pm = funcX(mid), funcY(mid)  # 中間パラメータ点
                 pe = funcX(pmax), funcY(pmax)  # パラメータ最大点
                 ls = np.linalg.norm(us(ps) - p)  # pmin と p の距離
-                lm = np.linalg.norm(us(pm) - p)  # pmid と p の距離
                 le = np.linalg.norm(us(pe) - p)  # pmax と p の距離
-
-                # 再帰終了判定 おおむね1ピクセル以内に収まったかどうか
-                xv = abs((pmax-pmin)*diffX(mid))  # x の範囲
-                yv = abs((pmax-pmin)*diffY(mid))  # y の範囲
-                # 1ピクセル以内の変動しかないか、分割回数が指定回数に到達したら探索終了
-                if max(xv, yv) < 1.0 or dcount == 0:
-                    m = min([ls, lm, le])
-                    if m == ls:
-                        return pmin
-                    elif m == le:
-                        return pmax
-                    else:
-                        return mid
+                mid = mid = (le*pmin+ls*pmax)/(ls+le)  # pmin と pmax のパラメータの平均
+                pm = funcX(mid), funcY(mid)  # 中間パラメータ点
+                lold = funcX(oldt)
+                lm = np.linalg.norm(us(pm) - p)  # pmid と p の距離
+                m = min([ls, lm, le, lold])
+                if m == lold:  # 改善されない
+                    return oldt
+                elif m == lm:
+                    newt = mid
+                    dd = min(mid - pmin, pmax - mid)/2.0
+                    newpmin = mid - dd
+                    newpmax = mid + dd
+                elif m == le:
+                    newt = pmax
+                    newpmin = mid  # (mid + pmax)/2.0
+                    newpmax = pmax + epsilon
                 else:
-                    if ls < le:
-                        return nearestNp(p, funcX, funcY, diffX, diffY, pmin, mid, dcount-1)
-                    else:
-                        return nearestNp(p, funcX, funcY, diffX, diffY, mid, pmax, dcount-1)
+                    newt = pmin
+                    newpmin = pmin - epsilon
+                    newpmax = mid  # (pmin + mid)/2.0
+                ddx = funcX(newpmax)-funcX(newpmin)  # x の範囲の見積もり
+                ddy = funcY(newpmax)-funcY(newpmin)  # y の範囲の見積もり
+                ddv = ddx*ddx + ddy*ddy
+                if m < err_th or ddv < err_th*err_th or (dcount == 0 and m > err_th*2):
+                    return newt
+                else:
+                    return nearestNp(p, newt, funcX, funcY, newpmin, newpmax, dcount-1)
 
             p = np.array([x, y])
             t = symbols('t')
             (funcX, funcY) = curvefunc  # funcX,funcY は 't' の関数
-            (diffX, diffY) = (diff(funcX, 't'), diff(funcY, 't'))  # 導関数
+            # (diffX, diffY) = (diff(funcX, 't'), diff(funcY, 't'))  # 導関数
             # 関数と導関数を numpy 関数化　（高速化目的）
             (funcX, funcY) = (lambdify(t, funcX, "numpy"), lambdify(t, funcY, "numpy"))
-            (diffX, diffY) = (lambdify(t, diffX, "numpy"), lambdify(t, diffY, "numpy"))
-            return nearestNp(p, funcX, funcY, diffX, diffY, pmin, pmax, dcount=dcount)
+            # (diffX, diffY) = (lambdify(t, diffX, "numpy"), lambdify(t, diffY, "numpy"))
+            # return nearestNp(p, oldt, funcX, funcY, diffX, diffY, pmin, pmax, dcount=dcount)
+            return nearestNp(p, oldt, funcX, funcY, pmin, pmax, dcount=dcount)
 
         if stt == end:
             return ts
@@ -1172,9 +1184,10 @@ class BezierCurve:
         nmid = (stt+end)//2  # 探索対象の中央のデータを抜き出す
         px, py = sps[nmid]  # 中央のデータの座標
         band = searchband(nmid)
+        tmid = ts[nmid]
 
         midpara = nearest(
-            px, py, f, band[0], band[1], dcount=BezierCurve.dCount)  # 最も近い点を探す
+            px, py, tmid, f, band[0], band[1], dcount=BezierCurve.dCount)  # 最も近い点を探す
 
         ts[nmid] = midpara
         ts = self.refineTparaN(ts, f, stt, nmid)
@@ -1230,11 +1243,17 @@ class BezierCurve:
 
             # あてはめ誤差を求める
             error = meanerr(fx, fy, ts=ts)
+            if BezierCurve.wandb:
+                BezierCurve.wandb.log({"loss": error})
             if error < minerror:
                 bestts = ts.copy()  # 今までで一番よかったパラメータセットを更新
                 bestfunc = func  # 今までで一番よかった関数式を更新
                 minerror = error  # 最小誤差を更新
                 bestcps = cps  # 最適制御点リストを更新
+                print(".", end='')
+            else:
+                print("^", end='')
+
             # 繰り返し判定調整量
             # 繰り返しが100回を超えたら条件を緩めていく
             thresrate = 1.0 if trynum <= 100 else threstune**(trynum-100)
@@ -1255,11 +1274,6 @@ class BezierCurve:
                     priority = 'span'
                 else:
                     break
-            else:
-                if error > minerror:
-                    print("^", end='')
-                else:
-                    print(".", end='')
 
             trynum += 1
             if trynum % 100 == 0:
@@ -1332,36 +1346,44 @@ class BezierCurve:
                         bezfy = bezfy + comb(N, i)*vs**(N-i)*ts**i*cps[i][1]
                 bezfx = bezfx + ts**N*cps[N][0]
                 bezfy = bezfy + ts**N*cps[N][1]
-                meanerrx = tf.reduce_mean((bezfx - x_data)*(bezfx - x_data))
-                meanerry = tf.reduce_mean((bezfy - y_data)*(bezfy - y_data))
-                meanerr = tf.add(meanerrx, meanerry)
+
+                meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
+                meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
+                loss = meanerr = tf.add(meanerrx, meanerry)
+
             if mode == 0:
-                gt = t.gradient(meanerr, [ts, Px, Py])
+                gt = t.gradient(loss, [ts, Px, Py])
                 opt.apply_gradients(zip(gt, [ts, Px, Py]))
                 for i in range(1, N):
                     cps[i][0] = Px[i-1].numpy()
                     cps[i][1] = Py[i-1].numpy()
                 func = self.setCPs(cps)
             elif mode == 1:
-                gt = t.gradient(meanerr, [ts])
+                gt = t.gradient(loss, [ts])
                 opt.apply_gradients(zip(gt, [ts]))
                 cps, func = self.fit0(tpara=ts.numpy())
 
-            if meanerr.numpy() < minerror:
+            error = meanerr.numpy()
+            if BezierCurve.wandb:
+                BezierCurve.wandb.log({"loss": error})
+            if error < minerror:
                 bestts = ts.numpy()  # 今までで一番よかったパラメータセットを更新
                 bestfunc = func  # 今までで一番よかった関数式を更新
-                minerror = meanerr.numpy()  # 最小誤差を更新
+                minerror = error  # 最小誤差を更新
                 bestcps = cps  # 最適制御点リストを更新
+                print(".", end='')
+            else:
+                print("^", end='')
 
             # 繰り返しが100回を超えたら条件を緩めていく
             thresrate = 1.0 if trynum <= 100 else threstune**(trynum-100)
             if BezierCurve.debugmode:
                 print("{} err:{:.5f}({:.5f}) rmcounter {})".format(
-                    trynum, meanerr.numpy(), minerror, rmcounter))
+                    trynum, error, minerror, rmcounter))
 
-            rmcounter = 0 if meanerr.numpy() <= minerror else rmcounter + \
+            rmcounter = 0 if error <= minerror else rmcounter + \
                 1  # エラー増加回数のカウントアップ　減り続けているなら０
-            if meanerr.numpy() < err_th*thresrate or ((trynum > 100) and rmcounter > pat):
+            if error < err_th*thresrate or ((trynum > 100) and rmcounter > pat):
                 # pat回続けてエラーが増加したらあきらめる デフォルトは１00 （fit1T は繰り返し1回あたりの変動が小さい）
                 if BezierCurve.debugmode:
                     if rmcounter > pat:
@@ -1369,11 +1391,6 @@ class BezierCurve:
                     else:
                         print("M")
                 break
-            else:
-                if meanerr.numpy() > minerror:
-                    print("^", end='')
-                else:
-                    print(".", end='')
 
             trynum += 1
             if trynum % 100 == 0:
@@ -1818,7 +1835,6 @@ def crossPointsLRonImg0(img, x0, y0, dx, dy):
                 crpRy, crpRx = min2y, min2x
 
     return (crpLx, crpLy), (crpRx+x0, crpRy)
-
 
 # (-1)変数データのストアとリストア
 # 変数内データを pickle 形式で保存
