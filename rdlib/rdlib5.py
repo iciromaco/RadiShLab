@@ -1163,7 +1163,7 @@ class BezierCurve:
                 ddx = funcX(newpmax)-funcX(newpmin)  # x の範囲の見積もり
                 ddy = funcY(newpmax)-funcY(newpmin)  # y の範囲の見積もり
                 ddv = ddx*ddx + ddy*ddy
-                if m < err_th or ddv < err_th*err_th or (dcount == 0 and m > err_th*2):
+                if m < err_th or ddv < err_th*err_th or (dcount <= 0 and m > err_th*2):
                     return newt
                 else:
                     return nearestNp(p, newt, funcX, funcY, newpmin, newpmax, dcount-1)
