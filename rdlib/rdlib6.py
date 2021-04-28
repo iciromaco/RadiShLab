@@ -979,7 +979,7 @@ class BezierCurve:
     dCount = 3  # ２分探索の打ち切り回数 （3以上が望ましい）
     convg_coe = 0.00001 # 収束の見切り　　１回あたりの誤差減少が少なすぎる時の打ち切り条件を決める値
     eq_coe = 0 # 300 # 等間隔制約の重み
-    terminal_coe = 2.5e-8
+    terminal_coe = 5.0e-9
     debugmode = False
     AsymptoticPriority = 'distance'  # パラメータ更新法
     wandb = False
