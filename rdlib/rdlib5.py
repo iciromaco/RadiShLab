@@ -6,6 +6,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from statistics import mean
+from collections import deque
 
 # from sympy import *
 from sympy import diff, Symbol, Matrix, symbols, solve, simplify, binomial, Abs, im, re, lambdify
@@ -979,7 +980,7 @@ class BezierCurve:
     dCount = 3  # ２分探索の打ち切り回数 （3以上が望ましい）
     convg_coe = 0.00001 # 収束の見切り　　１回あたりの誤差減少が少なすぎる時の打ち切り条件を決める値
     eq_coe = 0 # 300 # 等間隔制約の重み
-    terminal_coe = 5.0e-9
+    terminal_coe = 1.0e-8
     debugmode = False
     AsymptoticPriority = 'distance'  # パラメータ更新法
     wandb = False
@@ -1212,7 +1213,9 @@ class BezierCurve:
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
         #
         sps = self.samples
-
+        errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
+        for i in range(3):
+          errq.append(np.inf)
         # 当てはめ誤差の平均値を算出する関数
         def meanerr(fx, fy, ts):
             t = symbols('t')
@@ -1253,11 +1256,18 @@ class BezierCurve:
 
             # あてはめ誤差を求める
             error = meanerr(fx, fy, ts=ts)
+            olderr = errq.popleft() # ３回前のエラーを取り出し
+            errq.append(error) # 最新エラーをバッファに挿入
             if BezierCurve.wandb:
                 BezierCurve.wandb.log({"loss": error})
             if error < minerror:
                 convg_coe = BezierCurve.convg_coe*100
-                convergenceflag = True if (minerror - error)/(trynum - lastgood) < convg_coe*(error-err_th) else False
+                if trynum - lastgood > 3:
+                  convergenceflag = False
+                  # print(f"{trynum} {error:>1.7f}-{minerror:>1.7f}  {(minerror - error)/(trynum - lastgood):>1.7f},{convg_coe*(error-err_th):>1.7f}")
+                else:
+                  convergenceflag = (olderr - error)/3.0 < convg_coe*(error-err_th)
+                  # print(f"{trynum} {error:>1.7f}-{olderr:>1.7f}  {(olderr - error)/3.0:>1.7f},{convg_coe*(error-err_th):>1.7f}")
                 lastgood = trynum
                 bestts = ts.copy()  # 今までで一番よかったパラメータセットを更新
                 bestfunc = func  # 今までで一番よかった関数式を更新
@@ -1265,6 +1275,7 @@ class BezierCurve:
                 bestcps = cps  # 最適制御点リストを更新
                 print(".", end='')
             else:
+                convergenceflag = False
                 print("^", end='')
 
             # 繰り返し判定調整量
@@ -1278,6 +1289,7 @@ class BezierCurve:
             if convergenceflag or error < err_th*thresrate or rmcounter > pat:
                 # pat回続けてエラーが増加したらあきらめる デフォルトは10
                 if convergenceflag:
+
                   print('C')
                 elif error < err_th*thresrate :
                   print('E')
@@ -1319,6 +1331,10 @@ class BezierCurve:
         # pat 10 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
         # err_th 0.75  エラーの収束条件
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
+
+        errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
+        for i in range(3):
+          errq.append(np.inf)
         sps = self.samples
         x_data = [x for [x, y] in sps]
         y_data = [y for [x, y] in sps]
@@ -1334,17 +1350,20 @@ class BezierCurve:
         cps, func = self.fit0(tpara=tpara)  # レベル０フィッティングを実行
         bestfunc = func
         bestcps = cps
+        ts = bestts = self.ts.copy() # 初期パラメータ
+
         if BezierCurve.terminal_coe > 0:
             fx,fy = func
             t = symbols('t')
             diffx, diffy = diff(fx, t), diff(fy, t) # 導関数
+            dx1,dy1 = float(diffx.subs(t, ts[0])),float(diffy.subs(t, ts[0]))
+            dx2,dy2 = float(diffx.subs(t, ts[1])),float(diffy.subs(t, ts[1]))
 
         minerror = olderror = np.Inf  # 当てはめ誤差
         if BezierCurve.debugmode:
             print("initial error:{:.5f}".format(minerror))
 
         opt = tf.optimizers.Adam(learning_rate=lr)
-        ts = bestts = self.ts.copy()
 
         # tensorflow の変数
         if mode == 0:
@@ -1352,25 +1371,25 @@ class BezierCurve:
                               for i in range(N-1)], dtype='float32')
             Py = tf.Variable([cps[i+1][1]
                               for i in range(N-1)], dtype='float32')
-        ts = tf.Variable(ts)
 
+        tts = tf.Variable(ts)
         turn = 0 # 0 エラー減少中　　1 エラー増加中
         while True:
             # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
             with tf.GradientTape() as tape:
-                vs = 1-ts
-                # ts**0 と (1-ts)**0 を含めると微係数が nan となるのでループから外している
+                vs = 1-tts
+                # tts**0 と (1-tts)**0 を含めると微係数が nan となるのでループから外している
                 bezfx = vs**N*cps[0][0]
                 bezfy = vs**N*cps[0][1]
                 for i in range(1, N):
                     if mode == 0:
-                        bezfx = bezfx + comb(N, i)*vs**(N-i)*ts**i*Px[i-1]
-                        bezfy = bezfy + comb(N, i)*vs**(N-i)*ts**i*Py[i-1]
+                        bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*Px[i-1]
+                        bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*Py[i-1]
                     elif mode == 1:
-                        bezfx = bezfx + comb(N, i)*vs**(N-i)*ts**i*cps[i][0]
-                        bezfy = bezfy + comb(N, i)*vs**(N-i)*ts**i*cps[i][1]
-                bezfx = bezfx + ts**N*cps[N][0]
-                bezfy = bezfy + ts**N*cps[N][1]
+                        bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*cps[i][0]
+                        bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*cps[i][1]
+                bezfx = bezfx + tts**N*cps[N][0]
+                bezfy = bezfy + tts**N*cps[N][1]
 
                 meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
                 meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
@@ -1380,12 +1399,10 @@ class BezierCurve:
                 # 等間隔制約
                 if BezierCurve.eq_coe > 0:
                   ts2 = self.assignPara2Samples(prefunc=func)
-                  loss2 = tf.reduce_mean(tf.square(ts - ts2))
+                  loss2 = tf.reduce_mean(tf.square(tts - ts2))
                 # 終端制約                 
                 if BezierCurve.terminal_coe > 0:
-                  dx1,dy1 = float(diffx.subs(t, 0)),float(diffy.subs(t, 0))
                   bx1,by1 = bezfx[1]-bezfx[0],bezfy[1]-bezfy[0]
-                  dx2,dy2 = float(diffx.subs(t, 1)),float(diffy.subs(t, 1))
                   bx2,by2 = bezfx[-1]-bezfx[-2],bezfy[-1]-bezfy[-2]
                   loss31 = tf.square(tf.subtract(tf.multiply(dx1,by1),tf.multiply(bx1,dy1)))
                   loss32 = tf.square(tf.subtract(tf.multiply(dx2,by2),tf.multiply(bx2,dy2)))
@@ -1395,20 +1412,26 @@ class BezierCurve:
 
             # 誤差評価
             error = meanerr.numpy()
+            olderr = errq.popleft() # ３回前のエラーを取り出し
+            errq.append(error) # 最新エラーをバッファに挿入
             if BezierCurve.wandb:
                 BezierCurve.wandb.log({"loss": error})
             if error < minerror:
-                convg_coe = BezierCurve.convg_coe if mode == 1 else BezierCurve.convg_coe/10.0
-                convergenceflag = True if (minerror - error)/(trynum - lastgood) < convg_coe*(error-err_th) else False
-                bestts = ts.numpy()  # 今までで一番よかったパラメータセットを更新
+                convg_coe = BezierCurve.convg_coe if mode == 1 else BezierCurve.convg_coe/10.0 # 収束判定基準
+                if trynum - lastgood > 3:
+                  convergenceflag = False
+                  # print(f"{trynum} {error:>1.7f}-{minerror:>1.7f}  {(minerror - error)/(trynum - lastgood):>1.7f},{convg_coe*(error-err_th):>1.7f}")
+                else:
+                  convergenceflag = (olderr - error)/3.0 < convg_coe*(error-err_th)
+                  # print(f"{trynum} {error:>1.7f}-{olderr:>1.7f}  {(olderr - error)/3.0:>1.7f},{convg_coe*(error-err_th):>1.7f}")
+                bestts = tts.numpy()  # 今までで一番よかったパラメータセットを更新
                 bestfunc = func  # 今までで一番よかった関数式を更新
                 minerror = error  # 最小誤差を更新
                 bestcps = cps  # 最適制御点リストを更新
                 print(".", end='')
             else:
+                convergenceflag = False
                 print("^", end='')
-
-            olderror = error
 
             # 繰り返しが100回を超えたら条件を緩めていく
             thresrate = 1.0 if trynum <= 100 else threstune**(trynum-100)
@@ -1416,8 +1439,7 @@ class BezierCurve:
                 print("{} err:{:.5f}({:.5f}) rmcounter {})".format(
                     trynum, error, minerror, rmcounter))
 
-            rmcounter = 0 if error <= minerror else rmcounter + \
-                1  # エラー増加回数のカウントアップ　減り続けているなら０
+            rmcounter = 0 if error <= minerror else rmcounter + 1 # エラー増加回数のカウントアップ　減り続けているなら０
             if (convergenceflag and (trynum > 50)) or error < err_th*thresrate or ((trynum > 100) and rmcounter > pat):
                 # pat回続けてエラーが増加したらあきらめる デフォルトは１00 （fit1T は繰り返し1回あたりの変動が小さい）
                 if (convergenceflag and (trynum > 50)):
@@ -1436,18 +1458,27 @@ class BezierCurve:
 
             # 関数更新
             if mode == 0:
-                gt = tape.gradient(loss, [ts, Px, Py])
-                opt.apply_gradients(zip(gt, [ts, Px, Py]))
+                gt = tape.gradient(loss, [tts, Px, Py])
+                opt.apply_gradients(zip(gt, [tts, Px, Py]))
                 for i in range(1, N):
                     cps[i][0] = Px[i-1].numpy()
                     cps[i][1] = Py[i-1].numpy()
                 func = self.setCPs(cps)
+                newfuncflag = True
             elif mode == 1:
-                gt = tape.gradient(loss, [ts])
-                opt.apply_gradients(zip(gt, [ts]))
-                # 現状の関数で、ts の最適化をやり尽くして誤差が増加
+                gt = tape.gradient(loss, [tts])
+                opt.apply_gradients(zip(gt, [tts]))
+                # 現状の関数で、tts の最適化をやり尽くして誤差が増加
                 if (error >= olderror) or convergenceflag:
-                  cps, func = self.fit0(tpara=ts.numpy())
+                  cps, func = self.fit0(tpara=tts.numpy())
+                  newfuncflag = True
+                else:
+                  newfuncflag = False              
+            if BezierCurve.terminal_coe > 0 and newfuncflag:
+                fx,fy = func
+                diffx, diffy = diff(fx, t), diff(fy, t) # 導関数
+                dx1,dy1 = float(diffx.subs(t, ts[0])),float(diffy.subs(t, ts[0]))
+                dx2,dy2 = float(diffx.subs(t, ts[1])),float(diffy.subs(t, ts[1]))
 
             trynum += 1
             if trynum % 100 == 0:
@@ -1462,6 +1493,7 @@ class BezierCurve:
         else:
             return bestcps, bestfunc
 
+
     # 段階的ベジエ近似
     def fit2(self, mode=0, Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.005, pat=10, err_th=0.75, threstune=1.0, withErr=False, tpara=[], withFig=False):
         # mode 0 -> fit1() を使う, mode 1 -> fit1T(mode=1)を使う, mode 2 -> fit1T(mode=0) を使う
@@ -1473,7 +1505,7 @@ class BezierCurve:
         # err_th 打ち切り誤差
         # pat この回数エラーが減らない場合はあきらめる
         # withErr 誤差と次数を返すかどうか
-
+        
         Ncurrent = Nprolog - 1
         func = self.prefunc
         ts = tpara

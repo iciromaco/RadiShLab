@@ -6,6 +6,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from statistics import mean
+from collections import deque
 
 # from sympy import *
 from sympy import diff, Symbol, Matrix, symbols, solve, simplify, binomial, Abs, im, re, lambdify
@@ -967,6 +968,7 @@ def getDenseParameters(func, n_samples=0, span=0, needlength=False):
         else:
             return ftpara
 
+# ベジエ曲線のクラス定義
 class BezierCurve:
     # インスタンス変数
     # f [X座標関数式,Y座標関数式]
@@ -977,9 +979,10 @@ class BezierCurve:
     # xx driftThres = 0.01 # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
     # xx errorThres = 0.01 # 繰り返しを打ち切る誤差変化量
     dCount = 3  # ２分探索の打ち切り回数 （3以上が望ましい）
-    convg_coe = 0.00001 # 収束の見切り　　１回あたりの誤差減少が少なすぎる時の打ち切り条件を決める値
+    convg_coe = 5.0e-8  # 収束の見切り　　１回あたりの誤差減少が少なすぎる時の打ち切り条件を決める値 3e-8〜8e-8 が最適
     eq_coe = 0 # 300 # 等間隔制約の重み
-    terminal_coe = 5.0e-9
+    gradient_coe = 0 # 2.5e-8 # 接戦の傾きを標本間の傾きに合わせるための重み
+    smoothness_coe = 1.0e-8 # 標本間距離をなるべく短くするための重み 3e-9〜3e-8
     debugmode = False
     AsymptoticPriority = 'distance'  # パラメータ更新法
     wandb = False
@@ -1016,6 +1019,15 @@ class BezierCurve:
             self.ts = tpara
         else:
             self.ts = self.assignPara2Samples(prefunc=prefunc)
+
+    # 当てはめの自乗誤差の平均値を算出する関数
+    def f_meanerr(self, fx, fy, ts):
+        sps = self.samples
+        # fx, fy : t の symfy関数、ts: ベジエのパラメータのリスト, sps サンプル点のリスト
+        t = symbols('t')
+        nfx, nfy = lambdify(t, fx, "numpy"), lambdify(t, fy, "numpy")
+        onps = [[nfx(ts[i]), nfy(ts[i])] for i in range(len(ts))]
+        return mean([(sps[i][0]-onps[i][0])**2+(sps[i][1]-onps[i][1])**2 for i in range(len(sps))])
 
     # 解なしの部分に np.inf が入っているのでその抜けを前後から推定してデータを埋める
     def interporation(self, plist):
@@ -1071,12 +1083,14 @@ class BezierCurve:
         return f
 
     # ベジエ近似レベル０（標本点のパラメータを等間隔と仮定してあてはめ）
-    def fit0(self, tpara=[]):
+    def fit0(self, prefunc=None, tpara=[]):
         # ts 標本点に対するパラメータ割り当て
         samples = self.samples  # 標本点
         x, y = samples[:, 0], samples[:, 1]  # 標本点のｘ座標列とｙ座標列
         # t 標本点に結びつるパラメータは引数として与えられているならそれを、さもなくばリニアに設定
-        ts = self.assignPara2Samples(prefunc=self.prefunc) if len(tpara) == 0 else tpara
+        if prefunc == None:
+            prefunc = self.prefunc
+        ts = self.assignPara2Samples(prefunc=prefunc) if len(tpara) == 0 else tpara
         N = self.N  # ベジエの次数
         M = len(samples)  # サンプル数
         # バーンスタイン関数の定義
@@ -1213,13 +1227,6 @@ class BezierCurve:
         #
         sps = self.samples
 
-        # 当てはめ誤差の平均値を算出する関数
-        def meanerr(fx, fy, ts):
-            t = symbols('t')
-            nfx, nfy = lambdify(t, fx, "numpy"), lambdify(t, fy, "numpy")
-            onps = [[nfx(ts[i]), nfy(ts[i])] for i in range(len(ts))]
-            return mean([np.sqrt((sps[i][0]-onps[i][0])**2+(sps[i][1]-onps[i][1])**2) for i in range(len(sps))])
-
         # #######################
         # Itterations start here フィッティングのメインプログラム
         # #######################
@@ -1231,12 +1238,11 @@ class BezierCurve:
         cps, func = self.fit0(tpara=tpara)  # レベル０フィッティングを実行
         [fx, fy] = bestfunc = func
         bestcps = cps
+        ts = bestts = self.ts.copy()
 
-        minerror = meanerr(fx, fy, ts=self.ts)  # 当てはめ誤差
+        minerror = self.f_meanerr(fx, fy, ts=ts)  # 当てはめ誤差
         if BezierCurve.debugmode:
             print("initial error:{:.5f}".format(minerror))
-
-        ts = bestts = self.ts.copy()
 
         while True:
             # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
@@ -1252,7 +1258,7 @@ class BezierCurve:
             [fx, fy] = func
 
             # あてはめ誤差を求める
-            error = meanerr(fx, fy, ts=ts)
+            error = self.f_meanerr(fx, fy, ts=ts)
             if BezierCurve.wandb:
                 BezierCurve.wandb.log({"loss": error})
             if error < minerror:
@@ -1319,6 +1325,10 @@ class BezierCurve:
         # pat 10 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
         # err_th 0.75  エラーの収束条件
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
+
+        errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
+        for i in range(3):
+          errq.append(np.inf)
         sps = self.samples
         x_data = [x for [x, y] in sps]
         y_data = [y for [x, y] in sps]
@@ -1331,20 +1341,33 @@ class BezierCurve:
         rmcounter = 0  # エラー増加回数のカウンター
         priority = BezierCurve.AsymptoticPriority
 
-        cps, func = self.fit0(tpara=tpara)  # レベル０フィッティングを実行
-        bestfunc = func
+        # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる
+        prebez = BezierCurve(N=2*self.N,samples=self.samples)
+        precps, prefunc = prebez.fit0(prefunc = self.prefunc, tpara=tpara)
+        # 仮近似曲線をほぼ等距離に区切るようなパラメータを求める
+        # 改めて fit0 でN次近似した関数を初期近似とする
+        cps, func = self.fit0(prefunc = prefunc, tpara=[])  # レベル０フィッティングを実行
+        (fx,fy) = bestfunc = func
         bestcps = cps
-        if BezierCurve.terminal_coe > 0:
-            fx,fy = func
-            t = symbols('t')
-            diffx, diffy = diff(fx, t), diff(fy, t) # 導関数
+        ts = bestts = self.ts.copy()
 
-        minerror = olderror = np.Inf  # 当てはめ誤差
+        minerror = self.f_meanerr(fx, fy, ts=ts)  # 初期当てはめ誤差の算出
+        errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
+        for i in range(2):
+          errq.append(np.inf)
+        errq.append(minerror)
+
         if BezierCurve.debugmode:
             print("initial error:{:.5f}".format(minerror))
 
-        opt = tf.optimizers.Adam(learning_rate=lr)
-        ts = bestts = self.ts.copy()
+        if BezierCurve.gradient_coe > 0:
+            t = symbols('t')
+            diffx, diffy = diff(fx, t), diff(fy, t) # 導関数
+            # dx1,dy1 = float(diffx.subs(t, ts[0])),float(diffy.subs(t, ts[0]))
+            # dx2,dy2 = float(diffx.subs(t, ts[-1])),float(diffy.subs(t, ts[-1]))
+            dlen = len(ts)-1 # 下２行で標本点候補の接線の傾きを求める
+            dcanx = [float(diffx.subs(t, ts[i])) for i in range(dlen)] 
+            dcany = [float(diffy.subs(t, ts[i])) for i in range(dlen)]
 
         # tensorflow の変数
         if mode == 0:
@@ -1352,72 +1375,120 @@ class BezierCurve:
                               for i in range(N-1)], dtype='float32')
             Py = tf.Variable([cps[i+1][1]
                               for i in range(N-1)], dtype='float32')
-        ts = tf.Variable(ts)
 
-        turn = 0 # 0 エラー減少中　　1 エラー増加中
+        tts = tf.Variable(ts) 
+        opt = tf.optimizers.Adam(learning_rate=lr)
+
         while True:
             # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
-            with tf.GradientTape() as tape:
-                vs = 1-ts
-                # ts**0 と (1-ts)**0 を含めると微係数が nan となるのでループから外している
-                bezfx = vs**N*cps[0][0]
-                bezfy = vs**N*cps[0][1]
+            with tf.GradientTape(persistent=True) as metatape:
+                with tf.GradientTape(persistent=True) as t2:
+                    with tf.GradientTape(persistent=True) as t1:
+                        vs = 1-tts
+                        # tts**0 と (1-tts)**0 を含めると微係数が nan となるのでループから外している
+                        bezfx = vs**N*cps[0][0]
+                        bezfy = vs**N*cps[0][1]
+                        for i in range(1, N):
+                            if mode == 0:
+                                bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*Px[i-1]
+                                bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*Py[i-1]
+                            elif mode == 1:
+                                bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*cps[i][0]
+                                bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*cps[i][1]
+                        bezfx = bezfx + tts**N*cps[N][0]
+                        bezfy = bezfy + tts**N*cps[N][1]
+
+                        meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
+                        meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
+                        meanerror = tf.add(meanerrx, meanerry)
+
+                        metaloss = 0.0
+                        # 等間隔制約
+                        if BezierCurve.eq_coe > 0:
+                            ts2 = self.assignPara2Samples(prefunc=func)
+                            loss2 = tf.reduce_mean(tf.square(tts - ts2))
+                        # 終端制約                 
+                        if BezierCurve.gradient_coe > 0:
+                            # bx1,by1 = bezfx[1]-bezfx[0],bezfy[1]-bezfy[0]
+                            # bx2,by2 = bezfx[-1]-bezfx[-2],bezfy[-1]-bezfy[-2]
+                            # oss31 = tf.square(tf.subtract(tf.multiply(dx1,by1),tf.multiply(bx1,dy1)))
+                            # loss32 = tf.square(tf.subtract(tf.multiply(dx2,by2),tf.multiply(bx2,dy2)))
+                            # loss3 = tf.add(loss31,loss32)
+                            newdcanx,newdcany = bezfx[1:] - bezfx[:-1],bezfy[1:]-bezfy[:-1]
+                            loss3 = tf.reduce_mean(tf.square(tf.subtract(tf.multiply(dcanx,newdcany),tf.multiply(newdcanx,dcany))))
+                        # loss の定義
+                        loss = tf.add(tf.add(meanerror, BezierCurve.eq_coe*loss2),BezierCurve.gradient_coe*loss3)
+                    # 標本点間の滑らかさの制約として２回微分を０に近づける
+                    # １回微分
+                    dbezfx = t1.gradient(bezfx,[tts])
+                    dbezfy = t1.gradient(bezfy,[tts])
+                # ２回微分
+                if BezierCurve.smoothness_coe > 0:
+                    ddbezfx = t2.gradient(dbezfx,[tts])
+                    ddbezfy = t2.gradient(dbezfy,[tts])  
+                    ddbezfx = [[0 if tf.math.is_nan(x) else x for x in ddbezfx[0]]]
+                    ddbezfy = [[0 if tf.math.is_nan(y) else y for y in ddbezfy[0]]]
+                    # 滑らかさの制約 metaloss                  
+                    metaloss = tf.reduce_mean(tf.add(tf.square(ddbezfx),tf.square(ddbezfy)))
+                # global loss
+                gloss = tf.add(loss, BezierCurve.smoothness_coe*metaloss)
+
+            # 関数更新
+            if mode == 0:
+                gt = metatape.gradient(gloss, [tts, Px, Py])
+                if BezierCurve.smoothness_coe > 0:
+                    gt = [[0 if tf.math.is_nan(x) else x for x in gt[0]]]
+                opt.apply_gradients(zip(gt, [tts, Px, Py]))
                 for i in range(1, N):
-                    if mode == 0:
-                        bezfx = bezfx + comb(N, i)*vs**(N-i)*ts**i*Px[i-1]
-                        bezfy = bezfy + comb(N, i)*vs**(N-i)*ts**i*Py[i-1]
-                    elif mode == 1:
-                        bezfx = bezfx + comb(N, i)*vs**(N-i)*ts**i*cps[i][0]
-                        bezfy = bezfy + comb(N, i)*vs**(N-i)*ts**i*cps[i][1]
-                bezfx = bezfx + ts**N*cps[N][0]
-                bezfy = bezfy + ts**N*cps[N][1]
-
-                meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
-                meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
-                meanerr = tf.add(meanerrx, meanerry)
-
-                loss2 = loss3 = 0.0
-                # 等間隔制約
-                if BezierCurve.eq_coe > 0:
-                  ts2 = self.assignPara2Samples(prefunc=func)
-                  loss2 = tf.reduce_mean(tf.square(ts - ts2))
-                # 終端制約                 
-                if BezierCurve.terminal_coe > 0:
-                  dx1,dy1 = float(diffx.subs(t, 0)),float(diffy.subs(t, 0))
-                  bx1,by1 = bezfx[1]-bezfx[0],bezfy[1]-bezfy[0]
-                  dx2,dy2 = float(diffx.subs(t, 1)),float(diffy.subs(t, 1))
-                  bx2,by2 = bezfx[-1]-bezfx[-2],bezfy[-1]-bezfy[-2]
-                  loss31 = tf.square(tf.subtract(tf.multiply(dx1,by1),tf.multiply(bx1,dy1)))
-                  loss32 = tf.square(tf.subtract(tf.multiply(dx2,by2),tf.multiply(bx2,dy2)))
-                  loss3 = tf.add(loss31,loss32)
-                # loss の定義
-                loss = tf.add(tf.add(meanerr, BezierCurve.eq_coe*loss2),BezierCurve.terminal_coe*loss3)
+                    cps[i][0] = Px[i-1].numpy()
+                    cps[i][1] = Py[i-1].numpy() 
+                func = self.setCPs(cps)
+            elif mode == 1:
+                gt = metatape.gradient(gloss, [tts])
+                if BezierCurve.smoothness_coe > 0:
+                    gt = [[0 if tf.math.is_nan(x) else x for x in gt[0]]]
+                opt.apply_gradients(zip(gt, [tts]))
+                cps, func = self.fit0(tpara=tts.numpy())
+            self.ts = ts = tts.numpy() # ts を更新
 
             # 誤差評価
-            error = meanerr.numpy()
+            fx,fy = func
+            error = self.f_meanerr(fx, fy, ts=ts) 
+            old3err = errq.popleft() # ３回前のエラーを取り出し
+            errq.append(error) # 最新エラーをバッファに挿入
+            convg_coe = BezierCurve.convg_coe if mode == 1 else BezierCurve.convg_coe/10.0 # 収束判定基準
+            convergenceflag = ((old3err - error)/3.0 < convg_coe*(error-err_th))
+
             if BezierCurve.wandb:
                 BezierCurve.wandb.log({"loss": error})
-            if error < minerror:
-                convg_coe = BezierCurve.convg_coe if mode == 1 else BezierCurve.convg_coe/10.0
-                convergenceflag = True if (minerror - error)/(trynum - lastgood) < convg_coe*(error-err_th) else False
-                bestts = ts.numpy()  # 今までで一番よかったパラメータセットを更新
+                BezierCurve.wandb.log({"metaloss": metaloss.numpy()})
+            if error < minerror: 
+                if trynum - lastgood > 3:
+                  convergenceflag = False
+                bestts = ts  # 今までで一番よかったパラメータセットを更新
                 bestfunc = func  # 今までで一番よかった関数式を更新
                 minerror = error  # 最小誤差を更新
                 bestcps = cps  # 最適制御点リストを更新
                 print(".", end='')
+                lastgood = trynum
+                rmcounter = 0
             else:
+                rmcounter = rmcounter + 1 # エラー増加回数のカウントアップ　減り続けているなら０
+                convergenceflag = False
                 print("^", end='')
-
-            olderror = error
 
             # 繰り返しが100回を超えたら条件を緩めていく
             thresrate = 1.0 if trynum <= 100 else threstune**(trynum-100)
             if BezierCurve.debugmode:
                 print("{} err:{:.5f}({:.5f}) rmcounter {})".format(
                     trynum, error, minerror, rmcounter))
+            
+            # エラーが増加してしまった
+            # if convergenceflag or errq[-2] < error:
+                # fit0 で近似し、間隔均等になるように初期パラメータを決定
+                # cps, func = self.fit0(tpara=tts.numpy())
+                # ts = self.assignPara2Samples(prefunc=func)
 
-            rmcounter = 0 if error <= minerror else rmcounter + \
-                1  # エラー増加回数のカウントアップ　減り続けているなら０
             if (convergenceflag and (trynum > 50)) or error < err_th*thresrate or ((trynum > 100) and rmcounter > pat):
                 # pat回続けてエラーが増加したらあきらめる デフォルトは１00 （fit1T は繰り返し1回あたりの変動が小さい）
                 if (convergenceflag and (trynum > 50)):
@@ -1434,20 +1505,14 @@ class BezierCurve:
                         print("M")
                 break
 
-            # 関数更新
-            if mode == 0:
-                gt = tape.gradient(loss, [ts, Px, Py])
-                opt.apply_gradients(zip(gt, [ts, Px, Py]))
-                for i in range(1, N):
-                    cps[i][0] = Px[i-1].numpy()
-                    cps[i][1] = Py[i-1].numpy()
-                func = self.setCPs(cps)
-            elif mode == 1:
-                gt = tape.gradient(loss, [ts])
-                opt.apply_gradients(zip(gt, [ts]))
-                # 現状の関数で、ts の最適化をやり尽くして誤差が増加
-                if (error >= olderror) or convergenceflag:
-                  cps, func = self.fit0(tpara=ts.numpy())
+            if BezierCurve.gradient_coe > 0:
+                fx,fy = func
+                diffx, diffy = diff(fx, t), diff(fy, t) # 導関数
+                #dx1,dy1 = float(diffx.subs(t, ts[0])),float(diffy.subs(t, ts[0]))
+                #dx2,dy2 = float(diffx.subs(t, ts[-1])),float(diffy.subs(t, ts[-1]))
+                dlen = len(ts)-1 # 下２行で標本点候補の接線の傾きを求める
+                dcanx = [float(diffx.subs(t, ts[i])) for i in range(dlen)] 
+                dcany = [float(diffy.subs(t, ts[i])) for i in range(dlen)]
 
             trynum += 1
             if trynum % 100 == 0:
@@ -1456,6 +1521,7 @@ class BezierCurve:
                 break
 
         self.ts = bestts
+  
         print("")
         if withErr:
             return bestcps, bestfunc, minerror
@@ -1481,10 +1547,10 @@ class BezierCurve:
         results = {}
         while Ncurrent < Nto and err_th < err:
             Ncurrent = Ncurrent + 1
+            # abez = BezierCurve(N=Ncurrent, samples=self.samples, tpara=ts, prefunc=func)
             abez = BezierCurve(N=Ncurrent, samples=self.samples, tpara=ts, prefunc=func)
             print(Ncurrent, end="")
             # 最大 maxTry 回あてはめを繰り返す
-            # cps,func,err = abez.fit1(maxTry=maxTry if Ncurrent < Nto else 2*maxTry,withErr=True,tpara=ts)
             if mode == 0:
                 cps, func, err = abez.fit1(
                     maxTry=preTry if Ncurrent < Nfrom else maxTry, withErr=True, tpara=ts, pat=pat, err_th=err_th, threstune=threstune)
