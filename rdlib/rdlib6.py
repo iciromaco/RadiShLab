@@ -1402,7 +1402,7 @@ class BezierCurve:
                         meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
                         meanerror = tf.add(meanerrx, meanerry)
 
-                        metaloss = 0.0
+                        loss2 = loss3 = metaloss = 0.0
                         # 等間隔制約
                         if BezierCurve.eq_coe > 0:
                             ts2 = self.assignPara2Samples(prefunc=func)
