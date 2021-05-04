@@ -1087,10 +1087,13 @@ class BezierCurve:
         # ts 標本点に対するパラメータ割り当て
         samples = self.samples  # 標本点
         x, y = samples[:, 0], samples[:, 1]  # 標本点のｘ座標列とｙ座標列
-        # t 標本点に結びつるパラメータは引数として与えられているならそれを、さもなくばリニアに設定
-        if prefunc == None:
-            prefunc = self.prefunc
-        ts = self.assignPara2Samples(prefunc=prefunc) if len(tpara) == 0 else tpara
+        # t 標本点に結びつけるパラメータは引数として与えられているならそれを、さもなくばリニアに設定
+        if len(tpara) > 0: # パラメータが与えられているならそれを使う
+            ts = tpara
+        elif prefunc != None: # 関数が与えられているなら、それをもとに等間隔になるよう初期パラメータ設定
+            ts = self.assignPara2Samples(prefunc=prefunc) 
+        else: # さもなくば、self.prefunc で等間隔か [0,1] を等間隔
+            ts = self.assignPara2Samples(prefunc=None) 
         N = self.N  # ベジエの次数
         M = len(samples)  # サンプル数
         # バーンスタイン関数の定義
@@ -1314,7 +1317,7 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # fit1 の tensorflowによる実装
-    def fit1T(self, mode=1, maxTry=0, withErr=False, tpara=[], lr=0.005,  pat=10, err_th=0.75, threstune=1.00):
+    def fit1T(self, mode=1, maxTry=0, withErr=False, prefunc=None,tpara=[], lr=0.005,  pat=10, err_th=0.75, threstune=1.00):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか
         # tpara  fit0() にわたす初期パラメータ値
@@ -1322,6 +1325,7 @@ class BezierCurve:
         # mode 1: パラメータの最適化は tensorflow で、制御点はパラメータを固定して未定係数法で解く
         # fit1T では priority=distance のみ考え、span は考慮しない
         # lr 0.03 Adam オプティマイザーの学習係数
+        # prefunc tpara を求める基準となる関数式がある場合は指定
         # pat 10 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
         # err_th 0.75  エラーの収束条件
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
@@ -1341,9 +1345,10 @@ class BezierCurve:
         rmcounter = 0  # エラー増加回数のカウンター
         priority = BezierCurve.AsymptoticPriority
 
-        # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる
-        prebez = BezierCurve(N=2*self.N,samples=self.samples)
-        precps, prefunc = prebez.fit0(prefunc = self.prefunc, tpara=tpara)
+        # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる ただし、24乗あたりが solver 限界なので max 20としておく
+        doubleN = 2*self.N if N < 10 else 20
+        prebez = BezierCurve(N=doubleN,samples=self.samples)
+        precps, prefunc = prebez.fit0(prefunc=prefunc, tpara=tpara)
         # 仮近似曲線をほぼ等距離に区切るようなパラメータを求める
         # 改めて fit0 でN次近似した関数を初期近似とする
         cps, func = self.fit0(prefunc = prefunc, tpara=[])  # レベル０フィッティングを実行
@@ -1402,7 +1407,7 @@ class BezierCurve:
                         meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
                         meanerror = tf.add(meanerrx, meanerry)
 
-                        loss2 = loss3 = metaloss = 0.0
+                        loss2 = loss3 = 0.0
                         # 等間隔制約
                         if BezierCurve.eq_coe > 0:
                             ts2 = self.assignPara2Samples(prefunc=func)
@@ -1423,21 +1428,19 @@ class BezierCurve:
                     dbezfx = t1.gradient(bezfx,[tts])
                     dbezfy = t1.gradient(bezfy,[tts])
                 # ２回微分
-                if BezierCurve.smoothness_coe > 0:
-                    ddbezfx = t2.gradient(dbezfx,[tts])
-                    ddbezfy = t2.gradient(dbezfy,[tts])  
-                    ddbezfx = [[0 if tf.math.is_nan(x) else x for x in ddbezfx[0]]]
-                    ddbezfy = [[0 if tf.math.is_nan(y) else y for y in ddbezfy[0]]]
-                    # 滑らかさの制約 metaloss                  
-                    metaloss = tf.reduce_mean(tf.add(tf.square(ddbezfx),tf.square(ddbezfy)))
+                ddbezfx = t2.gradient(dbezfx,[tts])
+                ddbezfy = t2.gradient(dbezfy,[tts])  
+                ddbezfx = [[0 if tf.math.is_nan(x) else x for x in ddbezfx[0]]]
+                ddbezfy = [[0 if tf.math.is_nan(y) else y for y in ddbezfy[0]]]
+                # 滑らかさの制約 metaloss                  
+                metaloss = tf.reduce_mean(tf.add(tf.square(ddbezfx),tf.square(ddbezfy)))
                 # global loss
                 gloss = tf.add(loss, BezierCurve.smoothness_coe*metaloss)
 
             # 関数更新
             if mode == 0:
                 gt = metatape.gradient(gloss, [tts, Px, Py])
-                if BezierCurve.smoothness_coe > 0:
-                    gt = [[0 if tf.math.is_nan(x) else x for x in gt[0]]]
+                gt = [[0 if tf.math.is_nan(x) else x for x in gt[0]]]
                 opt.apply_gradients(zip(gt, [tts, Px, Py]))
                 for i in range(1, N):
                     cps[i][0] = Px[i-1].numpy()
@@ -1445,8 +1448,7 @@ class BezierCurve:
                 func = self.setCPs(cps)
             elif mode == 1:
                 gt = metatape.gradient(gloss, [tts])
-                if BezierCurve.smoothness_coe > 0:
-                    gt = [[0 if tf.math.is_nan(x) else x for x in gt[0]]]
+                gt = [[0 if tf.math.is_nan(x) else x for x in gt[0]]]
                 opt.apply_gradients(zip(gt, [tts]))
                 cps, func = self.fit0(tpara=tts.numpy())
             self.ts = ts = tts.numpy() # ts を更新
