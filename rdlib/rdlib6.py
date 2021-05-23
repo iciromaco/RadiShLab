@@ -1392,8 +1392,10 @@ class BezierCurve:
             opt = tf.optimizers.Adam(learning_rate=lr,amsgrad=True)
             optP = tf.optimizers.Adam(learning_rate=lr*lrP,amsgrad=True)        
         elif optimizer_name == 'Adadelta':
-            opt = tf.optimizers.Adadelta(learning_rate=lr, rho=0.975)
-            optP = tf.optimizers.Adadelta(learning_rate=lr*lrP, rho=0.975)
+            # opt = tf.optimizers.Adadelta(learning_rate=lr, rho=0.975)
+            # optP = tf.optimizers.Adadelta(learning_rate=lr*lrP, rho=0.975)
+            opt = tf.optimizers.Adadelta(learning_rate=lr)
+            optP = tf.optimizers.Adadelta(learning_rate=lr*lrP)
         elif optimizer_name == 'Nadam':
             opt = tf.optimizers.Nadam(learning_rate=lr)
             optP = tf.optimizers.Nadam(learning_rate=lr*lrP)
@@ -1478,55 +1480,45 @@ class BezierCurve:
                 # ２次微分
                     d2_bezfx = t2.gradient(d1_bezfx,tts) # 両端は計算から外す
                     d2_bezfy = t2.gradient(d1_bezfy,tts)     
-                    # 両端などで微分不可となり nan となるので、０を当てはめる gradient は２重リストであることに注意
-                    # d2_bezfx=tf.concat([[tfZERO],d2_bezfx[1:-1],[tfZERO]],axis=0)
-                    # d2_bezfy=tf.concat([[tfZERO],d2_bezfy[1:-1],[tfZERO]],axis=0)
                     sloss = tf.reduce_mean(tf.sqrt(tf.add(tf.square(d2_bezfx),tf.square(d2_bezfy))))
                 gloss = meanerror + BezierCurve.swing_penalty*tloss + BezierCurve.smoothness_coe*sloss
 
             # ts を誤差逆伝搬で更新
-            gtTS = np.array(metatape.gradient(meanerror, tts)) # エラーに対する tts 勾配   
-            if BezierCurve.swing_penalty > 0:
-                swgtTS = np.array(metatape.gradient(tloss, tts))
-                # swgtTS = tf.concat([[tfZERO],swgtTS[1:-1],[tfZERO]],axis=0) # ２次微分するため、端は計算できない
-                gtTS = gtTS + BezierCurve.swing_penalty*swgtTS
-            if BezierCurve.smoothness_coe > 0:
-                smgtTS = np.array(metatape.gradient(sloss, tts))
-                # smgtTS = tf.concat([[tfZERO],smgtTS[1:-1],[tfZERO]],axis=0) # ２次微分するため、端は計算できない
-                gtTS = gtTS + BezierCurve.smoothness_coe*smgtTS
-            # gtTS = tf.concat([[tfZERO],gtTS[1:-1],[tfZERO]],axis=0) # エラーに対する tts 勾配   
+            # gtTS = np.array(metatape.gradient(meanerror, tts)) # エラーに対する tts 勾配   
+            #if BezierCurve.swing_penalty > 0:
+            #    swgtTS = np.array(metatape.gradient(tloss, tts))
+            #    gtTS = gtTS + BezierCurve.swing_penalty*swgtTS
+            #if BezierCurve.smoothness_coe > 0:
+            #    smgtTS = np.array(metatape.gradient(sloss, tts))
+            #    gtTS = gtTS + BezierCurve.smoothness_coe*smgtTS
             # opt.apply_gradients([(gtTS,tts)])
             opt.minimize(gloss, tape=metatape, var_list=tts)
             # ts を更新
             ts[1:-1] = tts.numpy() 
             # check order and reorder 順序関係がおかしい場合強制的に変更       
+            ec, tsmin, tsmax = 0,0.0,1.0
             for i in range(1,len(ts)-1):
                 if ts[i] <= ts[i-1]:
-                  print("e",end="")
+                  ec += 1
                   ts[i] = ts[i-1] + 1e-6
-            if ts[-1] <= ts[-2]:
-                print("e",end="")
-                ts[-2]=ts[-1]-1e-6
-            if max(ts) > 1.0:
-                print("o",end="")
-                if ts[i] > 1.0:
-                  ts[1:-1] = ts[1:-1]/(max(ts)+1e-6)
-
+                if ts[i] >= 1.0-(len(ts)-i-2)*(1e-6):
+                  ec += 1
+                  ts[i] = min(1.0-(len(ts)-i-2)*(1e-6), ts[i+1]) - 1e-6
+            if ec > 0:
+                print("e%d" % (ec),end="")
             # tts を更新
             self.ts = ts
             tts.assign(ts[1:-1])
 
             # 制御点の最適化
             if mode == 0 : # mode 0 の場合は誤差逆伝播で更新
-                gtPxy = np.array(metatape.gradient(meanerror, [Px, Py])) # エラーに対する PxPy 勾配                
-                if BezierCurve.swing_penalty > 0:
-                    swgtPxy = np.array(metatape.gradient(tloss, [Px, Py])) # SwingPenaltyに対するPxPy 勾配
-                    gtPxy = gtPxy + BezierCurve.swing_penalty*swgtPxy
-                if BezierCurve.smoothness_coe > 0:
-                    smgtPxy = np.array(metatape.gradient(sloss, [Px, Py])) # Smoothnessに対する勾配
-                    #smgtPxy[0] = tf.concat([[tfZERO],smgtPxy[0][1:-1],[tfZERO]],axis=0) # ２次微分するため、端は計算できない
-                    #smgtPxy[1] = tf.concat([[tfZERO],smgtPxy[1][1:-1],[tfZERO]],axis=0) # 
-                    gtPxy = gtPxy + BezierCurve.smoothness_coe*smgtPxy
+                # gtPxy = np.array(metatape.gradient(meanerror, [Px, Py])) # エラーに対する PxPy 勾配                
+                #if BezierCurve.swing_penalty > 0:
+                #    swgtPxy = np.array(metatape.gradient(tloss, [Px, Py])) # SwingPenaltyに対するPxPy 勾配
+                #    gtPxy = gtPxy + BezierCurve.swing_penalty*swgtPxy
+                #if BezierCurve.smoothness_coe > 0:
+                #    smgtPxy = np.array(metatape.gradient(sloss, [Px, Py])) # Smoothnessに対する勾配
+                #    gtPxy = gtPxy + BezierCurve.smoothness_coe*smgtPxy
                 # optP.apply_gradients(zip(gtPxy, [Px, Py]))
                 optP.minimize(gloss, tape=metatape, var_list=[Px, Py])
 
