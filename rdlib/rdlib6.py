@@ -156,20 +156,20 @@ def makethumbnail(path, savedir='.', imgexts=['jpg', 'jpge', 'png']):
 # プロット用関数
 
 
-def plotimg(img, layout="111"):
+def plotimg(img, layout=111):
     if img.ndim == 2:
         pltgry(img, layout)
     elif img.ndim == 3:
         pltcol(img, layout)
 
 
-def pltgry(img, layout="111"):
+def pltgry(img, layout=111):
     plt.subplot(layout)
     plt.axis('off')
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_GRAY2RGB))
 
 
-def pltcol(img, layout="111"):
+def pltcol(img, layout=111):
     plt.subplot(layout)
     plt.axis('off')
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
@@ -1420,7 +1420,8 @@ class BezierCurve:
         tfONE = tf.constant(1.0,dtype=tf.float32)
 
         while True:
-            for loopc in range(3):
+            olderror = self.f_meanerr(fx, fy, ts=ts) 
+            for loopc in range(BezierCurve.mloop_itt):
                 # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
                 # 関数化したかったが、tape をつかっているせいなのか、エラーがでてできなかった
                 with tf.GradientTape(persistent=True) as metatape:
@@ -1507,7 +1508,7 @@ class BezierCurve:
 
             if mode == 0:
                 # 上で求めたベジエパラメータに対し制御点を最適化
-                for loopc in range(3):
+                for loopc in range(BezierCurve.mloop_itt):
                     with tf.GradientTape(persistent=True) as metatape:
                         with tf.GradientTape(persistent=True) as t2:
                             with tf.GradientTape(persistent=True) as t1:
@@ -1569,11 +1570,10 @@ class BezierCurve:
 
                     optP.minimize(gloss, tape=metatape, var_list=[Px, Py])
 
-                for i in range(1, N):
-                    cps[i][0] = Px[i-1].numpy()
-                    cps[i][1] = Py[i-1].numpy() 
-                func = self.setCPs(cps)
-                
+                    for i in range(1, N):
+                        cps[i][0] = Px[i-1].numpy()
+                        cps[i][1] = Py[i-1].numpy() 
+                    func = self.setCPs(cps)
             elif mode == 1:
                 cps, func = self.fit0(tpara=ts)
 
@@ -1771,6 +1771,7 @@ def drawBez(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], 
              resolution=resolution, n_ladder=n_ladder, ct=ct, bzlabel=bzlabel, linestyle=linestyle)
 
 # (29)-2 # 重ね書き用
+
 
 
 def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], cpr=[], cpc=[],
