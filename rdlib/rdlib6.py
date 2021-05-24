@@ -982,6 +982,7 @@ class BezierCurve:
     convg_coe = 1e-5 # 5.0e-8  # 収束の見切り　　１回あたりの誤差減少が少なすぎる時の打ち切り条件を決める値 3e-8〜8e-8 が最適
     swing_penalty = 0 # 2.5e-8 # 接戦の傾きを標本間の傾きに合わせるための重み
     smoothness_coe = 0 # 1.0e-8 # 標本間距離をなるべく短くするための重み 3e-9〜3e-8
+    mloop_itt = 3 # fitT mode 0 の繰り返しループにおける、minimize() の繰り返し回数。
     debugmode = False
     AsymptoticPriority = 'distance'  # パラメータ更新法
     wandb = False
@@ -1419,113 +1420,160 @@ class BezierCurve:
         tfONE = tf.constant(1.0,dtype=tf.float32)
 
         while True:
-            # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
-            with tf.GradientTape(persistent=True) as metatape:
-                with tf.GradientTape(persistent=True) as t2:
-                    with tf.GradientTape(persistent=True) as t1:
-                        vs = tfONE-tts
-                        # tts**0 と (1-tts)**0 を含めると微係数が nan となるのでループから外している
-                        bezfx = vs**N*cps[0][0]
-                        bezfy = vs**N*cps[0][1]
-                        for i in range(1, N):
-                            if mode == 0:
-                                bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*Px[i-1]
-                                bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*Py[i-1]
-                            elif mode == 1:
-                                bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*cps[i][0]
-                                bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*cps[i][1]
-                        bezfx = bezfx + tts**N*cps[N][0]
-                        bezfy = bezfy + tts**N*cps[N][1]
+            for loopc in range(3):
+                # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
+                # 関数化したかったが、tape をつかっているせいなのか、エラーがでてできなかった
+                with tf.GradientTape(persistent=True) as metatape:
+                    with tf.GradientTape(persistent=True) as t2:
+                        with tf.GradientTape(persistent=True) as t1:
+                            vs = tfONE-tts
+                            # tts**0 と (1-tts)**0 を含めると微係数が nan となるのでループから外している
+                            bezfx = vs**N*cps[0][0]
+                            bezfy = vs**N*cps[0][1]
+                            for i in range(1, N):
+                                if mode == 0:
+                                    bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*Px[i-1]
+                                    bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*Py[i-1]
+                                elif mode == 1:
+                                    bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*cps[i][0]
+                                    bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*cps[i][1]
+                            bezfx = bezfx + tts**N*cps[N][0]
+                            bezfy = bezfy + tts**N*cps[N][1]
 
-                        meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
-                        meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
-                        meanerror = tf.add(meanerrx, meanerry)
-                    
-                    # 1次微分
-                    # smoothness_coe 高波長の発生を抑える
-                    if BezierCurve.smoothness_coe > 0 or BezierCurve.swing_penalty > 0:
-                        d1_bezfx = t1.gradient(bezfx,tts)
-                        d1_bezfy = t1.gradient(bezfy,tts)                                             
-                    # swing_penalty 接線方向と標本点を結ぶ方向とのずれが大きいとペナルティを科す
-                    if BezierCurve.swing_penalty > 0:
-                        # 接線方向の単位ベクトルのテンソル
-                        norml = tf.sqrt(tf.add(tf.square(d1_bezfx),tf.square(d1_bezfy))) # 接線ベクトルのノルムのテンソル
-                        nd1_bezfx = tf.math.divide_no_nan(d1_bezfx,norml)
-                        nd1_bezfy = tf.math.divide_no_nan(d1_bezfy,norml)
-                        (dnvec0x,dnvec0y) = tf.concat([[nd1_bezfx],[nd1_bezfy]],axis=0) # 接線ベクトルの単位ベクトル
-                        # 標本点間を結ぶベクトルの単位ベクトルを求める
-                        svecx = tf.concat([[bezfx[1]-sps[0][0]],bezfx[2:]-bezfx[:-2],[sps[-1][0]-bezfx[-2]]],axis=0) # サンプル点を挟むサンプル点を結ぶベクトルｘ
-                        svecy = tf.concat([[bezfy[1]-sps[0][1]],bezfy[2:]-bezfy[:-2],[sps[-1][1]-bezfy[-2]]],axis=0) # 同ｙ
-                        snorml = tf.sqrt(tf.add(tf.square(svecx),tf.square(svecy)))
-                        nsvecx = tf.math.divide_no_nan(svecx,snorml)
-                        nsvecy = tf.math.divide_no_nan(svecy,snorml)
-                        (snvecx,snvecy) = tf.concat([[nsvecx],[nsvecy]],axis=0) # 標本点間ベクトルの単位ベクトル
-                        # dnvec と snvec の一致度  1-内積の平均値をペナルティ0とする
-                        tloss0 = tf.reduce_mean(tfONE-tf.add(dnvec0x*snvecx,dnvec0y*snvecy))
-                        # 両端だけ追加でペナルティを加える
-                        # パラメータの指す端点と2番目の点を結ぶ単位ベクトル
-                        nvec1 = tf.concat([[bezfx[0]-sps[0][0]],[bezfy[0]-sps[0][1]]],axis=0)
-                        (nvec1x,nvec1y) = tf.math.divide_no_nan(nvec1,tf.sqrt(tf.reduce_sum(tf.square(nvec1))))
-                        nvec2 = tf.concat([[sps[-1][0]-bezfx[-1]],[sps[-1][1]-bezfy[-1]]],axis=0)
-                        (nvec2x,nvec2y) = tf.math.divide_no_nan(nvec2,tf.sqrt(tf.reduce_sum(tf.square(nvec2))))
-                        # 導関数から両端点における接線方向の単位ベクトルを計算
-                        (dnvec1x,dnvec1y) = tf.concat([[nd1_bezfx[0]],[nd1_bezfy[0]]],axis=0)
-                        (dnvec2x,dnvec2y) = tf.concat([[nd1_bezfx[-1]],[nd1_bezfy[-1]]],axis=0)
-                        tloss1 = tfONE-(dnvec1x*nvec1x+dnvec1y*nvec1y)
-                        tloss2 = tfONE-(dnvec2x*nvec2x+dnvec2y*nvec2y)
-                        tloss = tf.add(tloss0,(tloss1+tloss2)/(len(ts)-2)) # 
+                            meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
+                            meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
+                            meanerror = tf.add(meanerrx, meanerry)
+                        
+                        # 1次微分
+                        # smoothness_coe 高波長の発生を抑える
+                        if BezierCurve.smoothness_coe > 0 or BezierCurve.swing_penalty > 0:
+                            d1_bezfx = t1.gradient(bezfx,tts)
+                            d1_bezfy = t1.gradient(bezfy,tts)                                             
+                        # swing_penalty 接線方向と標本点を結ぶ方向とのずれが大きいとペナルティを科す
+                        if BezierCurve.swing_penalty > 0:
+                            # 接線方向の単位ベクトルのテンソル
+                            norml = tf.sqrt(tf.add(tf.square(d1_bezfx),tf.square(d1_bezfy))) # 接線ベクトルのノルムのテンソル
+                            nd1_bezfx = tf.math.divide_no_nan(d1_bezfx,norml)
+                            nd1_bezfy = tf.math.divide_no_nan(d1_bezfy,norml)
+                            (dnvec0x,dnvec0y) = tf.concat([[nd1_bezfx],[nd1_bezfy]],axis=0) # 接線ベクトルの単位ベクトル
+                            # 標本点間を結ぶベクトルの単位ベクトルを求める
+                            svecx = tf.concat([[bezfx[1]-sps[0][0]],bezfx[2:]-bezfx[:-2],[sps[-1][0]-bezfx[-2]]],axis=0) # サンプル点を挟むサンプル点を結ぶベクトルｘ
+                            svecy = tf.concat([[bezfy[1]-sps[0][1]],bezfy[2:]-bezfy[:-2],[sps[-1][1]-bezfy[-2]]],axis=0) # 同ｙ
+                            snorml = tf.sqrt(tf.add(tf.square(svecx),tf.square(svecy)))
+                            nsvecx = tf.math.divide_no_nan(svecx,snorml)
+                            nsvecy = tf.math.divide_no_nan(svecy,snorml)
+                            (snvecx,snvecy) = tf.concat([[nsvecx],[nsvecy]],axis=0) # 標本点間ベクトルの単位ベクトル
+                            # dnvec と snvec の一致度  1-内積の平均値をペナルティ0とする
+                            tloss0 = tf.reduce_mean(tfONE-tf.add(dnvec0x*snvecx,dnvec0y*snvecy))
+                            # 両端だけ追加でペナルティを加える
+                            # パラメータの指す端点と2番目の点を結ぶ単位ベクトル
+                            nvec1 = tf.concat([[bezfx[0]-sps[0][0]],[bezfy[0]-sps[0][1]]],axis=0)
+                            (nvec1x,nvec1y) = tf.math.divide_no_nan(nvec1,tf.sqrt(tf.reduce_sum(tf.square(nvec1))))
+                            nvec2 = tf.concat([[sps[-1][0]-bezfx[-1]],[sps[-1][1]-bezfy[-1]]],axis=0)
+                            (nvec2x,nvec2y) = tf.math.divide_no_nan(nvec2,tf.sqrt(tf.reduce_sum(tf.square(nvec2))))
+                            # 導関数から両端点における接線方向の単位ベクトルを計算
+                            (dnvec1x,dnvec1y) = tf.concat([[nd1_bezfx[0]],[nd1_bezfy[0]]],axis=0)
+                            (dnvec2x,dnvec2y) = tf.concat([[nd1_bezfx[-1]],[nd1_bezfy[-1]]],axis=0)
+                            tloss1 = tfONE-(dnvec1x*nvec1x+dnvec1y*nvec1y)
+                            tloss2 = tfONE-(dnvec2x*nvec2x+dnvec2y*nvec2y)
+                            tloss = tf.add(tloss0,(tloss1+tloss2)/(len(ts)-2)) # 
 
-                # 標本点間の滑らかさの制約として２次微分を０に近づける
-                if BezierCurve.smoothness_coe > 0:
-                # ２次微分
-                    d2_bezfx = t2.gradient(d1_bezfx,tts) # 両端は計算から外す
-                    d2_bezfy = t2.gradient(d1_bezfy,tts)     
-                    sloss = tf.reduce_mean(tf.sqrt(tf.add(tf.square(d2_bezfx),tf.square(d2_bezfy))))
-                gloss = meanerror + BezierCurve.swing_penalty*tloss + BezierCurve.smoothness_coe*sloss
+                    # 標本点間の滑らかさの制約として２次微分を０に近づける
+                    if BezierCurve.smoothness_coe > 0:
+                    # ２次微分
+                        d2_bezfx = t2.gradient(d1_bezfx,tts) # 両端は計算から外す
+                        d2_bezfy = t2.gradient(d1_bezfy,tts)     
+                        sloss = tf.reduce_mean(tf.sqrt(tf.add(tf.square(d2_bezfx),tf.square(d2_bezfy))))
+                    gloss = meanerror + BezierCurve.swing_penalty*tloss + BezierCurve.smoothness_coe*sloss
 
-            # ts を誤差逆伝搬で更新
-            # gtTS = np.array(metatape.gradient(meanerror, tts)) # エラーに対する tts 勾配   
-            #if BezierCurve.swing_penalty > 0:
-            #    swgtTS = np.array(metatape.gradient(tloss, tts))
-            #    gtTS = gtTS + BezierCurve.swing_penalty*swgtTS
-            #if BezierCurve.smoothness_coe > 0:
-            #    smgtTS = np.array(metatape.gradient(sloss, tts))
-            #    gtTS = gtTS + BezierCurve.smoothness_coe*smgtTS
-            # opt.apply_gradients([(gtTS,tts)])
-            opt.minimize(gloss, tape=metatape, var_list=tts)
-            # ts を更新
-            ts[1:-1] = tts.numpy() 
-            # check order and reorder 順序関係がおかしい場合強制的に変更       
-            ec, tsmin, tsmax = 0,0.0,1.0
-            for i in range(1,len(ts)-1):
-                if ts[i] <= ts[i-1]:
-                  ec += 1
-                  ts[i] = ts[i-1] + 1e-6
-                if ts[i] >= 1.0-(len(ts)-i-2)*(1e-6):
-                  ec += 1
-                  ts[i] = min(1.0-(len(ts)-i-2)*(1e-6), ts[i+1]) - 1e-6
-            if ec > 0:
-                print("e%d" % (ec),end="")
+                # ts を誤差逆伝搬で更新
+                opt.minimize(gloss, tape=metatape, var_list=tts)
+                # ts を更新
+                ts[1:-1] = tts.numpy() 
+                # check order and reorder 順序関係がおかしい場合強制的に変更       
+                ec = 0
+                for i in range(1,len(ts)-1):
+                    if ts[i] <= ts[i-1]:
+                        ec += 1
+                        ts[i] = ts[i-1] + 1e-6
+                    if ts[i] >= 1.0-(len(ts)-i-2)*(1e-6):
+                        ec += 1
+                        ts[i] = min(1.0-(len(ts)-i-2)*(1e-6), ts[i+1]) - 1e-6
+                if ec > 0:
+                    print("e%d" % (ec),end="")
             # tts を更新
             self.ts = ts
             tts.assign(ts[1:-1])
 
-            # 制御点の最適化
-            if mode == 0 : # mode 0 の場合は誤差逆伝播で更新
-                # gtPxy = np.array(metatape.gradient(meanerror, [Px, Py])) # エラーに対する PxPy 勾配                
-                #if BezierCurve.swing_penalty > 0:
-                #    swgtPxy = np.array(metatape.gradient(tloss, [Px, Py])) # SwingPenaltyに対するPxPy 勾配
-                #    gtPxy = gtPxy + BezierCurve.swing_penalty*swgtPxy
-                #if BezierCurve.smoothness_coe > 0:
-                #    smgtPxy = np.array(metatape.gradient(sloss, [Px, Py])) # Smoothnessに対する勾配
-                #    gtPxy = gtPxy + BezierCurve.smoothness_coe*smgtPxy
-                # optP.apply_gradients(zip(gtPxy, [Px, Py]))
-                optP.minimize(gloss, tape=metatape, var_list=[Px, Py])
+            if mode == 0:
+                # 上で求めたベジエパラメータに対し制御点を最適化
+                for loopc in range(3):
+                    with tf.GradientTape(persistent=True) as metatape:
+                        with tf.GradientTape(persistent=True) as t2:
+                            with tf.GradientTape(persistent=True) as t1:
+                                vs = tfONE-tts
+                                # tts**0 と (1-tts)**0 を含めると微係数が nan となるのでループから外している
+                                bezfx = vs**N*cps[0][0]
+                                bezfy = vs**N*cps[0][1]
+                                for i in range(1, N):
+                                    bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*Px[i-1]
+                                    bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*Py[i-1]
+                                bezfx = bezfx + tts**N*cps[N][0]
+                                bezfy = bezfy + tts**N*cps[N][1]
+
+                                meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
+                                meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
+                                meanerror = tf.add(meanerrx, meanerry)
+                            
+                            # 1次微分
+                            # smoothness_coe 高波長の発生を抑える
+                            if BezierCurve.smoothness_coe > 0 or BezierCurve.swing_penalty > 0:
+                                d1_bezfx = t1.gradient(bezfx,tts)
+                                d1_bezfy = t1.gradient(bezfy,tts)                                             
+                            # swing_penalty 接線方向と標本点を結ぶ方向とのずれが大きいとペナルティを科す
+                            if BezierCurve.swing_penalty > 0:
+                                # 接線方向の単位ベクトルのテンソル
+                                norml = tf.sqrt(tf.add(tf.square(d1_bezfx),tf.square(d1_bezfy))) # 接線ベクトルのノルムのテンソル
+                                nd1_bezfx = tf.math.divide_no_nan(d1_bezfx,norml)
+                                nd1_bezfy = tf.math.divide_no_nan(d1_bezfy,norml)
+                                (dnvec0x,dnvec0y) = tf.concat([[nd1_bezfx],[nd1_bezfy]],axis=0) # 接線ベクトルの単位ベクトル
+                                # 標本点間を結ぶベクトルの単位ベクトルを求める
+                                svecx = tf.concat([[bezfx[1]-sps[0][0]],bezfx[2:]-bezfx[:-2],[sps[-1][0]-bezfx[-2]]],axis=0) # サンプル点を挟むサンプル点を結ぶベクトルｘ
+                                svecy = tf.concat([[bezfy[1]-sps[0][1]],bezfy[2:]-bezfy[:-2],[sps[-1][1]-bezfy[-2]]],axis=0) # 同ｙ
+                                snorml = tf.sqrt(tf.add(tf.square(svecx),tf.square(svecy)))
+                                nsvecx = tf.math.divide_no_nan(svecx,snorml)
+                                nsvecy = tf.math.divide_no_nan(svecy,snorml)
+                                (snvecx,snvecy) = tf.concat([[nsvecx],[nsvecy]],axis=0) # 標本点間ベクトルの単位ベクトル
+                                # dnvec と snvec の一致度  1-内積の平均値をペナルティ0とする
+                                tloss0 = tf.reduce_mean(tfONE-tf.add(dnvec0x*snvecx,dnvec0y*snvecy))
+                                # 両端だけ追加でペナルティを加える
+                                # パラメータの指す端点と2番目の点を結ぶ単位ベクトル
+                                nvec1 = tf.concat([[bezfx[0]-sps[0][0]],[bezfy[0]-sps[0][1]]],axis=0)
+                                (nvec1x,nvec1y) = tf.math.divide_no_nan(nvec1,tf.sqrt(tf.reduce_sum(tf.square(nvec1))))
+                                nvec2 = tf.concat([[sps[-1][0]-bezfx[-1]],[sps[-1][1]-bezfy[-1]]],axis=0)
+                                (nvec2x,nvec2y) = tf.math.divide_no_nan(nvec2,tf.sqrt(tf.reduce_sum(tf.square(nvec2))))
+                                # 導関数から両端点における接線方向の単位ベクトルを計算
+                                (dnvec1x,dnvec1y) = tf.concat([[nd1_bezfx[0]],[nd1_bezfy[0]]],axis=0)
+                                (dnvec2x,dnvec2y) = tf.concat([[nd1_bezfx[-1]],[nd1_bezfy[-1]]],axis=0)
+                                tloss1 = tfONE-(dnvec1x*nvec1x+dnvec1y*nvec1y)
+                                tloss2 = tfONE-(dnvec2x*nvec2x+dnvec2y*nvec2y)
+                                tloss = tf.add(tloss0,(tloss1+tloss2)/(len(ts)-2)) # 
+
+                        # 標本点間の滑らかさの制約として２次微分を０に近づける
+                        if BezierCurve.smoothness_coe > 0:
+                        # ２次微分
+                            d2_bezfx = t2.gradient(d1_bezfx,tts) # 両端は計算から外す
+                            d2_bezfy = t2.gradient(d1_bezfy,tts)     
+                            sloss = tf.reduce_mean(tf.sqrt(tf.add(tf.square(d2_bezfx),tf.square(d2_bezfy))))
+                        gloss = meanerror + BezierCurve.swing_penalty*tloss + BezierCurve.smoothness_coe*sloss
+
+                    optP.minimize(gloss, tape=metatape, var_list=[Px, Py])
 
                 for i in range(1, N):
                     cps[i][0] = Px[i-1].numpy()
                     cps[i][1] = Py[i-1].numpy() 
                 func = self.setCPs(cps)
+                
             elif mode == 1:
                 cps, func = self.fit0(tpara=ts)
 
@@ -1762,13 +1810,11 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             t, bezXl, "numpy"), lambdify(t, bezYl, "numpy")
         plotx = [nbezXl(tp) for tp in tplins50]
         ploty = [nbezYl(tp) for tp in tplins50]
-        plt.plot(plotx, ploty, color=n2c(
-            ct[0]), label=bzlabel, linestyle=linestyle)  # red
+        plt.plot(plotx, ploty, color=ct[0], label=bzlabel, linestyle=linestyle)  # red
     if len(cntL) > 0:
-        plt.scatter(cntL[:, 0], cntL[:, 1], color=n2c(
-            ct[3]), marker='.')  # サンプル点 blue
+        plt.scatter(cntL[:, 0], cntL[:, 1], color=ct[3], marker='.')  # サンプル点 blue
     if len(cpl) > 0:  # 制御点
-        plt.scatter(cpxl, cpyl, color=n2c(ct[6]), marker='*')  # 制御点の描画 purple
+        plt.scatter(cpxl, cpyl, color=ct[6], marker='*')  # 制御点の描画 purple
         for i in range(len(cpxl)):
             plt.annotate(str(i), (cpxl[i], cpyl[i]))
     # 右輪郭の描画
@@ -1779,12 +1825,11 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             t, bezXr, "numpy"), lambdify(t, bezYr, "numpy")
         plotx = [nbezXr(tp) for tp in tplins50]
         ploty = [nbezYr(tp) for tp in tplins50]
-        plt.plot(plotx, ploty, color=n2c(ct[1]), linestyle=linestyle)  # red
+        plt.plot(plotx, ploty, color=ct[1], linestyle=linestyle)  # red
     if len(cntR) > 0:
-        plt.scatter(cntR[:, 0], cntR[:, 1], color=n2c(
-            ct[4]), marker='.')  # サンプル点 blue
+        plt.scatter(cntR[:, 0], cntR[:, 1], color=ct[4], marker='.')  # サンプル点 blue
     if len(cpr) > 0:
-        plt.scatter(cpxr, cpyr, color=n2c(ct[7]), marker='*')  # 制御点の描画 red
+        plt.scatter(cpxr, cpyr, color=ct[7], marker='*')  # 制御点の描画 red
         for i in range(len(cpxr)):
             plt.annotate(str(i), (cpxr[i], cpyr[i]))
     # 中心軸の描画
@@ -1795,13 +1840,11 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             t, bezXc, "numpy"), lambdify(t, bezYc, "numpy")
         plotx = [nbezXc(tp) for tp in tplins50]
         ploty = [nbezYc(tp) for tp in tplins50]
-        plt.plot(plotx, ploty, color=n2c(ct[2]), linestyle=linestyle)  # red
+        plt.plot(plotx, ploty, color=ct[2], linestyle=linestyle)  # red
         if len(cntC) > 0:
-            plt.scatter(cntC[:, 0], cntC[:, 1], color=n2c(
-                ct[5]), marker='.')  # サンプル点 blue
+            plt.scatter(cntC[:, 0], cntC[:, 1], color=ct[5], marker='.')  # サンプル点 blue
         if len(cpc) > 0:
-            plt.scatter(cpxc, cpyc, color=n2c(
-                ct[8]), marker='*')  # 制御点の描画 rikyugreen
+            plt.scatter(cpxc, cpyc, color=ct[8], marker='*')  # 制御点の描画 rikyugreen
             for i in range(len(cpxc)):
                 plt.annotate(str(i), (cpxc[i], cpyc[i]))
 
@@ -1812,7 +1855,7 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             plotSPrx = [nbezXr(tp) for tp in tplinsSP]
             plotSPry = [nbezYr(tp) for tp in tplinsSP]
             for x0, x1, y0, y1 in zip(plotSPlx, plotSPrx, plotSPly, plotSPry):
-                plt.plot([x0, x1], [y0, y1], color=n2c(ct[9]))  # orange
+                plt.plot([x0, x1], [y0, y1], color=ct[9])  # orange
 
         elif ladder == 'normal':
             # 中心軸上に設定したサンプル点における法線と両輪郭の交点のリストを求める。
@@ -1824,10 +1867,10 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             plot20ry = PosR[:, 1]
             for x0, x1, y0, y1 in zip(plot20lx, plot20cx, plot20ly, plot20cy):
                 if x0 != np.inf and y0 != np.inf:
-                    plt.plot([x0, x1], [y0, y1], color=n2c(ct[9]))  # orange
+                    plt.plot([x0, x1], [y0, y1], color=ct[9])  # orange
             for x0, x1, y0, y1 in zip(plot20rx, plot20cx, plot20ry, plot20cy):
                 if x0 != np.inf and y0 != np.inf:
-                    plt.plot([x0, x1], [y0, y1], color=n2c(ct[9]))  # orange
+                    plt.plot([x0, x1], [y0, y1], color=ct[9])  # orange
     if saveImage:
         pltsaveimage(savepath, 'Bez')
 

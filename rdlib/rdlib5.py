@@ -1736,13 +1736,11 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             t, bezXl, "numpy"), lambdify(t, bezYl, "numpy")
         plotx = [nbezXl(tp) for tp in tplins50]
         ploty = [nbezYl(tp) for tp in tplins50]
-        plt.plot(plotx, ploty, color=n2c(
-            ct[0]), label=bzlabel, linestyle=linestyle)  # red
+        plt.plot(plotx, ploty, color=ct[0], label=bzlabel, linestyle=linestyle)  # red
     if len(cntL) > 0:
-        plt.scatter(cntL[:, 0], cntL[:, 1], color=n2c(
-            ct[3]), marker='.')  # サンプル点 blue
+        plt.scatter(cntL[:, 0], cntL[:, 1], color=ct[3], marker='.')  # サンプル点 blue
     if len(cpl) > 0:  # 制御点
-        plt.scatter(cpxl, cpyl, color=n2c(ct[6]), marker='*')  # 制御点の描画 purple
+        plt.scatter(cpxl, cpyl, color=ct[6], marker='*')  # 制御点の描画 purple
         for i in range(len(cpxl)):
             plt.annotate(str(i), (cpxl[i], cpyl[i]))
     # 右輪郭の描画
@@ -1753,12 +1751,11 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             t, bezXr, "numpy"), lambdify(t, bezYr, "numpy")
         plotx = [nbezXr(tp) for tp in tplins50]
         ploty = [nbezYr(tp) for tp in tplins50]
-        plt.plot(plotx, ploty, color=n2c(ct[1]), linestyle=linestyle)  # red
+        plt.plot(plotx, ploty, color=ct[1], linestyle=linestyle)  # red
     if len(cntR) > 0:
-        plt.scatter(cntR[:, 0], cntR[:, 1], color=n2c(
-            ct[4]), marker='.')  # サンプル点 blue
+        plt.scatter(cntR[:, 0], cntR[:, 1], color=ct[4], marker='.')  # サンプル点 blue
     if len(cpr) > 0:
-        plt.scatter(cpxr, cpyr, color=n2c(ct[7]), marker='*')  # 制御点の描画 red
+        plt.scatter(cpxr, cpyr, color=ct[7], marker='*')  # 制御点の描画 red
         for i in range(len(cpxr)):
             plt.annotate(str(i), (cpxr[i], cpyr[i]))
     # 中心軸の描画
@@ -1769,13 +1766,11 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             t, bezXc, "numpy"), lambdify(t, bezYc, "numpy")
         plotx = [nbezXc(tp) for tp in tplins50]
         ploty = [nbezYc(tp) for tp in tplins50]
-        plt.plot(plotx, ploty, color=n2c(ct[2]), linestyle=linestyle)  # red
+        plt.plot(plotx, ploty, color=ct[2], linestyle=linestyle)  # red
         if len(cntC) > 0:
-            plt.scatter(cntC[:, 0], cntC[:, 1], color=n2c(
-                ct[5]), marker='.')  # サンプル点 blue
+            plt.scatter(cntC[:, 0], cntC[:, 1], color=ct[5], marker='.')  # サンプル点 blue
         if len(cpc) > 0:
-            plt.scatter(cpxc, cpyc, color=n2c(
-                ct[8]), marker='*')  # 制御点の描画 rikyugreen
+            plt.scatter(cpxc, cpyc, color=ct[8], marker='*')  # 制御点の描画 rikyugreen
             for i in range(len(cpxc)):
                 plt.annotate(str(i), (cpxc[i], cpyc[i]))
 
@@ -1786,7 +1781,7 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             plotSPrx = [nbezXr(tp) for tp in tplinsSP]
             plotSPry = [nbezYr(tp) for tp in tplinsSP]
             for x0, x1, y0, y1 in zip(plotSPlx, plotSPrx, plotSPly, plotSPry):
-                plt.plot([x0, x1], [y0, y1], color=n2c(ct[9]))  # orange
+                plt.plot([x0, x1], [y0, y1], color=ct[9])  # orange
 
         elif ladder == 'normal':
             # 中心軸上に設定したサンプル点における法線と両輪郭の交点のリストを求める。
@@ -1798,10 +1793,10 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             plot20ry = PosR[:, 1]
             for x0, x1, y0, y1 in zip(plot20lx, plot20cx, plot20ly, plot20cy):
                 if x0 != np.inf and y0 != np.inf:
-                    plt.plot([x0, x1], [y0, y1], color=n2c(ct[9]))  # orange
+                    plt.plot([x0, x1], [y0, y1], color=ct[9])  # orange
             for x0, x1, y0, y1 in zip(plot20rx, plot20cx, plot20ry, plot20cy):
                 if x0 != np.inf and y0 != np.inf:
-                    plt.plot([x0, x1], [y0, y1], color=n2c(ct[9]))  # orange
+                    plt.plot([x0, x1], [y0, y1], color=ct[9])  # orange
     if saveImage:
         pltsaveimage(savepath, 'Bez')
 
