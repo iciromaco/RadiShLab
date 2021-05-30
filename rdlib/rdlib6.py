@@ -1317,18 +1317,25 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # fit1 の tensorflowによる実装
-    def fit1T(self, mode=1, maxTry=0, withErr=False, prefunc=None,tpara=[], optimizer_name='Adam',lr=0.005,  lrP=400, pat=10, err_th=0.75, threstune=1.00):
+    def fit1T(self, mode=1, maxTry=0, withErr=False, prefunc=None,tpara=[], optimizer_name='Adam',lr=0,  lrP=0, pat=10, err_th=0.75, threstune=1.00):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか
         # tpara  fit0() にわたす初期パラメータ値
         # mode 0: 制御点とパラメータを両方同時に tensorflow で最適化する
         # mode 1: パラメータの最適化は tensorflow で、制御点はパラメータを固定して未定係数法で解く
         # fit1T では priority=distance のみ考え、span は考慮しない
-        # lr 0.03 Adam オプティマイザーの学習係数
+        # lr オプティマイザーの学習係数（媒介変数 ts 用）
+        # lrP 制御点用オプティマイザーの学習係数の倍率 lr*lrP を制御点の学習係数とする。
         # prefunc tpara を求める基準となる関数式がある場合は指定
         # pat 10 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
         # err_th 0.75  エラーの収束条件
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
+        default_lrs={'Adam':[0.005,650],'AMSgrad':[0.005,650],'Adagrad':[0.02,250],
+                    'Adadelta':[0.013,3500],'Nadam':[0.001,500], 'Adamax':[0.0075,1000],
+                    'RMSprop':[0.0003,1300],'SGD':[5e-6,2e6],'Ftrl':[0.12,1000]}
+        
+        if lr == 0: lr = default_lrs[optimizer_name][0]
+        if lrP == 0: lr = default_lrs[optimizer_name][1]
 
         errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
         for i in range(3):
@@ -1386,35 +1393,35 @@ class BezierCurve:
                               for i in range(N-1)], dtype='float32')
 
         tts = tf.Variable(ts[1:-1]) 
-        if optimizer_name == 'Adam':
-            opt = tf.optimizers.Adam(learning_rate=lr)
-            optP = tf.optimizers.Adam(learning_rate=lr*lrP)
+        if optimizer_name == 'Adam': # 
+            opt = tf.optimizers.Adam(learning_rate=lr) # lr 0.005
+            optP = tf.optimizers.Adam(learning_rate=lr*lrP) # lrP 650
         elif optimizer_name == 'AMSgrad':
-            opt = tf.optimizers.Adam(learning_rate=lr,amsgrad=True)
-            optP = tf.optimizers.Adam(learning_rate=lr*lrP,amsgrad=True)        
+            opt = tf.optimizers.Adam(learning_rate=lr,amsgrad=True) # lr 0.005
+            optP = tf.optimizers.Adam(learning_rate=lr*lrP,amsgrad=True)  # lrP 650       
         elif optimizer_name == 'Adadelta':
             # opt = tf.optimizers.Adadelta(learning_rate=lr, rho=0.975)
             # optP = tf.optimizers.Adadelta(learning_rate=lr*lrP, rho=0.975)
-            opt = tf.optimizers.Adadelta(learning_rate=lr)
-            optP = tf.optimizers.Adadelta(learning_rate=lr*lrP)
+            opt = tf.optimizers.Adadelta(learning_rate=lr) # lr 0.013
+            optP = tf.optimizers.Adadelta(learning_rate=lr*lrP) # lrP 3500 
         elif optimizer_name == 'Nadam':
-            opt = tf.optimizers.Nadam(learning_rate=lr)
-            optP = tf.optimizers.Nadam(learning_rate=lr*lrP)
+            opt = tf.optimizers.Nadam(learning_rate=lr) # lr = 0.001
+            optP = tf.optimizers.Nadam(learning_rate=lr*lrP) # lrP 500 
         elif optimizer_name == 'Adamax':
-            opt = tf.optimizers.Adamax(learning_rate=lr)
-            optP = tf.optimizers.Adamax(learning_rate=lr*lrP)
+            opt = tf.optimizers.Adamax(learning_rate=lr) # lr 0.0075
+            optP = tf.optimizers.Adamax(learning_rate=lr*lrP) # lrP 1000
         elif optimizer_name == 'Adagrad':
-            opt = tf.optimizers.Adagrad(learning_rate=lr)
-            optP = tf.optimizers.Adagrad(learning_rate=lr*lrP)            
+            opt = tf.optimizers.Adagrad(learning_rate=lr) # lr 0.02
+            optP = tf.optimizers.Adagrad(learning_rate=lr*lrP) # lrP 250      
         elif optimizer_name == 'RMSprop':
-            opt = tf.optimizers.RMSprop(learning_rate=lr)
-            optP = tf.optimizers.RMSprop(learning_rate=lr*lrP)        
+            opt = tf.optimizers.RMSprop(learning_rate=lr) # lr =  0.0003
+            optP = tf.optimizers.RMSprop(learning_rate=lr*lrP) # lrP 1300        
         elif optimizer_name == 'SGD':
-            opt = tf.optimizers.SGD(learning_rate=lr)
-            optP = tf.optimizers.SGD(learning_rate=lr*lrP)   
+            opt = tf.optimizers.SGD(learning_rate=lr) # lr = 5e-6
+            optP = tf.optimizers.SGD(learning_rate=lr*lrP) # lrP = 2e6
         elif optimizer_name == 'Ftrl':
-            opt = tf.optimizers.Ftrl(learning_rate=lr)
-            optP = tf.optimizers.Ftrl(learning_rate=lr*lrP)  
+            opt = tf.optimizers.Ftrl(learning_rate=lr) # lr = 0.12
+            optP = tf.optimizers.Ftrl(learning_rate=lr*lrP) # lrP = 1000
 
         tloss = sloss = tloss1 = tloss2 = tfZERO = tf.constant(0.0,tf.float32)
         tfONE = tf.constant(1.0,dtype=tf.float32)
@@ -1570,10 +1577,10 @@ class BezierCurve:
 
                     optP.minimize(gloss, tape=metatape, var_list=[Px, Py])
 
-                    for i in range(1, N):
-                        cps[i][0] = Px[i-1].numpy()
-                        cps[i][1] = Py[i-1].numpy() 
-                    func = self.setCPs(cps)
+                for i in range(1, N):
+                    cps[i][0] = Px[i-1].numpy()
+                    cps[i][1] = Py[i-1].numpy() 
+                func = self.setCPs(cps)
             elif mode == 1:
                 cps, func = self.fit0(tpara=ts)
 
@@ -1751,7 +1758,7 @@ def n2c(name):
 def drawBez(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], cpr=[], cpc=[],
             cntL=[], cntR=[], cntC=[], ladder=None, PosL=[], PosR=[], PosC=[], saveImage=False, savepath="",
             resolution=128, n_ladder=20, ct=['red', 'red', 'red', 'blue', 'blue', 'blue', 'purple', 'red', 'rikyugreen', 'orange'],
-            figsize=(6, 6), dpi=100, layout="111", bzlabel="", linestyle='solid'):
+            figsize=(6, 6), dpi=100, layout=111, bzlabel="", linestyle='solid'):
 
     # rdimg 入力画像、stt,end 曲線の描画範囲、
     # bezL,bezR,bezC ベジエ曲線、cpl,cpr,cpc 制御点

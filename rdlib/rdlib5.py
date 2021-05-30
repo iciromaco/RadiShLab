@@ -157,20 +157,20 @@ def makethumbnail(path, savedir='.', imgexts=['jpg', 'jpge', 'png']):
 # プロット用関数
 
 
-def plotimg(img, layout="111"):
+def plotimg(img, layout=111):
     if img.ndim == 2:
         pltgry(img, layout)
     elif img.ndim == 3:
         pltcol(img, layout)
 
 
-def pltgry(img, layout="111"):
+def pltgry(img, layout=111):
     plt.subplot(layout)
     plt.axis('off')
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_GRAY2RGB))
 
 
-def pltcol(img, layout="111"):
+def pltcol(img, layout=111):
     plt.subplot(layout)
     plt.axis('off')
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
@@ -1677,7 +1677,7 @@ def n2c(name):
 def drawBez(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], cpr=[], cpc=[],
             cntL=[], cntR=[], cntC=[], ladder=None, PosL=[], PosR=[], PosC=[], saveImage=False, savepath="",
             resolution=128, n_ladder=20, ct=['red', 'red', 'red', 'blue', 'blue', 'blue', 'purple', 'red', 'rikyugreen', 'orange'],
-            figsize=(6, 6), dpi=100, layout="111", bzlabel="", linestyle='solid'):
+            figsize=(6, 6), dpi=100, layout=111, bzlabel="", linestyle='solid'):
 
     # rdimg 入力画像、stt,end 曲線の描画範囲、
     # bezL,bezR,bezC ベジエ曲線、cpl,cpr,cpc 制御点
