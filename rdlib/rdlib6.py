@@ -1333,12 +1333,12 @@ class BezierCurve:
         # err_th 0.75  エラーの収束条件
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
         # trial Optuna のインスタンス
-        default_lrs={'Adam':[0.005,650],'AMSgrad':[0.005,650],'Adagrad':[0.02,250],
+        default_lrs={'Adam':[0.0015,1140],'AMSgrad':[0.005,650],'Adagrad':[0.02,250],
                     'Adadelta':[0.013,3500],'Nadam':[0.001,500], 'Adamax':[0.0075,1000],
                     'RMSprop':[0.0003,1300],'SGD':[5e-6,2e6],'Ftrl':[0.12,1000]}
         
         if lr == 0: lr = default_lrs[optimizer_name][0]
-        if lrP == 0: lr = default_lrs[optimizer_name][1]
+        if lrP == 0: lrP = default_lrs[optimizer_name][1]
 
         errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
         for i in range(3):
@@ -1354,7 +1354,6 @@ class BezierCurve:
         lastgood = -1
         rmcounter = 0  # エラー増加回数のカウンター
         priority = BezierCurve.AsymptoticPriority
-        lrP = 400.0 if lrP <= 0 else lrP # 逆伝搬時の制御点変数の変化倍率
 
         # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる ただし、24乗あたりが solver 限界なので max 20としておく
         doubleN = 2*N if N < 10 else 20
@@ -1400,8 +1399,8 @@ class BezierCurve:
             opt = tf.optimizers.Adam(learning_rate=lr) # lr 0.005
             optP = tf.optimizers.Adam(learning_rate=lr*lrP) # lrP 650
         elif optimizer_name == 'AMSgrad':
-            opt = tf.optimizers.Adam(learning_rate=lr,amsgrad=True) # lr 0.005
-            optP = tf.optimizers.Adam(learning_rate=lr*lrP,amsgrad=True)  # lrP 650       
+            opt = tf.optimizers.Adam(learning_rate=lr,amsgrad=True) # lr 0.0015
+            optP = tf.optimizers.Adam(learning_rate=lr*lrP,amsgrad=True)  # lrP 1140       
         elif optimizer_name == 'Adadelta':
             # opt = tf.optimizers.Adadelta(learning_rate=lr, rho=0.975)
             # optP = tf.optimizers.Adadelta(learning_rate=lr*lrP, rho=0.975)
