@@ -1,4 +1,5 @@
-# rdlib6.py 安定版のつもり
+# rdlib7.py Nightly Version 5.31,2021
+
 import pickle
 from glob import glob
 import os
