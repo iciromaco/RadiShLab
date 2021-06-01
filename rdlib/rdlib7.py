@@ -1651,7 +1651,7 @@ class BezierCurve:
             # Optuna を使っている場合の打ち切り
             if trial:
                 trial.report(error,trynum)
-                if trial.should_prune():
+                if trial.should_prune() or error > 1e3:
                     print("Optuna による打ち切り")
                     raise optuna.TrialPruned()
             
