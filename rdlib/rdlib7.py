@@ -1346,9 +1346,6 @@ class BezierCurve:
         if lr == 0: lr = default_lrs[optimizer_name][0]
         if lrP == 0: lrP = default_lrs[optimizer_name][1]
 
-        errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
-        for i in range(3):
-          errq.append(np.inf)
         sps = self.samples
         x_data0 = [x for [x, y] in sps]
         y_data0 = [y for [x, y] in sps]

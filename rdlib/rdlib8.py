@@ -983,7 +983,7 @@ class BezierCurve:
     # xx errorThres = 0.01 # 繰り返しを打ち切る誤差変化量
     dCount = 3  # ２分探索の打ち切り回数 （3以上が望ましい）
     convg_coe = 1e-5 # 5.0e-8  # 収束の見切り　　１回あたりの誤差減少が少なすぎる時の打ち切り条件を決める値 3e-8〜8e-8 が最適
-    mloop_itt = 3 # fitT mode 0 の繰り返しループにおける、minimize() の繰り返し回数。
+    mloop_itt = 3 # fit1T mode 0 の繰り返しループにおける、minimize() の繰り返し回数。
     debugmode = False
     AsymptoticPriority = 'distance'  # パラメータ更新法
     wandb = False
@@ -1234,6 +1234,7 @@ class BezierCurve:
         # pat 10 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
         #
+
         sps = self.samples
 
         # #######################
@@ -1250,6 +1251,11 @@ class BezierCurve:
         ts = bestts = self.ts.copy()
 
         minerror = self.f_meanerr(fx, fy, ts=ts)  # 当てはめ誤差
+        errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
+        for i in range(2):
+          errq.append(np.inf)
+        errq.append(minerror)
+          
         if BezierCurve.debugmode:
             print("initial error:{:.5f}".format(minerror))
 
@@ -1267,11 +1273,15 @@ class BezierCurve:
 
             # あてはめ誤差を求める
             error = self.f_meanerr(fx, fy, ts=ts)
+            old3err = errq.popleft() # ３回前のエラーを取り出し
+            errq.append(error) # 最新エラーをバッファに挿入
+
             if BezierCurve.wandb:
                 BezierCurve.wandb.log({"loss": error})
             if error < minerror:
-                convg_coe = BezierCurve.convg_coe*100
-                convergenceflag = True if (minerror - error)/(trynum - lastgood) < convg_coe*(error-err_th) else False
+                convg_coe = BezierCurve.convg_coe
+                convergenceflag = (trynum - lastgood > 3 or trynum - lastgood == 1) and ((old3err - error)/3.0 < convg_coe*(error-err_th))
+                # convergenceflag = True if (minerror - error)/(trynum - lastgood) < convg_coe*(error-err_th) else False
                 lastgood = trynum
                 bestts = ts.copy()  # 今までで一番よかったパラメータセットを更新
                 bestfunc = func  # 今までで一番よかった関数式を更新
@@ -1289,8 +1299,10 @@ class BezierCurve:
                     trynum, error, minerror, rmcounter))
 
             rmcounter = 0 if error <= minerror else rmcounter + 1  # エラー増加回数のカウントアップ　減り続けているなら０
-            if convergenceflag or error < err_th*thresrate or rmcounter > pat:
+            # if convergenceflag or error < err_th*thresrate or rmcounter > pat:
+            if (convergenceflag and (trynum > 50)) or error < err_th*thresrate or ((trynum > 100) and rmcounter > pat):
                 # pat回続けてエラーが増加したらあきらめる デフォルトは10
+                #if (convergenceflag and (trynum > 50)):
                 if convergenceflag:
                   print('C')
                 elif error < err_th*thresrate :
@@ -1337,9 +1349,6 @@ class BezierCurve:
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
         # trial Optuna のインスタンス
 
-        errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
-        for i in range(3):
-          errq.append(np.inf)
         sps = self.samples
         x_data0 = [x for [x, y] in sps]
         y_data0 = [y for [x, y] in sps]
@@ -1487,7 +1496,7 @@ class BezierCurve:
             errq.append(error) # 最新エラーをバッファに挿入
             convg_coe = BezierCurve.convg_coe # if mode == 1 else BezierCurve.convg_coe/10.0 # 収束判定基準
             convergenceflag = (trynum - lastgood > 3 or trynum - lastgood == 1) and ((old3err - error)/3.0 < convg_coe*(error-err_th))
-
+            
             if BezierCurve.wandb:
                 BezierCurve.wandb.log({"loss":error})
             if error < minerror: 
