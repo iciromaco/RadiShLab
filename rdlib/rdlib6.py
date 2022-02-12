@@ -2,6 +2,7 @@
 import pickle
 from glob import glob
 import os
+# os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
 from PIL import Image
 import cv2
 import matplotlib.pyplot as plt
@@ -1785,8 +1786,7 @@ def drawBez(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], 
              cntL=cntL, cntR=cntR, cntC=cntC, ladder=ladder, PosL=PosL, PosR=PosR, PosC=PosC, saveImage=saveImage, savepath=savepath,
              resolution=resolution, n_ladder=n_ladder, ct=ct, bzlabel=bzlabel, linestyle=linestyle)
 
-# (29)-2 # 重ね書き用
-
+# (29)-2 # 重ね書き用
 
 
 def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], cpr=[], cpc=[],

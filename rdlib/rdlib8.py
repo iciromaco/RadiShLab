@@ -759,7 +759,7 @@ def findTips(img, con=[], top=0.1, bottom=0.8, topCD=0.5, bottomCD=0.5, mode=2):
             v1 = (p2[0]-p1[0], p2[1]-p1[1])  # p1p2 ベクトル
             p3 = ((p1[0]+p2[0])/2, (p1[1]+p2[1])/2)  # p3 = p1とp2の中点
             v2 = (p3[0]-p0[0], p3[1]-p0[1])  # p0p3 ベクトル
-            # v1 の複素表現  画像データは下がプラスなので虚成分を反転して考えないといけない
+            # v1 の複素表現  画像データは下がプラスなので虚成分を反転して考えないといけない
             pv1 = v1[0] - 1j*v1[1]
             pv2 = v2[0] - 1j*v2[1]  # v2 の複素表現
             nv1 = abs(pv1)  # v1 の長さ
@@ -983,9 +983,6 @@ class BezierCurve:
     # xx errorThres = 0.01 # 繰り返しを打ち切る誤差変化量
     dCount = 3  # ２分探索の打ち切り回数 （3以上が望ましい）
     convg_coe = 1e-5 # 5.0e-8  # 収束の見切り　　１回あたりの誤差減少が少なすぎる時の打ち切り条件を決める値 3e-8〜8e-8 が最適
-    swing_penalty = 0 # 2.5e-8 # 接戦の傾きを標本間の傾きに合わせるための重み
-    smoothness_coe = 0 # 1.0e-8 # 標本間距離をなるべく短くするための重み 3e-9〜3e-8
-    middle_coe = 0 
     mloop_itt = 3 # fitT mode 0 の繰り返しループにおける、minimize() の繰り返し回数。
     debugmode = False
     AsymptoticPriority = 'distance'  # パラメータ更新法
@@ -1325,7 +1322,7 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # fit1 の tensorflowによる実装
-    def fit1T(self, mode=1, maxTry=0, withErr=False, prefunc=None,tpara=[], optimizer_name='Adam',lr=0,  lrP=0, pat=10, err_th=0.75, threstune=1.00, trial=None, moption=False):
+    def fit1T(self, mode=1, maxTry=0, withErr=False, prefunc=None,tpara=[], lr=0,  lrP=0, pat=10, err_th=0.75, threstune=1.00, trial=None, moption=False):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか
         # tpara  fit0() にわたす初期パラメータ値
@@ -1339,12 +1336,6 @@ class BezierCurve:
         # err_th 0.75  エラーの収束条件
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
         # trial Optuna のインスタンス
-        default_lrs={'Adam':[0.0015,1140],'AMSgrad':[0.005,650],'Adagrad':[0.02,250],
-                    'Adadelta':[0.013,3500],'Nadam':[0.001,500], 'Adamax':[0.0075,1000],
-                    'RMSprop':[0.0003,1300],'SGD':[5e-6,2e6],'Ftrl':[0.12,1000]}
-        
-        if lr == 0: lr = default_lrs[optimizer_name][0]
-        if lrP == 0: lrP = default_lrs[optimizer_name][1]
 
         errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
         for i in range(3):
@@ -1371,7 +1362,7 @@ class BezierCurve:
         # 仮近似曲線をほぼ等距離に区切るようなパラメータを求める
         # 改めて fit0 でN次近似した関数を初期近似とする
         # cps, func = self.fit0(prefunc = prefunc, tpara=tpara)  # レベル０フィッティングを実行
-        cps, func = self.fit0(prefunc = prefunc,moption=moption)  # レベル０フィッティングを実行
+        cps, func = self.fit0(prefunc = prefunc, moption=moption)  # レベル０フィッティングを実行
         (fx,fy) = bestfunc = func
         bestcps = cps
         ts = bestts = self.ts.copy()
@@ -1405,37 +1396,18 @@ class BezierCurve:
 
         tts = tf.Variable(ts[1:-1]) # 端点以外のベジエパラメータをtensorflow変数化
         
-        if optimizer_name == 'Adam': # 
-            opt = tf.optimizers.Adam(learning_rate=lr) # lr 0.005
-            optP = tf.optimizers.Adam(learning_rate=lr*lrP) # lrP 650
-        elif optimizer_name == 'AMSgrad':
-            opt = tf.optimizers.Adam(learning_rate=lr,amsgrad=True) # lr 0.0015
-            optP = tf.optimizers.Adam(learning_rate=lr*lrP,amsgrad=True)  # lrP 1140       
-        elif optimizer_name == 'Adadelta':
-            # opt = tf.optimizers.Adadelta(learning_rate=lr, rho=0.975)
-            # optP = tf.optimizers.Adadelta(learning_rate=lr*lrP, rho=0.975)
-            opt = tf.optimizers.Adadelta(learning_rate=lr) # lr 0.013
-            optP = tf.optimizers.Adadelta(learning_rate=lr*lrP) # lrP 3500 
-        elif optimizer_name == 'Nadam':
-            opt = tf.optimizers.Nadam(learning_rate=lr) # lr = 0.001
-            optP = tf.optimizers.Nadam(learning_rate=lr*lrP) # lrP 500 
-        elif optimizer_name == 'Adamax':
-            opt = tf.optimizers.Adamax(learning_rate=lr) # lr 0.0075
-            optP = tf.optimizers.Adamax(learning_rate=lr*lrP) # lrP 1000
-        elif optimizer_name == 'Adagrad':
-            opt = tf.optimizers.Adagrad(learning_rate=lr) # lr 0.02
-            optP = tf.optimizers.Adagrad(learning_rate=lr*lrP) # lrP 250      
-        elif optimizer_name == 'RMSprop':
-            opt = tf.optimizers.RMSprop(learning_rate=lr) # lr =  0.0003
-            optP = tf.optimizers.RMSprop(learning_rate=lr*lrP) # lrP 1300        
-        elif optimizer_name == 'SGD':
-            opt = tf.optimizers.SGD(learning_rate=lr) # lr = 5e-6
-            optP = tf.optimizers.SGD(learning_rate=lr*lrP) # lrP = 2e6
-        elif optimizer_name == 'Ftrl':
-            opt = tf.optimizers.Ftrl(learning_rate=lr) # lr = 0.12
-            optP = tf.optimizers.Ftrl(learning_rate=lr*lrP) # lrP = 1000
+        # Optimizer 
+        # 実験結果としてAdamが優れていたのでAdamを採用。Adam 以外の、経験的な適正パラメータは以下の通り
+        # 'AMSgrad':[0.005,650],'Adagrad':[0.02,250],
+        # 'Adadelta':[0.013,3500],'Nadam':[0.001,500], 'Adamax':[0.0075,1000],
+        # 'RMSprop':[0.0003,1300],'SGD':[5e-6,2e6],'Ftrl':[0.12,1000]}
+        default_lrs={'Adam':[0.0015,1140]}        
+        if lr == 0: lr = default_lrs['Adam'][0]
+        if lrP == 0: lrP = default_lrs['Adam'][1]
+        opt = tf.optimizers.Adam(learning_rate=lr) 
+        optP = tf.optimizers.Adam(learning_rate=lr*lrP) 
 
-        tloss = sloss = tloss1 = tloss2 = meanerrorm = tfZERO = tf.constant(0.0,tf.float32)
+        meanerrorm = tfZERO = tf.constant(0.0,tf.float32)
         tfONE = tf.constant(1.0,dtype=tf.float32)
         
         while True:
@@ -1444,89 +1416,23 @@ class BezierCurve:
                 # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
                 # 関数化したかったが、tape をつかっているせいなのか、エラーがでてできなかった
                 with tf.GradientTape(persistent=True) as metatape:
-                    with tf.GradientTape(persistent=True) as t2:
-                        with tf.GradientTape(persistent=True) as t1:
-                            vs = tfONE-tts
-                            # tts**0 と (1-tts)**0 を含めると微係数が nan となるのでループから外している
-                            bezfx = vs**N*cps[0][0]
-                            bezfy = vs**N*cps[0][1] 
-                            for i in range(1, N):
-                                if mode == 0:
-                                    bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*Px[i-1]
-                                    bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*Py[i-1]                                
-                                elif mode == 1:
-                                    bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*cps[i][0]
-                                    bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*cps[i][1]
-                            bezfx = bezfx + tts**N*cps[N][0]
-                            bezfy = bezfy + tts**N*cps[N][1]
-                            
-                            meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
-                            meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
-                            meanerror = tf.add(meanerrx, meanerry)
-                        
-                            # 標本間の中点が近似曲線の中点と一致すべきという制約
-                            if BezierCurve.middle_coe > 0 :
-                                tsmp = tf.concat([[tts[0]/3.0,2*tts[0]/3.0],[(2*tts[-1] + tfONE)/3.0,(tts[-1] + 2*tfONE)/3.0]],axis=0)
-                                vmp = tfONE-tsmp
-                                bezfxm = vmp**N*cps[0][0]
-                                bezfym = vmp**N*cps[0][1]
-                                for i in range(1, N):
-                                    if mode == 0:
-                                        bezfxm = bezfxm + comb(N, i)*vmp**(N-i)*tsmp**i*Px[i-1]
-                                        bezfym = bezfym + comb(N, i)*vmp**(N-i)*tsmp**i*Py[i-1]                                
-                                    elif mode == 1:
-                                        bezfxm = bezfxm + comb(N, i)*vmp**(N-i)*tsmp**i*cps[i][0]
-                                        bezfym = bezfym + comb(N, i)*vmp**(N-i)*tsmp**i*cps[i][1]
-                                bezfxm = bezfxm + tsmp**N*cps[N][0]
-                                bezfym = bezfym + tsmp**N*cps[N][1]
-
-                                msps = np.array([(2*sps[0]+sps[1])/3.0,(sps[0]+2*sps[1])/3.0,(2*sps[-2]+sps[-1])/3.0,(sps[-2]+2*sps[-1])/3.0])
-                                meanerrxm = tf.reduce_mean(tf.square(bezfxm - msps[:,0]))
-                                meanerrym = tf.reduce_mean(tf.square(bezfym - msps[:,1]))                         
-                                meanerrorm = tf.add(meanerrxm, meanerrym)
-      
-                        # 1次微分
-                        # smoothness_coe 高波長の発生を抑える
-                        if BezierCurve.smoothness_coe > 0 or BezierCurve.swing_penalty > 0:
-                            d1_bezfx = t1.gradient(bezfx,tts)
-                            d1_bezfy = t1.gradient(bezfy,tts)                                             
-                        # swing_penalty 接線方向と標本点を結ぶ方向とのずれが大きいとペナルティを科す
-                        if BezierCurve.swing_penalty > 0:
-                            # 接線方向の単位ベクトルのテンソル
-                            norml = tf.sqrt(tf.add(tf.square(d1_bezfx),tf.square(d1_bezfy))) # 接線ベクトルのノルムのテンソル
-                            nd1_bezfx = tf.math.divide_no_nan(d1_bezfx,norml)
-                            nd1_bezfy = tf.math.divide_no_nan(d1_bezfy,norml)
-                            (dnvec0x,dnvec0y) = tf.concat([[nd1_bezfx],[nd1_bezfy]],axis=0) # 接線ベクトルの単位ベクトル
-                            # 標本点間を結ぶベクトルの単位ベクトルを求める
-                            svecx = tf.concat([[bezfx[1]-sps[0][0]],bezfx[2:]-bezfx[:-2],[sps[-1][0]-bezfx[-2]]],axis=0) # サンプル点を挟むサンプル点を結ぶベクトルｘ
-                            svecy = tf.concat([[bezfy[1]-sps[0][1]],bezfy[2:]-bezfy[:-2],[sps[-1][1]-bezfy[-2]]],axis=0) # 同ｙ
-                            snorml = tf.sqrt(tf.add(tf.square(svecx),tf.square(svecy)))
-                            nsvecx = tf.math.divide_no_nan(svecx,snorml)
-                            nsvecy = tf.math.divide_no_nan(svecy,snorml)
-                            (snvecx,snvecy) = tf.concat([[nsvecx],[nsvecy]],axis=0) # 標本点間ベクトルの単位ベクトル
-                            # dnvec と snvec の一致度  1-内積の平均値をペナルティ0とする
-                            tloss0 = tf.reduce_mean(tfONE-tf.add(dnvec0x*snvecx,dnvec0y*snvecy))
-                            # 両端だけ追加でペナルティを加える
-                            # パラメータの指す端点と2番目の点を結ぶ単位ベクトル
-                            nvec1 = tf.concat([[bezfx[0]-sps[0][0]],[bezfy[0]-sps[0][1]]],axis=0)
-                            (nvec1x,nvec1y) = tf.math.divide_no_nan(nvec1,tf.sqrt(tf.reduce_sum(tf.square(nvec1))))
-                            nvec2 = tf.concat([[sps[-1][0]-bezfx[-1]],[sps[-1][1]-bezfy[-1]]],axis=0)
-                            (nvec2x,nvec2y) = tf.math.divide_no_nan(nvec2,tf.sqrt(tf.reduce_sum(tf.square(nvec2))))
-                            # 導関数から両端点における接線方向の単位ベクトルを計算
-                            (dnvec1x,dnvec1y) = tf.concat([[nd1_bezfx[0]],[nd1_bezfy[0]]],axis=0)
-                            (dnvec2x,dnvec2y) = tf.concat([[nd1_bezfx[-1]],[nd1_bezfy[-1]]],axis=0)
-                            tloss1 = tfONE-(dnvec1x*nvec1x+dnvec1y*nvec1y)
-                            tloss2 = tfONE-(dnvec2x*nvec2x+dnvec2y*nvec2y)
-                            tloss = tf.add(tloss0,(tloss1+tloss2)/(len(ts)-2)) # 
-
-                    # 標本点間の滑らかさの制約として２次微分を０に近づける
-                    if BezierCurve.smoothness_coe > 0:
-                    # ２次微分
-                        d2_bezfx = t2.gradient(d1_bezfx,tts) # 両端は計算から外す
-                        d2_bezfy = t2.gradient(d1_bezfy,tts)     
-                        sloss = tf.reduce_mean(tf.sqrt(tf.add(tf.square(d2_bezfx),tf.square(d2_bezfy))))
-                    gloss = meanerror + BezierCurve.swing_penalty*tloss + BezierCurve.smoothness_coe*sloss
-                    gloss = gloss + BezierCurve.middle_coe * meanerrorm
+                    vs = tfONE-tts
+                    # tts**0 と (1-tts)**0 を含めると微係数が nan となるのでループから外している
+                    bezfx = vs**N*cps[0][0]
+                    bezfy = vs**N*cps[0][1] 
+                    for i in range(1, N):
+                        if mode == 0:
+                            bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*Px[i-1]
+                            bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*Py[i-1]                                
+                        elif mode == 1:
+                            bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*cps[i][0]
+                            bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*cps[i][1]
+                    bezfx = bezfx + tts**N*cps[N][0]
+                    bezfy = bezfy + tts**N*cps[N][1]
+                    
+                    meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
+                    meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
+                    gloss = tf.add(meanerrx, meanerry)                                      
 
                 # ts を誤差逆伝搬で更新
                 opt.minimize(gloss, tape=metatape, var_list=tts)
@@ -1551,81 +1457,19 @@ class BezierCurve:
                 # 上で求めたベジエパラメータに対し制御点を最適化
                 for loopc in range(BezierCurve.mloop_itt):
                     with tf.GradientTape(persistent=True) as metatape:
-                        with tf.GradientTape(persistent=True) as t2:
-                            with tf.GradientTape(persistent=True) as t1:
-                                vs = tfONE-tts
-                                # tts**0 と (1-tts)**0 を含めると微係数が nan となるのでループから外している
-                                bezfx = vs**N*cps[0][0]
-                                bezfy = vs**N*cps[0][1]
-                                for i in range(1, N):
-                                    bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*Px[i-1]
-                                    bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*Py[i-1]
-                                bezfx = bezfx + tts**N*cps[N][0]
-                                bezfy = bezfy + tts**N*cps[N][1]
+                        vs = tfONE-tts
+                        # tts**0 と (1-tts)**0 を含めると微係数が nan となるのでループから外している
+                        bezfx = vs**N*cps[0][0]
+                        bezfy = vs**N*cps[0][1]
+                        for i in range(1, N):
+                            bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*Px[i-1]
+                            bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*Py[i-1]
+                        bezfx = bezfx + tts**N*cps[N][0]
+                        bezfy = bezfy + tts**N*cps[N][1]
 
-                                meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
-                                meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
-                                meanerror = tf.add(meanerrx, meanerry)
-                                
-                                # 標本間の中点が近似曲線の中点と一致すべきという制約
-                                if BezierCurve.middle_coe > 0 :
-                                    tsmp = tf.concat([[tts[0]/3.0,2*tts[0]/3.0],[(2*tts[-1] + tfONE)/3.0,(tts[-1] + 2*tfONE)/3.0]],axis=0)
-                                    vmp = tfONE-tsmp
-                                    bezfxm = vmp**N*cps[0][0]
-                                    bezfym = vmp**N*cps[0][1]
-                                    for i in range(1, N):
-                                        bezfxm = bezfxm + comb(N, i)*vmp**(N-i)*tsmp**i*Px[i-1]
-                                        bezfym = bezfym + comb(N, i)*vmp**(N-i)*tsmp**i*Py[i-1]                                
-                                    bezfxm = bezfxm + tsmp**N*cps[N][0]
-                                    bezfym = bezfym + tsmp**N*cps[N][1]
-                                
-                                    msps = np.array([(2*sps[0]+sps[1])/3.0,(sps[0]+2*sps[1])/3.0,(2*sps[-2]+sps[-1])/3.0,(sps[-2]+2*sps[-1])/3.0])
-                                    meanerrxm = tf.reduce_mean(tf.square(bezfxm - msps[:,0]))
-                                    meanerrym = tf.reduce_mean(tf.square(bezfym - msps[:,1]))                         
-                                    meanerrorm = tf.add(meanerrxm, meanerrym)                    
-                            
-                            # 1次微分
-                            # smoothness_coe 高波長の発生を抑える
-                            if BezierCurve.smoothness_coe > 0 or BezierCurve.swing_penalty > 0:
-                                d1_bezfx = t1.gradient(bezfx,tts)
-                                d1_bezfy = t1.gradient(bezfy,tts)                                             
-                            # swing_penalty 接線方向と標本点を結ぶ方向とのずれが大きいとペナルティを科す
-                            if BezierCurve.swing_penalty > 0:
-                                # 接線方向の単位ベクトルのテンソル
-                                norml = tf.sqrt(tf.add(tf.square(d1_bezfx),tf.square(d1_bezfy))) # 接線ベクトルのノルムのテンソル
-                                nd1_bezfx = tf.math.divide_no_nan(d1_bezfx,norml)
-                                nd1_bezfy = tf.math.divide_no_nan(d1_bezfy,norml)
-                                (dnvec0x,dnvec0y) = tf.concat([[nd1_bezfx],[nd1_bezfy]],axis=0) # 接線ベクトルの単位ベクトル
-                                # 標本点間を結ぶベクトルの単位ベクトルを求める
-                                svecx = tf.concat([[bezfx[1]-sps[0][0]],bezfx[2:]-bezfx[:-2],[sps[-1][0]-bezfx[-2]]],axis=0) # サンプル点を挟むサンプル点を結ぶベクトルｘ
-                                svecy = tf.concat([[bezfy[1]-sps[0][1]],bezfy[2:]-bezfy[:-2],[sps[-1][1]-bezfy[-2]]],axis=0) # 同ｙ
-                                snorml = tf.sqrt(tf.add(tf.square(svecx),tf.square(svecy)))
-                                nsvecx = tf.math.divide_no_nan(svecx,snorml)
-                                nsvecy = tf.math.divide_no_nan(svecy,snorml)
-                                (snvecx,snvecy) = tf.concat([[nsvecx],[nsvecy]],axis=0) # 標本点間ベクトルの単位ベクトル
-                                # dnvec と snvec の一致度  1-内積の平均値をペナルティ0とする
-                                tloss0 = tf.reduce_mean(tfONE-tf.add(dnvec0x*snvecx,dnvec0y*snvecy))
-                                # 両端だけ追加でペナルティを加える
-                                # パラメータの指す端点と2番目の点を結ぶ単位ベクトル
-                                nvec1 = tf.concat([[bezfx[0]-sps[0][0]],[bezfy[0]-sps[0][1]]],axis=0)
-                                (nvec1x,nvec1y) = tf.math.divide_no_nan(nvec1,tf.sqrt(tf.reduce_sum(tf.square(nvec1))))
-                                nvec2 = tf.concat([[sps[-1][0]-bezfx[-1]],[sps[-1][1]-bezfy[-1]]],axis=0)
-                                (nvec2x,nvec2y) = tf.math.divide_no_nan(nvec2,tf.sqrt(tf.reduce_sum(tf.square(nvec2))))
-                                # 導関数から両端点における接線方向の単位ベクトルを計算
-                                (dnvec1x,dnvec1y) = tf.concat([[nd1_bezfx[0]],[nd1_bezfy[0]]],axis=0)
-                                (dnvec2x,dnvec2y) = tf.concat([[nd1_bezfx[-1]],[nd1_bezfy[-1]]],axis=0)
-                                tloss1 = tfONE-(dnvec1x*nvec1x+dnvec1y*nvec1y)
-                                tloss2 = tfONE-(dnvec2x*nvec2x+dnvec2y*nvec2y)
-                                tloss = tf.add(tloss0,(tloss1+tloss2)/(len(ts)-2)) # 
-
-                        # 標本点間の滑らかさの制約として２次微分を０に近づける
-                        if BezierCurve.smoothness_coe > 0:
-                        # ２次微分
-                            d2_bezfx = t2.gradient(d1_bezfx,tts) # 両端は計算から外す
-                            d2_bezfy = t2.gradient(d1_bezfy,tts)     
-                            sloss = tf.reduce_mean(tf.sqrt(tf.add(tf.square(d2_bezfx),tf.square(d2_bezfy))))
-                        gloss = meanerror + BezierCurve.swing_penalty*tloss + BezierCurve.smoothness_coe*sloss
-                        gloss = gloss + BezierCurve.middle_coe * meanerrorm 
+                        meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
+                        meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
+                        gloss = tf.add(meanerrx, meanerry)                
 
                     optP.minimize(gloss, tape=metatape, var_list=[Px, Py])
 
@@ -1645,12 +1489,7 @@ class BezierCurve:
             convergenceflag = (trynum - lastgood > 3 or trynum - lastgood == 1) and ((old3err - error)/3.0 < convg_coe*(error-err_th))
 
             if BezierCurve.wandb:
-                if BezierCurve.smoothness_coe > 0 or BezierCurve.swing_penalty > 0:
-                    BezierCurve.wandb.log({"loss":error,"tloss": tloss.numpy(),'sloss':sloss.numpy()})
-                elif BezierCurve.middle_coe > 0:
-                    BezierCurve.wandb.log({"loss":error,"mloss": meanerrorm.numpy()})
-                else:
-                    BezierCurve.wandb.log({"loss":error})
+                BezierCurve.wandb.log({"loss":error})
             if error < minerror: 
                 if trynum - lastgood > 3:
                   convergenceflag = False
@@ -1715,7 +1554,7 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # 段階的ベジエ近似
-    def fit2(self, mode=0, Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.005, lrP=400, pat=10, err_th=0.75, threstune=1.0, withErr=False, tpara=[], withFig=False, moption=False):
+    def fit2(self, mode=0, Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.0015, lrP=1140, pat=100, err_th=0.75, threstune=1.0, withErr=False, tpara=[], withFig=False, moption=False):
         # mode 0 -> fit1() を使う, mode 1 -> fit1T(mode=1)を使う, mode 2 -> fit1T(mode=0) を使う
         # Nplolog 近似準備開始次数　この次数からNfrom-1までは maxTry 回数で打ち切る
         # Nfrom 近似開始次数　この次数以降は収束したら終了
@@ -1774,14 +1613,11 @@ class BezierCurve:
         BezierCurve.debugmode = debugmode
         BezierCurve.openmode = openmode
         BezierCurve.wandb = wandb
-        BezierCurve.priority = priority
         BezierCurve.convg_coe = convg_coe
         BezierCurve.swing_penalty = swing_penalty
         BezierCurve.smoothness_coe = smoothness_coe
         print("AsymptoticPriority : ", priority)
         print("dCount    : ", dCount)
-        #print("driftThres: ",driftThres)
-        #print("errorThres: ",errorThres)
         print("debugmode : ", debugmode)
         print("openmode  : ", openmode)
         print("wandb  : ", wandb)
@@ -1837,9 +1673,7 @@ def drawBez(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], 
              cntL=cntL, cntR=cntR, cntC=cntC, ladder=ladder, PosL=PosL, PosR=PosR, PosC=PosC, saveImage=saveImage, savepath=savepath,
              resolution=resolution, n_ladder=n_ladder, ct=ct, bzlabel=bzlabel, linestyle=linestyle)
 
-# (29)-2 # 重ね書き用
-
-
+# (29)-2 # 重ね書き用
 
 def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], cpr=[], cpc=[],
              cntL=[], cntR=[], cntC=[], ladder=None, PosL=[], PosR=[], PosC=[], saveImage=False, savepath="",
