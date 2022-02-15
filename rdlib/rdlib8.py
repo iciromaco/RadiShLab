@@ -1227,9 +1227,9 @@ class BezierCurve:
         return ts
 
     # ベジエ近似　パラメータの繰り返し再調整あり
-    def fit1(self, maxTry=0, withErr=False, tpara=[], pat=10, err_th=0.75, threstune=1.00, moption=False):
+    def fit1(self, maxTry=0, withErr=False, withEC=False, tpara=[], pat=10, err_th=0.75, threstune=1.00, moption=False):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
-        # withErr 誤差情報を返すかどうか
+        # withErr 誤差情報を返すかどうか  withECも真ならカウントも返す
         # tpara  fit0() にわたす初期パラメータ値
         # pat 10 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
@@ -1327,16 +1327,20 @@ class BezierCurve:
                 break
 
         self.ts = bestts
+        
         print("")
         if withErr:
-            return bestcps, bestfunc, minerror
+            if withEC:
+                return bestcps, bestfunc, (minerror,trynum)
+            else:
+                return bestcps, bestfunc, minerror
         else:
             return bestcps, bestfunc
 
     # fit1 の tensorflowによる実装
-    def fit1T(self, mode=1, maxTry=0, withErr=False, prefunc=None,tpara=[], lr=0,  lrP=0, pat=10, err_th=0.75, threstune=1.00, trial=None, moption=False):
+    def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=10, err_th=0.75, threstune=1.00, trial=None, moption=False):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
-        # withErr 誤差情報を返すかどうか
+        # withErr 誤差情報を返すかどうか withEC が真ならカウントも返す
         # tpara  fit0() にわたす初期パラメータ値
         # mode 0: 制御点とパラメータを両方同時に tensorflow で最適化する
         # mode 1: パラメータの最適化は tensorflow で、制御点はパラメータを固定して未定係数法で解く
@@ -1365,9 +1369,9 @@ class BezierCurve:
         priority = BezierCurve.AsymptoticPriority
 
         # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる ただし、24乗あたりが solver 限界なので max 20としておく
-        doubleN = 2*N if N < 10 else 20
-        prebez = BezierCurve(N=doubleN,samples=self.samples)
-        precps, prefunc = prebez.fit0(prefunc=prefunc, tpara=tpara,moption=moption)
+        #doubleN = 2*N if N < 10 else 20
+        #prebez = BezierCurve(N=doubleN,samples=self.samples)
+        #precps, prefunc = prebez.fit0(prefunc=prefunc, tpara=tpara,moption=moption)
         # 仮近似曲線をほぼ等距離に区切るようなパラメータを求める
         # 改めて fit0 でN次近似した関数を初期近似とする
         # cps, func = self.fit0(prefunc = prefunc, tpara=tpara)  # レベル０フィッティングを実行
@@ -1558,12 +1562,15 @@ class BezierCurve:
   
         print("")
         if withErr:
-            return bestcps, bestfunc, minerror
+            if withEC:
+                return bestcps, bestfunc, (minerror,trynum)
+            else:
+                return bestcps, bestfunc, minerror
         else:
             return bestcps, bestfunc
 
     # 段階的ベジエ近似
-    def fit2(self, mode=0, Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.0015, lrP=1140, pat=100, err_th=0.75, threstune=1.0, withErr=False, tpara=[], withFig=False, moption=False):
+    def fit2(self, mode=0, Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.0015, lrP=1140, pat=100, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=False):
         # mode 0 -> fit1() を使う, mode 1 -> fit1T(mode=1)を使う, mode 2 -> fit1T(mode=0) を使う
         # Nplolog 近似準備開始次数　この次数からNfrom-1までは maxTry 回数で打ち切る
         # Nfrom 近似開始次数　この次数以降は収束したら終了
