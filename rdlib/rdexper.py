@@ -21,6 +21,9 @@ import tensorflow as tf
 from keras import optimizers
 from scipy.special import comb
 
+import datetime
+import time
+
 # px,py =var('px:4'),var('py:4')
 
 # OpenCV のファイル入出力が2バイト文字パス名に対応していないための対処
@@ -1234,7 +1237,9 @@ class BezierCurve:
         # pat 10 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
         #
-
+        start = time.time()
+        flag5,flag2,flag1,flag65,flag05=True,True,True,True,True
+        
         sps = self.samples
 
         # #######################
@@ -1319,7 +1324,28 @@ class BezierCurve:
                     priority = 'span'
                 else:
                     break
-
+                
+            if error < 5.0 and flag5:
+                etime = time.time() - start
+                print("\nCP 5.0, steps:%d, etime: %3.5f err: %1.10f" % (trynum,etime, error))
+                flag5 = False
+            elif  error < 2.0 and flag2:
+                etime = time.time() - start
+                print("\nCP 2.0, steps:%d, etime: %3.5f err: %1.10f" % (trynum,etime, error))
+                flag2 = False
+            elif  error < 1.0 and flag1:
+                etime = time.time() - start
+                print("\nCP 1.0, steps:%d, etime: %3.5f err: %1.10f" % (trynum,etime, error))
+                flag1 = False
+            elif  error < 0.65 and flag65:
+                etime = time.time() - start
+                print("\nCP 0.65, steps:%d, etime: %3.5f err: %1.10f" % (trynum,etime, error))
+                flag65 = False
+            elif error < 0.5 and flag05:
+                etime = time.time() - start
+                print("\nCP 0.5, steps:%d, etime: %3.5f err: %1.10f" % (trynum,etime, error))
+                flag05 = False
+                
             trynum += 1
             if trynum % 100 == 0:
                 print("")
@@ -1352,7 +1378,9 @@ class BezierCurve:
         # err_th 0.75  エラーの収束条件
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
         # trial Optuna のインスタンス
-
+        start = time.time()
+        flag5,flag2,flag1,flag65,flag05=True,True,True,True,True
+        
         sps = self.samples
         x_data0 = [x for [x, y] in sps]
         y_data0 = [y for [x, y] in sps]
@@ -1546,6 +1574,27 @@ class BezierCurve:
                         print("M")
                 break
 
+            if error < 5.0 and flag5:
+                etime = time.time() - start
+                print("\nCP 5.0, steps:%d, etime: %3.5f err: %1.10f" % (trynum,etime, error))
+                flag5 = False
+            elif  error < 2.0 and flag2:
+                etime = time.time() - start
+                print("\nCP 2.0, steps:%d, etime: %3.5f err: %1.10f" % (trynum,etime, error))
+                flag2 = False
+            elif  error < 1.0 and flag1:
+                etime = time.time() - start
+                print("\nCP 1.0, steps:%d, etime: %3.5f err: %1.10f" % (trynum,etime, error))
+                flag1 = False
+            elif  error < 0.65 and flag65:
+                etime = time.time() - start
+                print("\nCP 0.65, steps:%d, etime: %3.5f err: %1.10f" % (trynum,etime, error))
+                flag65 = False
+            elif error < 0.5 and flag05:
+                etime = time.time() - start
+                print("\nCP 0.5, steps:%d, etime: %3.5f err: %1.10f" % (trynum,etime, error))
+                flag05 = False
+                      
             trynum += 1
             if trynum % 100 == 0:
                 print("")
