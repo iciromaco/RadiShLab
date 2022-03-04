@@ -1368,8 +1368,9 @@ class BezierCurve:
         rmcounter = 0  # エラー増加回数のカウンター
         priority = BezierCurve.AsymptoticPriority
 
-        # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる ただし、24乗あたりが solver 限界なので max 20としておく
-        doubleN = 2*N if N < 10 else 20
+        # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる ただし、24乗あたりが solver 限界
+        # 20次を超えるとオーバフィッティングが発生しがちなのでmax 18としておく
+        doubleN = 2*N if N < 9 else 18
         prebez = BezierCurve(N=doubleN,samples=self.samples)
         precps, prefunc = prebez.fit0(prefunc=prefunc, tpara=tpara,moption=moption)
         # 仮近似曲線をほぼ等距離に区切るようなパラメータを求める
