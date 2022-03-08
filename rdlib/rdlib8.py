@@ -1054,7 +1054,7 @@ class BezierCurve:
         return plist
 
     # サンプル点が等間隔になるようにパラメータを設定する
-    def assignPara2Samples(self, prefunc=None):
+    def assignPara2Samples(self, prefunc=None, scatter=False):
         samples = self.samples
         if len(samples) == 0:  # 標本点を与えずにベジエ曲線の一般式として使うこともできる
             return
@@ -1064,8 +1064,12 @@ class BezierCurve:
         else:  # パラメータが与えられていない場合、0～1をリニアに各サンプル点までので経路長で刻む
             # axlength = np.array(cv2.arcLength(samples, False)) # 点列に沿って測った総経路長
             # 各サンプル点の始点からの経路長の全長に対する比を、各点のベジエパラメータの初期化とする
-            # return [cv2.arcLength(samples[:i+1],False)  for i in range(len(samples))]/axlength
-            return [i/(len(samples)-1) for i in range(len(samples))]
+            if scatter:
+                axlength = np.array(cv2.arcLength(samples, False))
+                return [cv2.arcLength(samples[:i+1],False)  for i in range(len(samples))]/axlength
+            else:
+                return [i/(len(samples)-1) for i in range(len(samples))]
+        
 
     # 制御点のi番目を代入
     def setACP(self, f, i, cp):
@@ -1084,7 +1088,7 @@ class BezierCurve:
         return f
 
     # ベジエ近似レベル０（標本点のパラメータを等間隔と仮定してあてはめ）
-    def fit0(self, prefunc=None, tpara=[], moption=False):
+    def fit0(self, prefunc=None, tpara=[], scatter=False, moption=False):
         # ts 標本点に対するパラメータ割り当て
         samples = self.samples  # 標本点
             
@@ -1093,8 +1097,8 @@ class BezierCurve:
             ts = self.ts = tpara
         elif prefunc != None: # 関数が与えられているなら、それをもとに等間隔になるよう初期パラメータ設定
             ts = self.ts = self.assignPara2Samples(prefunc=prefunc) 
-        else: # さもなくば、self.prefunc で等間隔か [0,1] を等間隔
-            ts = self.ts = self.assignPara2Samples(prefunc=None) 
+        else: # さもなくば、self.prefunc で等間隔か [0,1] を等間隔　ただしscatter=Trueのときは不等間隔
+            ts = self.ts = self.assignPara2Samples(prefunc=None,scatter=scatter) 
         N = self.N  # ベジエの次数
         M = len(samples)  # サンプル数
         # バーンスタイン関数の定義
@@ -1227,13 +1231,13 @@ class BezierCurve:
         return ts
 
     # ベジエ近似　パラメータの繰り返し再調整あり
-    def fit1(self, maxTry=0, withErr=False, withEC=False, tpara=[], pat=10, err_th=0.75, threstune=1.00, moption=False):
+    def fit1(self, maxTry=0, withErr=False, withEC=False, tpara=[], pat=10, err_th=0.75, threstune=1.00, scatter=False,moption=False):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか  withECも真ならカウントも返す
         # tpara  fit0() にわたす初期パラメータ値
         # pat 10 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
-        #
+        # scatter 不等間隔標本の場合に真
 
         sps = self.samples
 
@@ -1245,7 +1249,7 @@ class BezierCurve:
         rmcounter = 0  # エラー増加回数のカウンター
         priority = BezierCurve.AsymptoticPriority
 
-        cps, func = self.fit0(tpara=tpara,moption=moption)  # レベル０フィッティングを実行
+        cps, func = self.fit0(tpara=tpara,scatter=scatter,moption=moption)  # レベル０フィッティングを実行
         [fx, fy] = bestfunc = func
         bestcps = cps
         ts = bestts = self.ts.copy()
@@ -1268,7 +1272,7 @@ class BezierCurve:
                 ts = self.assignPara2Samples(prefunc=[fx, fy])
 
             # レベル０フィッティングを再実行
-            cps, func = self.fit0(tpara=ts,moption=moption)
+            cps, func = self.fit0(tpara=ts,scatter=scatter,moption=moption)
             [fx, fy] = func
 
             # あてはめ誤差を求める
@@ -1338,7 +1342,7 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # fit1 の tensorflowによる実装
-    def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=10, err_th=0.75, threstune=1.00, trial=None, moption=False):
+    def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=10, err_th=0.75, threstune=1.00, trial=None, scatter=False, moption=False):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか withEC が真ならカウントも返す
         # tpara  fit0() にわたす初期パラメータ値
@@ -1352,7 +1356,8 @@ class BezierCurve:
         # err_th 0.75  エラーの収束条件
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
         # trial Optuna のインスタンス
-
+        # サンプル間隔が等間隔でない場合、scatter=True
+        
         sps = self.samples
         x_data0 = [x for [x, y] in sps]
         y_data0 = [y for [x, y] in sps]
@@ -1372,11 +1377,11 @@ class BezierCurve:
         # 20次を超えるとオーバフィッティングが発生しがちなのでmax 18としておく
         doubleN = 2*N if N < 9 else 18
         prebez = BezierCurve(N=doubleN,samples=self.samples)
-        precps, prefunc = prebez.fit0(prefunc=prefunc, tpara=tpara,moption=moption)
+        precps, prefunc = prebez.fit0(prefunc=prefunc, tpara=tpara, scatter=scatter,moption=moption)
         # 仮近似曲線をほぼ等距離に区切るようなパラメータを求める
         # 改めて fit0 でN次近似した関数を初期近似とする
         # cps, func = self.fit0(prefunc = prefunc, tpara=tpara)  # レベル０フィッティングを実行
-        cps, func = self.fit0(prefunc = prefunc, moption=moption)  # レベル０フィッティングを実行
+        cps, func = self.fit0(prefunc = prefunc, scatter=scatter, moption=moption)  # レベル０フィッティングを実行
         (fx,fy) = bestfunc = func
         bestcps = cps
         ts = bestts = self.ts.copy()
@@ -1492,7 +1497,7 @@ class BezierCurve:
                     cps[i][1] = Py[i-1].numpy() 
                 func = self.setCPs(cps)
             elif mode == 1:
-                cps, func = self.fit0(tpara=ts,moption=moption)
+                cps, func = self.fit0(tpara=ts,scatter=scatter,moption=moption)
 
             # 誤差評価
             fx,fy = func
@@ -1529,7 +1534,7 @@ class BezierCurve:
             # if convergenceflag or errq[-2] < error:
                 # fit0 で近似し、間隔均等になるように初期パラメータを決定
                 # cps, func = self.fit0(tpara=tts.numpy())
-                # ts = self.assignPara2Samples(prefunc=func)
+                # ts = self.assignPara2Samples(prefunc=func,scatter=scatter)
 
             if (convergenceflag and (trynum > 50)) or error < err_th*thresrate or ((trynum > 100) and rmcounter > pat):
                 # pat回続けてエラーが増加したらあきらめる デフォルトは１00 （fit1T は繰り返し1回あたりの変動が小さい）
