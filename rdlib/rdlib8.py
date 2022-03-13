@@ -1581,9 +1581,9 @@ class BezierCurve:
         else:
             return bestcps, bestfunc
 
-    def fit2(self, mode=0, contours = [], Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.001, lrP=30000, pat=100, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=True):
+    def fit2(self, mode=0, cont = [], Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.001, lrP=30000, pat=100, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=True):
         # mode 0 -> fit1() を使う, mode 1 -> fit1T(mode=1)を使う, mode 2 -> fit1T(mode=0) を使う
-        # contours 与えられている場合オーバフィッティング判定を行う
+        # cont 与えられている場合オーバフィッティング判定を行う
         # Nplolog 近似準備開始次数　この次数からNfrom-1までは maxTry 回数で打ち切る
         # Nfrom 近似開始次数　この次数以降は収束したら終了
         # Nto 最大近似次数 Nto < Nfrom  の場合は誤差しきい値による打ち切り
@@ -1615,8 +1615,8 @@ class BezierCurve:
                 cps, func, err = abez.fit1T(
                     mode=0, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, lrP=lrP,withErr=True, tpara=[], pat=pat, err_th=err_th, threstune=threstune, moption=moption)
             ts = abez.ts
-            if len(contours)>0:
-                odds = isOverFitting(func,ts,contours) 
+            if len(cont)>0:
+                odds = isOverFitting(func,ts,cont) 
             if err_th >= err and len(odds) > 0:
                 print("Order ",Ncurrent," is Overfitting")
             results[str(Ncurrent)] = (cps, func, err)
