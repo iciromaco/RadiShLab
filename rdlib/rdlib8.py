@@ -20,6 +20,7 @@ from sympy import var
 import tensorflow as tf
 from keras import optimizers
 from scipy.special import comb
+import scipy.stats as stats
 
 # px,py =var('px:4'),var('py:4')
 
@@ -2015,7 +2016,6 @@ def crossPointsLRonImg0(img, x0, y0, dx, dy):
     return (crpLx, crpLy), (crpRx+x0, crpRy)
 
 # OverFitting判定　標本点間の異常判定
-import scipy.stats as stats
 
 # スミルノフ・グラブス検定で３０％基準、かつ４分位範囲の１．５倍基準の両方ではずれ値と判定される区間を含む場合にオーバフィッティングと判定する。
 def isOverFitting(func,ts,Samples,alpha=0.3):
