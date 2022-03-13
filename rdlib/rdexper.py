@@ -912,7 +912,7 @@ def getSamples(cont, N=20, mode='Equidistant'):
         axlength = np.array(cv2.arcLength(cont, closed=False))  # 弧長
         lengths = np.array([cv2.arcLength(cont[:i+1], closed=False)
                             for i in range(len(cont))])  # 各点までの弧長の配列
-        return np.array([cont[np.abs(np.asarray(lengths) - i).argmin()] for i in np.linspace(0, axlength, N)])
+        return np.array([cont[np.abs(lengths - i).argmin()] for i in np.linspace(0, axlength, N)])
     else:  # 'Simple' 実際にはなんでもOK
         return cont[list(map(int, np.linspace(0, len(cont)-1, N)))]
 
@@ -1626,8 +1626,9 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # 段階的ベジエ近似
-    def fit2(self, mode=0, Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.0015, lrP=1140, pat=100, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=True):
+    def fit2(self, mode=0, contours = [], Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.001, lrP=30000, pat=100, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=True):
         # mode 0 -> fit1() を使う, mode 1 -> fit1T(mode=1)を使う, mode 2 -> fit1T(mode=0) を使う
+        # contours 与えられている場合オーバフィッティング判定を行う
         # Nplolog 近似準備開始次数　この次数からNfrom-1までは maxTry 回数で打ち切る
         # Nfrom 近似開始次数　この次数以降は収束したら終了
         # Nto 最大近似次数 Nto < Nfrom  の場合は誤差しきい値による打ち切り
@@ -1642,8 +1643,8 @@ class BezierCurve:
         ts = tpara
         err = err_th + 1
         results = {}
-        odds = 0
-        while Ncurrent < Nto and (err_th < err or odds > 0):
+        odds = []
+        while Ncurrent < Nto and (err_th < err or len(odds) > 0):
             Ncurrent = Ncurrent + 1
             # abez = BezierCurve(N=Ncurrent, samples=self.samples, tpara=ts, prefunc=func)
             abez = BezierCurve(N=Ncurrent, samples=self.samples, tpara=[], prefunc=None)
@@ -1659,8 +1660,9 @@ class BezierCurve:
                 cps, func, err = abez.fit1T(
                     mode=0, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, lrP=lrP,withErr=True, tpara=[], pat=pat, err_th=err_th, threstune=threstune, moption=moption)
             ts = abez.ts
-            odds,_var,_dpm = isOverFitting(func,ts,self.samples) 
-            if err_th >= err and odds > 0:
+            if len(contours)>0:
+                odds = isOverFitting(func,ts,contours,Nsamples=self.samples) 
+            if err_th >= err and len(odds) > 0:
                 print("Order ",Ncurrent," is Overfitting")
             results[str(Ncurrent)] = (cps, func, err)
             # 次数を上げてインスタンス生成
@@ -2060,8 +2062,17 @@ def crossPointsLRonImg0(img, x0, y0, dx, dy):
 
     return (crpLx, crpLy), (crpRx+x0, crpRy)
 
-# スミルノフ・グラブス検定で３０％基準、かつ４分位範囲の１．５倍基準の両方ではずれ値と判定される区間を含む場合にオーバフィッティングと判定する。
-def isOverFitting(func,ts,Samples,alpha=0.3):
+# 実輪郭の標本点間の輪郭長と近似曲線の対応区間長との差の分布において、４分位範囲の１．５倍基準の両方ではずれ値と判定される区間を含む場合にオーバフィッティングと判定する。
+def isOverFitting(func,ts,cont,Nsamples=65):
+    # 実輪郭線側の標本点間弧長を計算する
+    axlength = np.array(cv2.arcLength(cont,closed=False))  # 全周の長さ
+    lengths = np.array([cv2.arcLength(cont[:i+1], closed=False) for i in range(len(cont))])
+                                                    # 始点から全輪郭点にいたる弧長
+    sampleindexes = np.array([np.abs(lengths - i).argmin() for i in np.linspace(0, axlength, Nsamples)])
+                                                    # 等間隔にとった標本点のインデックス
+    ll = np.array([lengths[i] for i in sampleindexes]) # 始点から各標本点にいたる弧長
+    arcls = ll[1:]-ll[0:-1] # 標本点間の距離の配列
+    # 近似曲線側の弧長を計算する
     t = symbols('t')
     fx,fy = func
     nfx, nfy = lambdify(t, fx, "numpy"), lambdify(t, fy, "numpy")
@@ -2074,26 +2085,13 @@ def isOverFitting(func,ts,Samples,alpha=0.3):
         r4y = d5y[1:]-d5y[0:-1]  # 同ｙ変位
         r = np.sum(np.sqrt(r4x*r4x + r4y*r4y)) # 折れ線の長さの合計 
         rs.append(r)
-    # rs = np.array(rs)
-    # 本来ｒはどの標本間でも一致すべき 
-    q1,q3 = np.percentile(rs, q=[25, 75]) # 第１第３の四分位点
-    odds = np.where((rs>q3+1.5*(q3-q1))|(rs<q1-1.5*(q3-q1))) # 異常値のインデックス
-    odds2 = []
-    rs2 = rs.copy()
-    for r in sorted(odds[0], reverse=True):
-        std = np.std(rs2, ddof=1) # 標準偏差
-        myu = np.mean(rs2) # 平均値
-        # スミルノフ・グラブス検定の基準でも外れ値であることをテスト
-        n = len(rs2)
-        t = stats.t.isf(q=(alpha / n) / 2, df=n - 2) # 有意基準
-        tau = (n - 1) * t / np.sqrt(n * (n - 2) + n * t * t) # スミルノフ・グラブス検定の有意点
-        tau_far = np.abs((rs2[r] - myu) / std) # はずれ度
-        if tau_far > tau: # はずれ度が高い場合
-            odds2.append(r)
-            rs2 = rs2[:r]+rs2[r+1:]
-        else:
-            break
-    return odds2,rs
+    rs = np.array(rs) # 近似曲線の対応点間弧長配列
+
+    # 両者の長さの差の配列を作る。本来 arcls と rs は一致すべき
+    difs = np.abs(arcls - rs)
+    q1,q3 = np.percentile(difs, q=[25, 75]) # 第１第３の四分位点
+    odds = np.where((difs>q3+1.5*(q3-q1))|(difs<q1-1.5*(q3-q1))) # 異常値のインデックス
+    return odds
 
 # (-1)変数データのストアとリストア
 # 変数内データを pickle 形式で保存
