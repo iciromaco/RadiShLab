@@ -2050,7 +2050,7 @@ def isOverFitting(func,ts,cont):
     difs = np.abs(arcls - rs)
     q1,q3 = np.percentile(difs, q=[25, 75]) # 第１第３の四分位点
     odds = np.where((difs>q3+1.5*(q3-q1))|(difs<q1-1.5*(q3-q1))) # 異常値のインデックス
-    return odds
+    return odds[0]
 
 # (-1)変数データのストアとリストア
 # 変数内データを pickle 形式で保存
