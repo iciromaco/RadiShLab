@@ -2060,8 +2060,8 @@ def crossPointsLRonImg0(img, x0, y0, dx, dy):
 
     return (crpLx, crpLy), (crpRx+x0, crpRy)
 
-# OverFitting判定　標本点間の異常判定
-def isOverFitting(func,ts,Samples):
+# スミルノフ・グラブス検定で３０％基準、かつ４分位範囲の１．５倍基準の両方ではずれ値と判定される区間を含む場合にオーバフィッティングと判定する。
+def isOverFitting(func,ts,Samples,alpha=0.3):
     t = symbols('t')
     fx,fy = func
     nfx, nfy = lambdify(t, fx, "numpy"), lambdify(t, fy, "numpy")
@@ -2073,13 +2073,27 @@ def isOverFitting(func,ts,Samples):
         r4x = d5x[1:]-d5x[0:-1]  # 隣接区分点のｘ変位
         r4y = d5y[1:]-d5y[0:-1]  # 同ｙ変位
         r = np.sum(np.sqrt(r4x*r4x + r4y*r4y)) # 折れ線の長さの合計 
-        rs.append(r)  
-    # 本来ｒはどの標本間でも一致すべき    
+        rs.append(r)
+    # rs = np.array(rs)
+    # 本来ｒはどの標本間でも一致すべき 
     q1,q3 = np.percentile(rs, q=[25, 75]) # 第１第３の四分位点
-    odds = np.sum(rs>q3+1.5*(q3-q1)) # 異常値の数
-    v = np.var(rs)
-    m = np.mean(rs)
-    return odds, np.var(rs),(np.max(rs)-m)/m
+    odds = np.where((rs>q3+1.5*(q3-q1))|(rs<q1-1.5*(q3-q1))) # 異常値のインデックス
+    odds2 = []
+    rs2 = rs.copy()
+    for r in sorted(odds[0], reverse=True):
+        std = np.std(rs2, ddof=1) # 標準偏差
+        myu = np.mean(rs2) # 平均値
+        # スミルノフ・グラブス検定の基準でも外れ値であることをテスト
+        n = len(rs2)
+        t = stats.t.isf(q=(alpha / n) / 2, df=n - 2) # 有意基準
+        tau = (n - 1) * t / np.sqrt(n * (n - 2) + n * t * t) # スミルノフ・グラブス検定の有意点
+        tau_far = np.abs((rs2[r] - myu) / std) # はずれ度
+        if tau_far > tau: # はずれ度が高い場合
+            odds2.append(r)
+            rs2 = rs2[:r]+rs2[r+1:]
+        else:
+            break
+    return odds2,rs
 
 # (-1)変数データのストアとリストア
 # 変数内データを pickle 形式で保存
