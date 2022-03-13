@@ -2063,7 +2063,10 @@ def crossPointsLRonImg0(img, x0, y0, dx, dy):
     return (crpLx, crpLy), (crpRx+x0, crpRy)
 
 # 実輪郭の標本点間の輪郭長と近似曲線の対応区間長との差の分布において、４分位範囲の１．５倍基準の両方ではずれ値と判定される区間を含む場合にオーバフィッティングと判定する。
-def isOverFitting(func,ts,cont,Nsamples=65):
+def isOverFitting(func,ts,cont):
+    if len(cont) == 0:
+        return []
+    Nsamples = len(ts)
     # 実輪郭線側の標本点間弧長を計算する
     axlength = np.array(cv2.arcLength(cont,closed=False))  # 全周の長さ
     lengths = np.array([cv2.arcLength(cont[:i+1], closed=False) for i in range(len(cont))])
