@@ -30,7 +30,7 @@ sys.path.append('./rdlib')
 import pprint
 pprint.pprint(sys.path)
 import filedialog # self made library
-import rdlib4 as rd # self made library
+import rdlib8 as rd # self made library
 
 # Prohibit red circle displayed by right click
 from kivy.config import Config

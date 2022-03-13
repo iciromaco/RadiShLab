@@ -124,22 +124,28 @@ def makethumbnail(path, savedir='.',imgexts=['jpg','jpge','png']):
 
 # (2)画像の表示
 # プロット用関数
-def plotimg(img,layout="111"):
+def plotimg(img, layout=111):
+    if(type(layout))==str:
+        layout = int(layout)
     if img.ndim == 2:
-        pltgry(img,layout)
-    elif img.ndim ==3:
-        pltcol(img,layout)
+        pltgry(img, layout)
+    elif img.ndim == 3:
+        pltcol(img, layout)
 
-def pltgry(img,layout="111"):
+def pltgry(img, layout=111):
+    if(type(layout))==str:
+        layout = int(layout)
     plt.subplot(layout)
     plt.axis('off')
-    plt.imshow(cv2.cvtColor(img,cv2.COLOR_GRAY2RGB))
+    plt.imshow(cv2.cvtColor(img, cv2.COLOR_GRAY2RGB))
 
-def pltcol(img,layout="111"):
+def pltcol(img, layout=111):
+    if(type(layout))==str:
+        layout = int(layout)
     plt.subplot(layout)
     plt.axis('off')
-    plt.imshow(cv2.cvtColor(img,cv2.COLOR_BGR2RGB))
-
+    plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    
 # (3) mkparaimage で２枚並べた画像を表示
 def mkparaimage2(img1,img2):
     h1,w1 = img1.shape[:2]
@@ -1238,6 +1244,9 @@ def drawBez0(rdimg,stt=0.02,end=0.98,bezL=None,bezR=None,bezC=None,cpl=[],cpr=[]
           linestyle = ["solid", "dashed", "dashdot", "dotted"][linestyle]
       else:
           linestyle = 'solid'
+    # matplotlib の仕様変更への対応 数字列指定した場合
+    if ct.isdecimal() == True:
+        ct = [n2c(int(i)) for i in ct]
     # いわゆる自乗誤差の一般式
     s,t= symbols('s,t')
     

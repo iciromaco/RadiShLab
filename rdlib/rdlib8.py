@@ -160,19 +160,23 @@ def makethumbnail(path, savedir='.', imgexts=['jpg', 'jpge', 'png']):
 
 
 def plotimg(img, layout=111):
+    if(type(layout))==str:
+        layout = int(layout)
     if img.ndim == 2:
         pltgry(img, layout)
     elif img.ndim == 3:
         pltcol(img, layout)
 
-
 def pltgry(img, layout=111):
+    if(type(layout))==str:
+        layout = int(layout)
     plt.subplot(layout)
     plt.axis('off')
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_GRAY2RGB))
 
-
 def pltcol(img, layout=111):
+    if(type(layout))==str:
+        layout = int(layout)
     plt.subplot(layout)
     plt.axis('off')
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
@@ -1088,7 +1092,7 @@ class BezierCurve:
         return f
 
     # ベジエ近似レベル０（標本点のパラメータを等間隔と仮定してあてはめ）
-    def fit0(self, prefunc=None, tpara=[], scatter=False, moption=False):
+    def fit0(self, prefunc=None, tpara=[], scatter=False, moption=True):
         # ts 標本点に対するパラメータ割り当て
         samples = self.samples  # 標本点
             
@@ -1231,7 +1235,7 @@ class BezierCurve:
         return ts
 
     # ベジエ近似　パラメータの繰り返し再調整あり
-    def fit1(self, maxTry=0, withErr=False, withEC=False, tpara=[], pat=10, err_th=0.75, threstune=1.00, scatter=False,moption=False):
+    def fit1(self, maxTry=3000, withErr=False, withEC=False, tpara=[], pat=300, err_th=1.0, threstune=1.00, scatter=False,moption=True):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか  withECも真ならカウントも返す
         # tpara  fit0() にわたす初期パラメータ値
@@ -1342,7 +1346,7 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # fit1 の tensorflowによる実装
-    def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=10, err_th=0.75, threstune=1.00, trial=None, scatter=False, moption=False):
+    def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=300, err_th=1.0, threstune=1.00, trial=None, scatter=False, moption=True):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか withEC が真ならカウントも返す
         # tpara  fit0() にわたす初期パラメータ値
@@ -1420,7 +1424,8 @@ class BezierCurve:
         # 'AMSgrad':[0.005,650],'Adagrad':[0.02,250],
         # 'Adadelta':[0.013,3500],'Nadam':[0.001,500], 'Adamax':[0.0075,1000],
         # 'RMSprop':[0.0003,1300],'SGD':[5e-6,2e6],'Ftrl':[0.12,1000]}
-        default_lrs={'Adam':[0.0015,1140]}        
+        # default_lrs={'Adam':[0.0015,1140]}  
+        default_lrs={'Adam':[0.001,30000]}      
         if lr == 0: lr = default_lrs['Adam'][0]
         if lrP == 0: lrP = default_lrs['Adam'][1]
         opt = tf.optimizers.Adam(learning_rate=lr) 
@@ -1576,14 +1581,14 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # 段階的ベジエ近似
-    def fit2(self, mode=0, Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.0015, lrP=1140, pat=100, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=False):
+    def fit2(self, mode=0, Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=3000, lr=0.001, lrP=30000, pat=300, err_th=1.0, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=True):
         # mode 0 -> fit1() を使う, mode 1 -> fit1T(mode=1)を使う, mode 2 -> fit1T(mode=0) を使う
         # Nplolog 近似準備開始次数　この次数からNfrom-1までは maxTry 回数で打ち切る
         # Nfrom 近似開始次数　この次数以降は収束したら終了
         # Nto 最大近似次数 Nto < Nfrom  の場合は誤差しきい値による打ち切り
         # maxTry 各次数での繰り返し回数
         # prefunc 初期近似関数
-        # err_th 打ち切り誤差
+
         # pat この回数エラーが減らない場合はあきらめる
         # withErr 誤差と次数を返すかどうか
 
@@ -1592,7 +1597,8 @@ class BezierCurve:
         ts = tpara
         err = err_th + 1
         results = {}
-        while Ncurrent < Nto and err_th < err:
+        odds = 0
+        while Ncurrent < Nto and (err_th < err or odds>0):
             Ncurrent = Ncurrent + 1
             # abez = BezierCurve(N=Ncurrent, samples=self.samples, tpara=ts, prefunc=func)
             abez = BezierCurve(N=Ncurrent, samples=self.samples, tpara=[], prefunc=None)
@@ -1608,6 +1614,9 @@ class BezierCurve:
                 cps, func, err = abez.fit1T(
                     mode=0, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, lrP=lrP,withErr=True, tpara=[], pat=pat, err_th=err_th, threstune=threstune, moption=moption)
             ts = abez.ts
+            odds,_var,_dpm = isOverFitting(func,ts,self.samples) 
+            if err_th >= err and odds > 0:
+                print("Order ",Ncurrent," is Overfitting")
             results[str(Ncurrent)] = (cps, func, err)
             # 次数を上げてインスタンス生成
         print(err,end="")
@@ -1689,6 +1698,8 @@ def drawBez(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], 
     if figsize != None:
         plt.figure(figsize=figsize, dpi=dpi)
 
+    if(type(layout))==str:
+        layout = int(layout)
     plt.subplot(layout)
 
     drawBez0(rdimg, stt=stt, end=end, bezL=bezL, bezR=bezR, bezC=bezC, cpl=cpl, cpr=cpr, cpc=cpc,
@@ -1706,6 +1717,9 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             linestyle = ["solid", "dashed", "dashdot", "dotted"][linestyle]
         else:
             linestyle = 'solid'
+    # matplotlib の仕様変更への対応 数字列指定した場合
+    if ct[0].isdecimal() == True:
+        ct = [n2c(int(i)) for i in ct]
     # いわゆる自乗誤差の一般式
     s, t = symbols('s,t')
 
@@ -1815,7 +1829,7 @@ def pltsaveimage(savepath, prefix):
 # (31) 画像の両側と仮の中心線のベジエ曲線を返す関数
 
 
-def getAverageBezline(img, N=6, n_samples=32, Amode=0, maxTry=0, moption=False):
+def getAverageBezline(img, N=6, n_samples=32, Amode=0, maxTry=0, moption=True):
     # img 画像
     # N ベジエ近似の次数
     # n_samples 左右輪郭線から取るサンプル点の数
@@ -1846,8 +1860,6 @@ def getAverageBezline(img, N=6, n_samples=32, Amode=0, maxTry=0, moption=False):
     return cpl, cpr, cpc, fL, fR, fC, cntL, cntR
 
 # (32) 中心線の法線と輪郭の交点を数式処理により求める
-
-
 def crossPointsLRonEx(fl, fr, fc, t0):
     # fl,fr,fc 左側、右側、中心線のパラメトリック曲線
     # t0 曲線上の位置を特定するパラメータ
@@ -1877,8 +1889,6 @@ def crossPointsLRonEx(fl, fr, fc, t0):
     return ldata, rdata
 
 # (33) 中心線の法線と輪郭の交点を図的処理により求める
-
-
 def crossPointsLRonImg(img, fc, t0, debugmode=False):
     # fc 中心線のパラメトリック曲線
     # t0 曲線上の位置を特定するパラメータ
@@ -1922,8 +1932,6 @@ def crossPointsLRonImg(img, fc, t0, debugmode=False):
     return [crpLx, crpLy], [crpRx, crpRy]
 
 # (34) 1点を通る直線（x0,y0を通り傾きdy/dx)と輪郭画像の交点を求める
-
-
 def crossPointsLRonImg0(img, x0, y0, dx, dy):
     # 輪郭線を描いた画像を用意する
     con = getContour(img)
@@ -2006,10 +2014,46 @@ def crossPointsLRonImg0(img, x0, y0, dx, dy):
 
     return (crpLx, crpLy), (crpRx+x0, crpRy)
 
+# OverFitting判定　標本点間の異常判定
+import scipy.stats as stats
+
+# スミルノフ・グラブス検定で３０％基準、かつ４分位範囲の１．５倍基準の両方ではずれ値と判定される区間を含む場合にオーバフィッティングと判定する。
+def isOverFitting(func,ts,Samples,alpha=0.3):
+    t = symbols('t')
+    fx,fy = func
+    nfx, nfy = lambdify(t, fx, "numpy"), lambdify(t, fy, "numpy")
+    rs = []
+    for i in range(len(ts)-1):
+        d5 = np.linspace(ts[i],ts[i+1],5)  # 標本点のパラメタ間を4分割
+        d5x = np.array([nfx(s) for s in d5])  # 区分点のｘ座標
+        d5y = np.array([nfy(s) for s in d5])  # 区分点のｙ座標
+        r4x = d5x[1:]-d5x[0:-1]  # 隣接区分点のｘ変位
+        r4y = d5y[1:]-d5y[0:-1]  # 同ｙ変位
+        r = np.sum(np.sqrt(r4x*r4x + r4y*r4y)) # 折れ線の長さの合計 
+        rs.append(r)
+    # rs = np.array(rs)
+    # 本来ｒはどの標本間でも一致すべき 
+    q1,q3 = np.percentile(rs, q=[25, 75]) # 第１第３の四分位点
+    odds = np.where((rs>q3+1.5*(q3-q1))|(rs<q1-1.5*(q3-q1))) # 異常値のインデックス
+    odds2 = []
+    rs2 = rs.copy()
+    for r in sorted(odds[0], reverse=True):
+        std = np.std(rs2, ddof=1) # 標準偏差
+        myu = np.mean(rs2) # 平均値
+        # スミルノフ・グラブス検定の基準でも外れ値であることをテスト
+        n = len(rs2)
+        t = stats.t.isf(q=(alpha / n) / 2, df=n - 2) # 有意基準
+        tau = (n - 1) * t / np.sqrt(n * (n - 2) + n * t * t) # スミルノフ・グラブス検定の有意点
+        tau_far = np.abs((rs2[r] - myu) / std) # はずれ度
+        if tau_far > tau: # はずれ度が高い場合
+            odds2.append(r)
+            rs2 = rs2[:r]+rs2[r+1:]
+        else:
+            break
+    return odds2,rs
+
 # (-1)変数データのストアとリストア
 # 変数内データを pickle 形式で保存
-
-
 def storePkl(val, fname, folder="."):
     os.makedirs(folder, exist_ok=True)
     f = open(folder+"/"+fname, 'wb')
@@ -2017,8 +2061,6 @@ def storePkl(val, fname, folder="."):
     f.close
 
 # pickle 形式で保存されたデータを変数に復元
-
-
 def loadPkl(fname, folder="."):
     f = open(folder+"/"+fname, 'rb')
     cat = pickle.load(f)

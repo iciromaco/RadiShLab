@@ -156,21 +156,24 @@ def makethumbnail(path, savedir='.', imgexts=['jpg', 'jpge', 'png']):
 # (2)画像の表示
 # プロット用関数
 
-
 def plotimg(img, layout=111):
+    if(type(layout))==str:
+        layout = int(layout)
     if img.ndim == 2:
         pltgry(img, layout)
     elif img.ndim == 3:
         pltcol(img, layout)
 
-
 def pltgry(img, layout=111):
+    if(type(layout))==str:
+        layout = int(layout)
     plt.subplot(layout)
     plt.axis('off')
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_GRAY2RGB))
 
-
 def pltcol(img, layout=111):
+    if(type(layout))==str:
+        layout = int(layout)
     plt.subplot(layout)
     plt.axis('off')
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
@@ -977,8 +980,6 @@ class BezierCurve:
     # ts 標本点に対するベジエパラメータ
 
     # クラス変数
-    # xx driftThres = 0.01 # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
-    # xx errorThres = 0.01 # 繰り返しを打ち切る誤差変化量
     dCount = 3  # ２分探索の打ち切り回数 （3以上が望ましい）
     convg_coe = 1e-5 # 5.0e-8  # 収束の見切り　　１回あたりの誤差減少が少なすぎる時の打ち切り条件を決める値 3e-8〜8e-8 が最適
     swing_penalty = 0 # 2.5e-8 # 接戦の傾きを標本間の傾きに合わせるための重み
@@ -1708,6 +1709,9 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             linestyle = ["solid", "dashed", "dashdot", "dotted"][linestyle]
         else:
             linestyle = 'solid'
+    # matplotlib の仕様変更への対応 数字列指定した場合
+    if ct[0].isdecimal() == True:
+        ct = [n2c(int(i)) for i in ct]
     # いわゆる自乗誤差の一般式
     s, t = symbols('s,t')
 
