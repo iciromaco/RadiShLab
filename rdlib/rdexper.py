@@ -1619,7 +1619,7 @@ class BezierCurve:
         print("")
         if withErr:
             if withEC:
-                return bestcps, bestfunc, (minerror,trynum)
+                return bestcps, bestfunc, (minerror,trynum) 
             else:
                 return bestcps, bestfunc, minerror
         else:
@@ -1653,7 +1653,7 @@ class BezierCurve:
             if mode == 0:
                 cps, func, err = abez.fit1(
                     maxTry=preTry if Ncurrent < Nfrom else maxTry, withErr=True, tpara=[], pat=pat, err_th=err_th, threstune=threstune, moption=moption)
-            elif mode == 1:
+            elif mode == 1: # XXXX
                 cps, func, err = abez.fit1T(
                     mode=1, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, lrP=lrP,withErr=True, tpara=[], pat=pat, err_th=err_th, threstune=threstune, moption=moption)
             elif mode == 2:
@@ -1661,11 +1661,12 @@ class BezierCurve:
                     mode=0, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, lrP=lrP,withErr=True, tpara=[], pat=pat, err_th=err_th, threstune=threstune, moption=moption)
             ts = abez.ts
             if len(cont)>0:
-                odds = isOverFitting(func,ts,cont) 
+                odds = isOverFitting(func,ts,cont,tover=0.1,tunder=-0.1) 
             if err_th >= err and len(odds) > 0:
-                print("Order ",Ncurrent," is Overfitting")
+                print("Order ",Ncurrent," is Overfitting",odds)
             results[str(Ncurrent)] = (cps, func, err)
             # 次数を上げてインスタンス生成
+        self.ts = ts.copy()
         print(err,end="")
         if withErr:
             return Ncurrent, results
@@ -2063,7 +2064,7 @@ def crossPointsLRonImg0(img, x0, y0, dx, dy):
     return (crpLx, crpLy), (crpRx+x0, crpRy)
 
 # 実輪郭の標本点間の輪郭長と近似曲線の対応区間長との差の分布において、４分位範囲の１．５倍基準の両方ではずれ値と判定される区間を含む場合にオーバフィッティングと判定する。
-def isOverFitting(func,ts,cont):
+def isOverFitting(func,ts,cont,tover=0.1,tunder=-0.1):
     if len(cont) == 0:
         return []
     Nsamples = len(ts)
@@ -2071,30 +2072,39 @@ def isOverFitting(func,ts,cont):
     axlength = np.array(cv2.arcLength(cont,closed=False))  # 全周の長さ
     lengths = np.array([cv2.arcLength(cont[:i+1], closed=False) for i in range(len(cont))])
                                                     # 始点から全輪郭点にいたる弧長
-    sampleindexes = np.array([np.abs(lengths - i).argmin() for i in np.linspace(0, axlength, Nsamples)])
+    spidx = np.array([np.abs(lengths - i).argmin() for i in np.linspace(0, axlength, Nsamples)])
                                                     # 等間隔にとった標本点のインデックス
-    ll = np.array([lengths[i] for i in sampleindexes]) # 始点から各標本点にいたる弧長
-    arcls = ll[1:]-ll[0:-1] # 標本点間の距離の配列
+    rs1 = []
+    for i in range(Nsamples-1):
+        d5 = np.array(np.linspace(spidx[i],spidx[i+1],5),np.int32)  # 標本点のパラメタ間を4分割
+        d5x = np.array([cont[s][0] for s in d5])  # 区分点のｘ座標
+        d5y = np.array([cont[s][1] for s in d5])  # 区分点のｙ座標
+        r4x = d5x[1:]-d5x[0:-1]  # 隣接区分点のｘ変位
+        r4y = d5y[1:]-d5y[0:-1]  # 同ｙ変位
+        r = np.sum(np.sqrt(r4x*r4x + r4y*r4y)) # 折れ線の長さの合計 
+        rs1.append(r)
+    rs1 = np.array(rs1)
     # 近似曲線側の弧長を計算する
     t = symbols('t')
     fx,fy = func
     nfx, nfy = lambdify(t, fx, "numpy"), lambdify(t, fy, "numpy")
-    rs = []
-    for i in range(len(ts)-1):
+    rs2 = []
+    for i in range(Nsamples-1):
         d5 = np.linspace(ts[i],ts[i+1],5)  # 標本点のパラメタ間を4分割
         d5x = np.array([nfx(s) for s in d5])  # 区分点のｘ座標
         d5y = np.array([nfy(s) for s in d5])  # 区分点のｙ座標
         r4x = d5x[1:]-d5x[0:-1]  # 隣接区分点のｘ変位
         r4y = d5y[1:]-d5y[0:-1]  # 同ｙ変位
         r = np.sum(np.sqrt(r4x*r4x + r4y*r4y)) # 折れ線の長さの合計 
-        rs.append(r)
-    rs = np.array(rs) # 近似曲線の対応点間弧長配列
+        rs2.append(r)
+    rs2 = np.array(rs2) # 近似曲線の対応点間弧長配列
 
-    # 両者の長さの差の配列を作る。本来 arcls と rs は一致すべき
-    difs = np.abs(arcls - rs)
-    q1,q3 = np.percentile(difs, q=[25, 75]) # 第１第３の四分位点
-    odds = np.where((difs>q3+1.5*(q3-q1))|(difs<q1-1.5*(q3-q1))) # 異常値のインデックス
-    return odds[0]
+    # 両者の長さの比の対数の配列を作る。本来 rs1 と rs2 は一致すべき
+    difs = np.log10(rs1/rs2)
+    #q1,q3 = np.percentile(difs, q=[25, 75]) # 第１第３の四分位点
+    #odds = np.where((difs>q3+tover*(q3-q1))|(difs<q1-tunder*(q3-q1))) # 異常値のインデックス
+    odds = np.where((difs>tover)|(difs<tunder)) # 異常値のインデックス
+    return odds[0] # ,rs1,rs2,difs
 
 # (-1)変数データのストアとリストア
 # 変数内データを pickle 形式で保存
