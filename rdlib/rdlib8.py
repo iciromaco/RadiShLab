@@ -1593,6 +1593,7 @@ class BezierCurve:
         # pat この回数エラーが減らない場合はあきらめる
         # withErr 誤差と次数を返すかどうか
 
+        Nprolog = Nfrom if Nprolog == 0 else Nfrom
         Ncurrent = Nprolog - 1
         func = self.prefunc
         ts = tpara

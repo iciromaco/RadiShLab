@@ -1626,7 +1626,7 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # 段階的ベジエ近似
-    def fit2(self, mode=0, cont = [], Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.001, lrP=30000, pat=100, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=True):
+    def fit2(self, mode=0, cont = [], Nprolog=0, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.001, lrP=30000, pat=100, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=True):
         # mode 0 -> fit1() を使う, mode 1 -> fit1T(mode=1)を使う, mode 2 -> fit1T(mode=0) を使う
         # contours 与えられている場合オーバフィッティング判定を行う
         # Nplolog 近似準備開始次数　この次数からNfrom-1までは maxTry 回数で打ち切る
@@ -1638,6 +1638,7 @@ class BezierCurve:
         # pat この回数エラーが減らない場合はあきらめる
         # withErr 誤差と次数を返すかどうか
 
+        Nprolog = Nfrom if Nprolog == 0 else Nfrom
         Ncurrent = Nprolog - 1
         func = self.prefunc
         ts = tpara
@@ -1763,6 +1764,9 @@ def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[],
             linestyle = ["solid", "dashed", "dashdot", "dotted"][linestyle]
         else:
             linestyle = 'solid'
+    # matplotlib の仕様変更への対応 数字列指定した場合
+    if ct[0].isdecimal() == True:
+        ct = [n2c(int(i)) for i in ct]
     # いわゆる自乗誤差の一般式
     s, t = symbols('s,t')
 
