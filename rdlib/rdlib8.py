@@ -2030,7 +2030,7 @@ def crossPointsLRonImg0(img, x0, y0, dx, dy):
 
 # OverFitting判定　標本点間の異常判定
 #実輪郭の各標本点間を4分割し、4分位点３つと標本点２つの5点を区間代表とし、近似曲線の対応区間で対応する５点との距＃
-def isOverFitting(func,ts,cont,err_th=0.5,of_th=0.5):
+def isOverFitting(func,ts,cont,err_th=1.0,of_th=1.0):
     if len(cont) == 0:
         return []
     Nsamples = len(ts)
@@ -2047,7 +2047,7 @@ def isOverFitting(func,ts,cont,err_th=0.5,of_th=0.5):
         qidx = np.array([np.abs(lengths - l).argmin() for l in qls])
         rq5 = np.array([cont[s] for s in qidx]) 
         rs1.append(rq5) # 各区分の両端と4分割点計5点ずつのリスト
-    # 近似曲線側の弧長を計算するddddfdsfdsddsfd
+    # 近似曲線側の弧長を計算する
     rs2 = []
     fx,fy = func
     nfx, nfy = lambdify('t', fx, "numpy"), lambdify('t', fy, "numpy")
@@ -2059,7 +2059,7 @@ def isOverFitting(func,ts,cont,err_th=0.5,of_th=0.5):
     difs = np.array([np.std(np.sum((rq5-aq5)*(rq5-aq5),axis=1)) for (rq5,aq5) in zip(rs1,rs2)])
     #q75, q25 = np.percentile(difs, [75,25]) # 四分位点
     #odds0 = np.where((difs>q75+1.5*(q75-q25))) # 異常値のインデックス
-    odds = np.where(difs > of_th*span)[0] # 
+    odds = np.where(difs > err_th*of_th*span)[0] # 
     # print(odds,[difs[i] for i in odds0])
     return odds  
 

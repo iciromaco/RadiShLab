@@ -2123,8 +2123,9 @@ def isOverFitting(func,ts,cont,tover=0.1,tunder=-0.1):
     odds = np.where((difs>tover)|(difs<tunder)) # 異常値のインデックス
     return odds[0] # ,rs1,rs2,difs
 
+# OverFitting判定　標本点間の異常判定
 #実輪郭の各標本点間を4分割し、4分位点３つと標本点２つの5点を区間代表とし、近似曲線の対応区間で対応する５点との距＃
-def isOverFitting(func,ts,cont,err_th=0.5,of_th=0.5):
+def isOverFitting(func,ts,cont,err_th=1.0,of_th=1.0):
     if len(cont) == 0:
         return []
     Nsamples = len(ts)
@@ -2153,7 +2154,7 @@ def isOverFitting(func,ts,cont,err_th=0.5,of_th=0.5):
     difs = np.array([np.std(np.sum((rq5-aq5)*(rq5-aq5),axis=1)) for (rq5,aq5) in zip(rs1,rs2)])
     #q75, q25 = np.percentile(difs, [75,25]) # 四分位点
     #odds0 = np.where((difs>q75+1.5*(q75-q25))) # 異常値のインデックス
-    odds = np.where(difs > of_th*span)[0] # 
+    odds = np.where(difs > err_th*of_th*span)[0] # 
     # print(odds,[difs[i] for i in odds0])
     return odds  
 
