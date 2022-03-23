@@ -1626,8 +1626,7 @@ class BezierCurve:
                     mode=0, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, lrP=lrP,withErr=True, tpara=[], pat=pat, err_th=err_th, threstune=threstune, moption=moption)
             ts = abez.ts
             if len(cont)>0:
-                odds = isOverFitting(func,ts,cont) 
-                print(odds) 
+                odds = isOverFitting(func=func,ts=ts,cont=cont,err_th=err_th,of_th=1.0) 
             if err_th >= err and len(odds) > 0:
                 print("Order ",Ncurrent," is Overfitting",odds)
             results[str(Ncurrent)] = (cps, func, err,ts)
