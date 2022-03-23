@@ -951,8 +951,8 @@ class BezierCurve:
         # 標本点と、それに対応する曲線上の点の距離の総和を最小化するような制御点を求める
         if BezierCurve.openmode:
             exA = np.array([[sum([bs(i,t[k])*bs(n,t[k]) for k in range(M)]) for i in range(N+1)] for n in range(N+1)],'float64')
-            while np.linalg.matrix_rank(exA) < exA.shape[0]:
-                t[1] = t[1]+0.000001
+            if np.linalg.matrix_rank(exA,tol=1e-20) != exA.shape[0]:
+                print("Rank Warning(tol:1e-20)")
             exBX = np.array([[sum([x[k]*bs(n,t[k]) for k in range(M)])] for n in range(N+1)],'float64')
             exBY = np.array([[sum([y[k]*bs(n,t[k]) for k in range(M)])] for n in range(N+1)],'float64')
             cpsx = np.linalg.solve(exA, exBX)
@@ -960,8 +960,8 @@ class BezierCurve:
 
         else: # 両端点をサンプルの両端に固定する場合
             exA = np.array([[sum([bs(i,t[k])*bs(n,t[k]) for k in range(M)]) for i in range(1,N)] for n in range(1,N)],'float64')
-            while np.linalg.matrix_rank(exA) < exA.shape[0]:
-                t[1] = t[1]+0.000001
+            if np.linalg.matrix_rank(exA,tol=1e-20) != exA.shape[0]:
+                print("Rank Warning(tol:1e-20)")
             exBX = np.array([[sum([ bs(n,t[k])*(x[k]-x[0]*(1-t[k])**N - x[-1]*t[k]**N) for k in range(M)])] for n in range(1,N)],'float64')
             exBY = np.array([[sum([ bs(n,t[k])*(y[k]-y[0]*(1-t[k])**N - y[-1]*t[k]**N) for k in range(M)]) ] for n in range(1,N)],'float64')
             cpsx = np.r_[[[x[0]]],np.linalg.solve(exA, exBX), [[x[-1]]]]

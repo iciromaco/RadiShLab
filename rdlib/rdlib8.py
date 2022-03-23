@@ -923,45 +923,43 @@ def getSamples(cont, N=20, mode='Equidistant'):
 #from sympy import var
 
 #  稠密なパラメータを得る（点列は一定間隔にならないので、点列が一定間隔になるようなパラメータ列を求める）
-
-
-def getDenseParameters(func, n_samples=0, span=0, needlength=False):
+#  稠密なパラメータを得る（点列は一定間隔にならないので、点列が一定間隔になるようなパラメータ列を求める）
+def getDenseParameters(func, st=0.0, et=1.0, n_samples=31, span=0, needlength=False):
     # func 曲線のパラメータ表現 = (fx,fy)
     # n_samples 必要なパラメータ数 = サンプル数
     # span 稠密さの係数　1 なら 候補パラメータの刻みが１画素以内に収まるように　２なら２画素以内に…
     if func == None:  # 近似式が与えられていない場合
         return np.linspace(0, 1, n_samples)
     else:
-        fx, fy = func
+        fx,fy = func
         dfx, dfy = diff(fx), diff(fy)
         nfx, nfy = lambdify('t', fx, "numpy"), lambdify('t', fy, "numpy")
         ndfx, ndfy = lambdify('t', dfx, "numpy"), lambdify('t', dfy, "numpy")
-
-        if span == 0:  # 稠密さの係数が与えられていない場合はサンプル10点でおおざっぱに全長を見積もって決める
-            ss = np.linspace(0, 1, 10)
+        para = [st]  # 候補パラメータを格納するリスト　
+        bzpoints = [[int(nfx(st)), int(nfy(st))]]  # パラメータに対応する座標のリスト
+        if span == 0:  # 稠密さの係数が与えられていない場合はサンプル30点でおおざっぱに全長を見積もって決める
+            ss = np.linspace(st, et, 30)
             ps = np.array([[int(nfx(s)), int(nfy(s))] for s in ss])
-            axlength = cv2.arcLength(ps, closed=False)  # 経路長
+            axlength = cv2.arcLength(ps, closed=False) # 経路長
             # 経路長が実際の長さより短めの値に算出される。その３分の１なので実際のサンプル間の長さの３分の１以下になる
             span = axlength/(n_samples-1)/3
-        para = [0.0]  # 候補パラメータを格納するリスト　
-        bzpoints = [[int(nfx(0)), int(nfy(0))]]  # パラメータに対応する座標のリスト
-        ss = 0.0
-        while ss < 1:
-            absdx = abs(ndfx(ss))  # x微係数
-            absdy = abs(ndfy(ss))  # y微係数
+        s1 = st
+        while s1 < et:
+            absdx = abs(ndfx(s1))  # x微係数
+            absdy = abs(ndfy(s1))  # y微係数
             absd = np.sqrt(float(absdx**2 + absdy**2))  # 傾き
             pstep = span/absd if absd > 0 else 1/n_samples  # 傾きの逆数＝ｘかｙが最大span移動するだけのパラメータ変化
-            ss += 0.7*pstep  # span を超えないよう、７掛けで控えめにパラメータを増やす　
-            ss = 1.0 if ss > 1 else ss
-            para.append(ss)  # リストへ追加
-            # ss に対応する曲線上の点をリストに追加
-            bzpoints.append([int(nfx(ss)), int(nfy(ss))])
+            s1 += 0.7*pstep  # span を超えないよう、７掛けで控えめにパラメータを増やす　
+            s1 = et if s1 > et else s1
+            para.append(s1)  # リストへ追加
+            # s1 に対応する曲線上の点をリストに追加
+            bzpoints.append([int(nfx(s1)), int(nfy(s1))])
         bzpoints = np.array(bzpoints)
         axlength = cv2.arcLength(bzpoints, closed=False)  # 弧長
         lengths = np.array([0]+[cv2.arcLength(bzpoints[:i+1], closed=False)
-                                for i in range(1, len(bzpoints))])  # 各点までの弧長の配列
+                                for i in range(1, len(bzpoints))])  # 各点までの弧長の配
         tobefound = np.linspace(0, axlength, n_samples)  # 全長をサンプルの数で区切る
-        ftpara = [0.0]
+        ftpara = [st]
         found = [0.0]
         i = 1
         for slength in tobefound[1:-1]:
@@ -969,7 +967,7 @@ def getDenseParameters(func, n_samples=0, span=0, needlength=False):
                 i += 1
             ftpara.append(float(para[i]))
             found.append(lengths[i])
-        ftpara.append(float(para[-1]))
+        ftpara.append(et)
         found.append(axlength)
         if needlength:
             return ftpara, found
@@ -1022,7 +1020,7 @@ class BezierCurve:
             self.samples = self.interporation(samples)
         # 初期パラメータのセット
         if len(tpara) > 0:
-            self.ts = tpara
+            self.ts = tpara.copy()
         else:
             self.ts = self.assignPara2Samples(prefunc=prefunc)
 
@@ -1093,13 +1091,13 @@ class BezierCurve:
         return f
 
     # ベジエ近似レベル０（標本点のパラメータを等間隔と仮定してあてはめ）
-    def fit0(self, prefunc=None, tpara=[], scatter=False, moption=True):
+    def fit0(self, prefunc=None, tpara=[], scatter=False, moption=True, withErr=False):
         # ts 標本点に対するパラメータ割り当て
         samples = self.samples  # 標本点
             
         # t 標本点に結びつけるパラメータは引数として与えられているならそれを、さもなくばリニアに設定
         if len(tpara) > 0: #パラメータが与えられているならそれを使う
-            ts = self.ts = tpara
+            ts = self.ts = tpara.copy()
         elif prefunc != None: # 関数が与えられているなら、それをもとに等間隔になるよう初期パラメータ設定
             ts = self.ts = self.assignPara2Samples(prefunc=prefunc) 
         else: # さもなくば、self.prefunc で等間隔か [0,1] を等間隔　ただしscatter=Trueのときは不等間隔
@@ -1119,8 +1117,8 @@ class BezierCurve:
         if BezierCurve.openmode:
             exA = np.array([[sum([bs(i, ts[k])*bs(n, ts[k]) for k in range(M)])
                              for i in range(N+1)] for n in range(N+1)], 'float64')
-            while np.linalg.matrix_rank(exA) < exA.shape[0]:
-                ts[1] = ts[1]+0.000001
+            if np.linalg.matrix_rank(exA,tol=1e-20) != exA.shape[0]:
+                print("Rank Warning(tol:1e-20)")
             exBX = np.array([[sum([x[k]*bs(n, ts[k]) for k in range(M)])]
                              for n in range(N+1)], 'float64')
             exBY = np.array([[sum([y[k]*bs(n, ts[k]) for k in range(M)])]
@@ -1131,8 +1129,8 @@ class BezierCurve:
         else:  # 両端点をサンプルの両端に固定する場合
             exA = np.array([[sum([bs(i, ts[k])*bs(n, ts[k]) for k in range(M)])
                              for i in range(1, N)] for n in range(1, N)], 'float64')
-            while np.linalg.matrix_rank(exA) < exA.shape[0]:
-                ts[1] = ts[1]+0.000001
+            if np.linalg.matrix_rank(exA,tol=1e-20) != exA.shape[0]:
+                print("Rank Warning(tol:1e-20)")
             exBX = np.array([[sum([bs(n, ts[k])*(x[k]-x[0]*(1-ts[k])**N - x[-1]*ts[k]**N)
                                    for k in range(M)])] for n in range(1, N)], 'float64')
             exBY = np.array([[sum([bs(n, ts[k])*(y[k]-y[0]*(1-ts[k])**N - y[-1]*ts[k]**N)
@@ -1143,7 +1141,11 @@ class BezierCurve:
         cps = [[i[0][0], i[1][0]] for i in zip(cpsx, cpsy)]
         func = self.setCPs(cps)
 
-        return cps, func
+        if withErr:
+            fx,fy = func
+            return cps, func, self.f_meanerr(fx, fy, self.ts)
+        else:
+            return cps, func
 
     #  パラメトリック曲線　curvefunc 上で各サンプル点に最寄りの点のパラメータを対応づける
     def refineTparaN(self, bezierparameters, curvefunc, stt, end):
@@ -1236,11 +1238,12 @@ class BezierCurve:
         return ts
 
     # ベジエ近似　パラメータの繰り返し再調整あり
-    def fit1(self, maxTry=3000, withErr=False, withEC=False, tpara=[], pat=300, err_th=1.0, threstune=1.00, scatter=False,moption=True):
+    def fit1(self, maxTry=0, withErr=False, withEC=False, tpara=[], prefunc=None,pat=300, err_th=0.75, threstune=1.00,scatter=False, moption=True):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか  withECも真ならカウントも返す
         # tpara  fit0() にわたす初期パラメータ値
-        # pat 10 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
+        # prefunc tpara を求める基準となる関数式がある場合は指定
+        # pat 300 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
         # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
         # scatter 不等間隔標本の場合に真
 
@@ -1254,7 +1257,16 @@ class BezierCurve:
         rmcounter = 0  # エラー増加回数のカウンター
         priority = BezierCurve.AsymptoticPriority
 
-        cps, func = self.fit0(tpara=tpara,scatter=scatter,moption=moption)  # レベル０フィッティングを実行
+        N = self.N
+        # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる 
+        doubleN = 2*N if N < 9 else 18
+        prebez = BezierCurve(N=doubleN,samples=self.samples)
+        precps, prefunc = prebez.fit0(prefunc=prefunc, tpara=tpara, scatter=scatter,moption=moption)
+        # 仮近似曲線をほぼ等距離に区切るようなパラメータを求める
+        # 改めて fit0 でN次近似した関数を初期近似とする
+        # cps, func = self.fit0(prefunc = prefunc, tpara=tpara)  # レベル０フィッティングを実行
+        cps, func = self.fit0(prefunc = prefunc, scatter=scatter, moption=moption)  # レベル０フィッティングを実行
+        #cps, func = self.fit0(tpara=tpara,scatter=scatter,moption=moption)  # レベル０フィッティングを実行
         [fx, fy] = bestfunc = func
         bestcps = cps
         ts = bestts = self.ts.copy()
@@ -1335,7 +1347,7 @@ class BezierCurve:
             if maxTry > 0 and trynum >= maxTry:
                 break
 
-        self.ts = bestts
+        self.ts = bestts.copy()
         
         print("")
         if withErr:
@@ -1369,7 +1381,6 @@ class BezierCurve:
         x_data = x_data0[1:-1]
         y_data = y_data0[1:-1]
         
-        N = self.N
         # #######################
         # Itterations start here フィッティングのメインプログラム
         # #######################
@@ -1378,8 +1389,8 @@ class BezierCurve:
         rmcounter = 0  # エラー増加回数のカウンター
         priority = BezierCurve.AsymptoticPriority
 
-        # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる ただし、24乗あたりが solver 限界
-        # 20次を超えるとオーバフィッティングが発生しがちなのでmax 18としておく
+        N = self.N
+        # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる 
         doubleN = 2*N if N < 9 else 18
         prebez = BezierCurve(N=doubleN,samples=self.samples)
         precps, prefunc = prebez.fit0(prefunc=prefunc, tpara=tpara, scatter=scatter,moption=moption)
@@ -1432,7 +1443,7 @@ class BezierCurve:
         opt = tf.optimizers.Adam(learning_rate=lr) 
         optP = tf.optimizers.Adam(learning_rate=lr*lrP) 
 
-        meanerrorm = tfZERO = tf.constant(0.0,tf.float32)
+        tfZERO = tf.constant(0.0,tf.float32)
         tfONE = tf.constant(1.0,dtype=tf.float32)
         
         while True:
@@ -1475,7 +1486,7 @@ class BezierCurve:
                 if ec > 0:
                     print("e%d" % (ec),end="")
             # tts を更新
-            self.ts = ts
+            self.ts = ts.copy()
             tts.assign(ts[1:-1])
 
             if mode == 0:
@@ -1518,7 +1529,7 @@ class BezierCurve:
             if error < minerror: 
                 if trynum - lastgood > 3:
                   convergenceflag = False
-                bestts = ts  # 今までで一番よかったパラメータセットを更新
+                bestts = ts.copy()  # 今までで一番よかったパラメータセットを更新
                 bestfunc = func  # 今までで一番よかった関数式を更新
                 minerror = error  # 最小誤差を更新
                 bestcps = cps  # 最適制御点リストを更新
@@ -1570,8 +1581,6 @@ class BezierCurve:
                     print("Optuna による打ち切り")
                     raise optuna.TrialPruned()
             
-        self.ts = bestts
-  
         print("")
         if withErr:
             if withEC:
@@ -1581,7 +1590,7 @@ class BezierCurve:
         else:
             return bestcps, bestfunc
 
-    def fit2(self, mode=0, cont = [], Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.001, lrP=30000, pat=100, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=True):
+    def fit2(self, mode=0, cont = [], Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.001, lrP=30000, pat=300, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=True):
         # mode 0 -> fit1() を使う, mode 1 -> fit1T(mode=1)を使う, mode 2 -> fit1T(mode=0) を使う
         # cont 与えられている場合オーバフィッティング判定を行う
         # Nplolog 近似準備開始次数　この次数からNfrom-1までは maxTry 回数で打ち切る
@@ -1617,7 +1626,7 @@ class BezierCurve:
                     mode=0, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, lrP=lrP,withErr=True, tpara=[], pat=pat, err_th=err_th, threstune=threstune, moption=moption)
             ts = abez.ts
             if len(cont)>0:
-                odds = isOverFitting(func,ts,cont,tover=0.1,tunder=-0.1) 
+                odds = isOverFitting(func,ts,cont) 
                 print(odds) 
             if err_th >= err and len(odds) > 0:
                 print("Order ",Ncurrent," is Overfitting",odds)
@@ -2020,48 +2029,39 @@ def crossPointsLRonImg0(img, x0, y0, dx, dy):
     return (crpLx, crpLy), (crpRx+x0, crpRy)
 
 # OverFitting判定　標本点間の異常判定
-# 実輪郭の標本点間の輪郭長と近似曲線の対応区間長との差の分布において、４分位範囲の１．５倍基準の両方ではずれ値と判定される区間を含む場合にオーバフィッティングと判定する。
-def isOverFitting(func,ts,cont,tover=0.1,tunder=-0.1):
+#実輪郭の各標本点間を4分割し、4分位点３つと標本点２つの5点を区間代表とし、近似曲線の対応区間で対応する５点との距＃
+def isOverFitting(func,ts,cont,err_th=0.5,of_th=0.5):
     if len(cont) == 0:
         return []
     Nsamples = len(ts)
     # 実輪郭線側の標本点間弧長を計算する
     axlength = np.array(cv2.arcLength(cont,closed=False))  # 全周の長さ
+    span = axlength/(Nsamples-1) # 平均標本点間距離
     lengths = np.array([cv2.arcLength(cont[:i+1], closed=False) for i in range(len(cont))])
                                                     # 始点から全輪郭点にいたる弧長
     spidx = np.array([np.abs(lengths - i).argmin() for i in np.linspace(0, axlength, Nsamples)])
                                                     # 等間隔にとった標本点のインデックス
     rs1 = []
     for i in range(Nsamples-1):
-        d5 = np.array(np.linspace(spidx[i],spidx[i+1],5),np.int32)  # 標本点のパラメタ間を4分割
-        d5x = np.array([cont[s][0] for s in d5])  # 区分点のｘ座標
-        d5y = np.array([cont[s][1] for s in d5])  # 区分点のｙ座標
-        r4x = d5x[1:]-d5x[0:-1]  # 隣接区分点のｘ変位
-        r4y = d5y[1:]-d5y[0:-1]  # 同ｙ変位
-        r = np.sum(np.sqrt(r4x*r4x + r4y*r4y)) # 折れ線の長さの合計 
-        rs1.append(r)
-    rs1 = np.array(rs1)
-    # 近似曲線側の弧長を計算する
-    t = symbols('t')
-    fx,fy = func
-    nfx, nfy = lambdify(t, fx, "numpy"), lambdify(t, fy, "numpy")
+        qls = np.linspace(lengths[spidx[i]],lengths[spidx[i+1]],5)
+        qidx = np.array([np.abs(lengths - l).argmin() for l in qls])
+        rq5 = np.array([cont[s] for s in qidx]) 
+        rs1.append(rq5) # 各区分の両端と4分割点計5点ずつのリスト
+    # 近似曲線側の弧長を計算するddddfdsfdsddsfd
     rs2 = []
+    fx,fy = func
+    nfx, nfy = lambdify('t', fx, "numpy"), lambdify('t', fy, "numpy")
     for i in range(Nsamples-1):
-        d5 = np.linspace(ts[i],ts[i+1],5)  # 標本点のパラメタ間を4分割
-        d5x = np.array([nfx(s) for s in d5])  # 区分点のｘ座標
-        d5y = np.array([nfy(s) for s in d5])  # 区分点のｙ座標
-        r4x = d5x[1:]-d5x[0:-1]  # 隣接区分点のｘ変位
-        r4y = d5y[1:]-d5y[0:-1]  # 同ｙ変位
-        r = np.sum(np.sqrt(r4x*r4x + r4y*r4y)) # 折れ線の長さの合計 
-        rs2.append(r)
-    rs2 = np.array(rs2) # 近似曲線の対応点間弧長配列
-
-    # 両者の長さの比の対数の配列を作る。本来 rs1 と rs2 は一致すべき
-    difs = np.log10(rs1/rs2)
-    #q1,q3 = np.percentile(difs, q=[25, 75]) # 第１第３の四分位点
-    #odds = np.where((difs>q3+tover*(q3-q1))|(difs<q1-tunder*(q3-q1))) # 異常値のインデックス
-    odds = np.where((difs>tover)|(difs<tunder)) # 異常値のインデックス
-    return odds[0] # ,rs1,rs2,difs
+        d5 = getDenseParameters(func, st=ts[i], et=ts[i+1], n_samples=5) # 標本点のパラメタ間を4分割
+        aq5 = np.array([[nfx(s),nfy(s)] for s in d5]) # 近似曲線上で区間を4等分する座標のリスト
+        rs2.append(aq5)
+    # 代表5点の残差の標準偏差 
+    difs = np.array([np.std(np.sum((rq5-aq5)*(rq5-aq5),axis=1)) for (rq5,aq5) in zip(rs1,rs2)])
+    #q75, q25 = np.percentile(difs, [75,25]) # 四分位点
+    #odds0 = np.where((difs>q75+1.5*(q75-q25))) # 異常値のインデックス
+    odds = np.where(difs > of_th*span)[0] # 
+    # print(odds,[difs[i] for i in odds0])
+    return odds  
 
 # (-1)変数データのストアとリストア
 # 変数内データを pickle 形式で保存

@@ -1106,8 +1106,9 @@ class BezierCurve:
         if BezierCurve.openmode:
             exA = np.array([[sum([bs(i, ts[k])*bs(n, ts[k]) for k in range(M)])
                              for i in range(N+1)] for n in range(N+1)], 'float64')
-            while np.linalg.matrix_rank(exA) < exA.shape[0]:
-                ts[1] = ts[1]+0.000001
+            if np.linalg.matrix_rank(exA,tol=1e-20) != exA.shape[0]:
+                print("Rank Warning(tol:1e-20)")
+            ts[1] = ts[1]+0.000001
             exBX = np.array([[sum([x[k]*bs(n, ts[k]) for k in range(M)])]
                              for n in range(N+1)], 'float64')
             exBY = np.array([[sum([y[k]*bs(n, ts[k]) for k in range(M)])]
@@ -1118,8 +1119,8 @@ class BezierCurve:
         else:  # 両端点をサンプルの両端に固定する場合
             exA = np.array([[sum([bs(i, ts[k])*bs(n, ts[k]) for k in range(M)])
                              for i in range(1, N)] for n in range(1, N)], 'float64')
-            while np.linalg.matrix_rank(exA) < exA.shape[0]:
-                ts[1] = ts[1]+0.000001
+            if np.linalg.matrix_rank(exA,tol=1e-20) != exA.shape[0]:
+                print("Rank Warning(tol:1e-20)")
             exBX = np.array([[sum([bs(n, ts[k])*(x[k]-x[0]*(1-ts[k])**N - x[-1]*ts[k]**N)
                                    for k in range(M)])] for n in range(1, N)], 'float64')
             exBY = np.array([[sum([bs(n, ts[k])*(y[k]-y[0]*(1-ts[k])**N - y[-1]*ts[k]**N)
