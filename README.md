@@ -179,18 +179,15 @@ Anaconda で仮想環境を作った場合、ライブラリは最小限しか�
 - jupyter
 - sympy 
 - scikit-learn 
+- tensorflow 2.6
+- keras
 - pandas
 - openpyxl
 - optuna
 - wandb
 ```
-conda install Pillow numpy jupyter matplotlib seaborn sympy scikit-learn pandas
+conda install Pillow numpy jupyter matplotlib seaborn sympy scikit-learn pandas openpyxl optuna wandb tensorflow=2.6 keras
 ```
-
-#### その他
-予定
-- tensorflow
-- keras
 
 ## Anaconda の更新
 
