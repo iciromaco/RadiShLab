@@ -139,7 +139,7 @@ python はライブラリ間の依存関係が複雑でしばしば最新でな�
 ### CUIで仮想環境作成
 Anaconda Promptを起動して次のように打ち込んでください。
 ```
-conda create -n RL python=3.8  opencv=4.5  jupyter jupyterlab matplotlib pillow openpyxl pandas tensorflow=2.6 kearas=2.6 optuna wandb
+conda create -n RL python=3.8  opencv=4.5  jupyter jupyterlab tensorflow=2.6 kearas=2.6 omatplotlib pillow sympy kivy openpyxl pandas ptuna wandb
 ```
 
 ### 3. ライブラリのインストール
