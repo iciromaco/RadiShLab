@@ -139,7 +139,7 @@ python はライブラリ間の依存関係が複雑でしばしば最新でな�
 ### CUIで仮想環境作成
 Anaconda Promptを起動して次のように打ち込んでください。
 ```
-conda create -n RL python=3.8  opencv=4.5  jupyter jupyterlab matplotlib pillow openpyxl pandas tensorflow kearas optuna wandb
+conda create -n RL python=3.8  opencv=4.5  jupyter jupyterlab matplotlib pillow openpyxl pandas tensorflow=2.6 kearas=2.6 optuna wandb
 ```
 
 ### 3. ライブラリのインストール
@@ -180,7 +180,7 @@ Anaconda で仮想環境を作った場合、ライブラリは最小限しか�
 - sympy 
 - scikit-learn 
 - tensorflow 2.6
-- keras
+- keras 2.6
 - pandas
 - openpyxl
 - optuna
