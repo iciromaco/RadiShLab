@@ -177,7 +177,7 @@ Anaconda で仮想環境を作った場合、ライブラリは最小限しか�
 - matplotlib
 - seaborn
 - jupyter
-- sympy 
+- sympy 1.10
 - scikit-learn 
 - tensorflow 2.6
 - keras 2.6
