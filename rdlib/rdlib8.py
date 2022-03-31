@@ -922,6 +922,19 @@ def getSamples(cont, N=20, mode='Equidistant'):
 #from sympy.abc import a,b,c
 #from sympy import var
 
+# 輪郭点列中の両端の２標本点間の点列の序列中央の座標を返す関数
+def getMutPoints(cont=[],Samples=[]):
+    if len(Samples)>0:
+        wx1 = np.where(cont[:,0]==Samples[1][0])[0] # X座標が１番と一致する要素番号
+        wy1 = np.where(cont[:,1]==Samples[1][1])[0] # Y座標が１番と一致する要素番号
+        im1 = wx1[np.in1d(wx1, wy1)][0] # Sample[1]のcontにおけるインデックス
+        wx2 = np.where(cont[:,0]==Samples[-2][0])[0] # X座標が-2番と一致する要素番号
+        wy2 = np.where(cont[:,1]==Samples[-2][1])[0] # Y座標が-2番と一致する要素番号
+        im2 = wx2[np.in1d(wx2, wy2)][0] # Sample[1]のcontにおけるインデックス
+        return [cont[im1//2],cont[(im2+len(cont)-1)//2]]
+    else:
+        return []
+
 #  稠密なパラメータを得る（点列は一定間隔にならないので、点列が一定間隔になるようなパラメータ列を求める）
 #  稠密なパラメータを得る（点列は一定間隔にならないので、点列が一定間隔になるようなパラメータ列を求める）
 def getDenseParameters(func, st=0.0, et=1.0, n_samples=31, span=0, needlength=False):
@@ -1091,7 +1104,7 @@ class BezierCurve:
         return f
 
     # ベジエ近似レベル０（標本点のパラメータを等間隔と仮定してあてはめ）
-    def fit0(self, prefunc=None, tpara=[], scatter=False, moption=True, withErr=False):
+    def fit0(self, prefunc=None, tpara=[], scatter=False, moption=[], withErr=False):
         # ts 標本点に対するパラメータ割り当て
         samples = self.samples  # 標本点
             
@@ -1105,8 +1118,8 @@ class BezierCurve:
         N = self.N  # ベジエの次数
         M = len(samples)  # サンプル数
         # バーンスタイン関数の定義
-        if moption: # 端点部のみ中間点を追加する
-            samples = np.concatenate([[samples[0],(samples[0]+samples[1])/2],samples[1:-1],[(samples[-2]+samples[-1])/2,samples[-1]]])
+        if len(moption)>1: # 端点部のみ中間点を追加する
+            samples = np.concatenate([[samples[0],moption[0]],samples[1:-1],[moption[-1],samples[-1]]])
             ts = np.concatenate([[ts[0],(ts[0]+ts[1])/2],ts[1:-1],[(ts[-2]+ts[-1])/2,ts[-1]]])
             M = M + 2
         x, y = samples[:, 0], samples[:, 1]  # 標本点のｘ座標列とｙ座標列
@@ -1238,7 +1251,7 @@ class BezierCurve:
         return ts
 
     # ベジエ近似　パラメータの繰り返し再調整あり
-    def fit1(self, maxTry=0, withErr=False, withEC=False, tpara=[], prefunc=None,pat=300, err_th=0.75, threstune=1.00,scatter=False, moption=True):
+    def fit1(self, maxTry=0, withErr=False, withEC=False, tpara=[], prefunc=None,pat=300, err_th=0.75, threstune=1.00,scatter=False, moption=[]):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか  withECも真ならカウントも返す
         # tpara  fit0() にわたす初期パラメータ値
@@ -1359,7 +1372,7 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # fit1 の tensorflowによる実装
-    def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=300, err_th=1.0, threstune=1.00, trial=None, scatter=False, moption=True):
+    def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=300, err_th=1.0, threstune=1.00, trial=None, scatter=False, moption=[]):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか withEC が真ならカウントも返す
         # tpara  fit0() にわたす初期パラメータ値
@@ -1375,11 +1388,7 @@ class BezierCurve:
         # trial Optuna のインスタンス
         # サンプル間隔が等間隔でない場合、scatter=True
         
-        sps = self.samples
-        x_data0 = [x for [x, y] in sps]
-        y_data0 = [y for [x, y] in sps]
-        x_data = x_data0[1:-1]
-        y_data = y_data0[1:-1]
+        sps = self.samples.copy()
         
         # #######################
         # Itterations start here フィッティングのメインプログラム
@@ -1391,9 +1400,9 @@ class BezierCurve:
 
         N = self.N
         # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる 
-        doubleN = 2*N if N < 9 else 18
+        doubleN = 2*N  if N < 9 else 18
         prebez = BezierCurve(N=doubleN,samples=self.samples)
-        precps, prefunc = prebez.fit0(prefunc=prefunc, tpara=tpara, scatter=scatter,moption=moption)
+        precps, prefunc = prebez.fit0(prefunc=prefunc, tpara=tpara,scatter=scatter, moption=moption)
         # 仮近似曲線をほぼ等距離に区切るようなパラメータを求める
         # 改めて fit0 でN次近似した関数を初期近似とする
         # cps, func = self.fit0(prefunc = prefunc, tpara=tpara)  # レベル０フィッティングを実行
@@ -1401,6 +1410,12 @@ class BezierCurve:
         (fx,fy) = bestfunc = func
         bestcps = cps
         ts = bestts = self.ts.copy()
+        m_ts = self.ts.copy()
+        if len(moption)>1: # 端点部のみ中間点を追加する
+            sps = np.concatenate([[sps[0],moption[0]],sps[1:-1],[moption[-1],sps[-1]]])
+            m_ts = np.concatenate([[m_ts[0],(m_ts[0]+m_ts[1])/2],m_ts[1:-1],[(m_ts[-2]+m_ts[-1])/2,m_ts[-1]]])
+        x_data = sps[:,0]
+        y_data = sps[:,1]
 
         minerror = self.f_meanerr(fx, fy, ts=ts)  # 初期当てはめ誤差の算出
         errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
@@ -1411,17 +1426,6 @@ class BezierCurve:
         if BezierCurve.debugmode:
             print("initial error:{:.5f}".format(minerror))
 
-        # 両端点の接線方向単位ベクトルの計算
-        def calcnvecOnTerminal(fx,fy,ts):         
-              t = symbols('t')
-              diffx, diffy = diff(fx, t), diff(fy, t) # 導関数
-              # 端点の接線方向の単位ベクトル
-              ndvec1 = np.array([float(diffx.subs(t, ts[0])),float(diffy.subs(t, ts[0]))])
-              ndvec1 =  ndvec1/np.linalg.norm(ndvec1)
-              ndvec2 = np.array([float(diffx.subs(t, ts[-1])),float(diffy.subs(t, ts[-1]))])
-              ndvec2 =  ndvec2/np.linalg.norm(ndvec2)
-              return ndvec1,ndvec2
-
         # tensorflow の変数
         if mode == 0:
             Px = tf.Variable([cps[i+1][0]
@@ -1429,15 +1433,14 @@ class BezierCurve:
             Py = tf.Variable([cps[i+1][1]
                               for i in range(N-1)], dtype='float32')
 
-        tts = tf.Variable(ts[1:-1]) # 端点以外のベジエパラメータをtensorflow変数化
+        tts = tf.Variable(m_ts, dtype='float32') # 端点以外のベジエパラメータをtensorflow変数化
         
         # Optimizer 
         # 実験結果としてAdamが優れていたのでAdamを採用。Adam 以外の、経験的な適正パラメータは以下の通り
         # 'AMSgrad':[0.005,650],'Adagrad':[0.02,250],
         # 'Adadelta':[0.013,3500],'Nadam':[0.001,500], 'Adamax':[0.0075,1000],
         # 'RMSprop':[0.0003,1300],'SGD':[5e-6,2e6],'Ftrl':[0.12,1000]}
-        # default_lrs={'Adam':[0.0015,1140]}  
-        default_lrs={'Adam':[0.001,30000]}      
+        default_lrs={'Adam':[0.0015,1140]}        
         if lr == 0: lr = default_lrs['Adam'][0]
         if lrP == 0: lrP = default_lrs['Adam'][1]
         opt = tf.optimizers.Adam(learning_rate=lr) 
@@ -1466,6 +1469,8 @@ class BezierCurve:
                     bezfx = bezfx + tts**N*cps[N][0]
                     bezfy = bezfy + tts**N*cps[N][1]
                     
+                    sqx,sqy = tf.square(bezfx - x_data),tf.square(bezfy - y_data)
+
                     meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
                     meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
                     gloss = tf.add(meanerrx, meanerry)                                      
@@ -1473,21 +1478,27 @@ class BezierCurve:
                 # ts を誤差逆伝搬で更新
                 opt.minimize(gloss, tape=metatape, var_list=tts)
                 # ts を更新
-                ts[1:-1] = tts.numpy() 
+                m_ts = tts.numpy() 
+                m_ts[0] = 0.0 # 両端は0,1にリセット
+                m_ts[-1] = 1.0 
                 # check order and reorder 順序関係がおかしい場合強制的に変更       
                 ec = 0
-                for i in range(1,len(ts)-1):
-                    if ts[i] <= ts[i-1]:
+                for i in range(1,len(m_ts)-1):
+                    if m_ts[i] <= m_ts[i-1]:
                         ec += 1
-                        ts[i] = ts[i-1] + 1e-6
-                    if ts[i] >= 1.0-(len(ts)-i-2)*(1e-6):
+                        m_ts[i] = m_ts[i-1] + 1e-6
+                    if m_ts[i] >= 1.0-(len(m_ts)-i-2)*(1e-6):
                         ec += 1
-                        ts[i] = min(1.0-(len(ts)-i-2)*(1e-6), ts[i+1]) - 1e-6
+                        m_ts[i] = min(1.0-(len(m_ts)-i-2)*(1e-6), m_ts[i+1]) - 1e-6
                 if ec > 0:
                     print("e%d" % (ec),end="")
             # tts を更新
+            tts.assign(m_ts)
+            if len(moption)>0:
+                ts[1:-1] = m_ts[2:-2].copy()
+            else:
+                ts = m_ts.copy()
             self.ts = ts.copy()
-            tts.assign(ts[1:-1])
 
             if mode == 0:
                 # 上で求めたベジエパラメータに対し制御点を最適化
@@ -1547,12 +1558,6 @@ class BezierCurve:
                 print("{} err:{:.5f}({:.5f}) rmcounter {})".format(
                     trynum, error, minerror, rmcounter))
             
-            # エラーが増加したときだけ fit0 を実行
-            # if convergenceflag or errq[-2] < error:
-                # fit0 で近似し、間隔均等になるように初期パラメータを決定
-                # cps, func = self.fit0(tpara=tts.numpy())
-                # ts = self.assignPara2Samples(prefunc=func,scatter=scatter)
-
             if (convergenceflag and (trynum > 50)) or error < err_th*thresrate or ((trynum > 100) and rmcounter > pat):
                 # pat回続けてエラーが増加したらあきらめる デフォルトは１00 （fit1T は繰り返し1回あたりの変動が小さい）
                 if (convergenceflag and (trynum > 50)):
@@ -1568,7 +1573,7 @@ class BezierCurve:
                     else:
                         print("M")
                 break
-
+            
             trynum += 1
             if trynum % 100 == 0:
                 print("")
@@ -1580,6 +1585,9 @@ class BezierCurve:
                 if trial.should_prune() or error > 1e3:
                     print("Optuna による打ち切り")
                     raise optuna.TrialPruned()
+                
+        self.ts = bestts.copy()
+        fx,fy=bestfunc
             
         print("")
         if withErr:
@@ -1590,7 +1598,7 @@ class BezierCurve:
         else:
             return bestcps, bestfunc
 
-    def fit2(self, mode=0, cont = [], Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.001, lrP=30000, pat=300, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=True):
+    def fit2(self, mode=0, cont = [], Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.001, lrP=30000, pat=300, err_th=0.75, threstune=1.0, withErr=False, withEC=False, tpara=[], withFig=False, moption=[]):
         # mode 0 -> fit1() を使う, mode 1 -> fit1T(mode=1)を使う, mode 2 -> fit1T(mode=0) を使う
         # cont 与えられている場合オーバフィッティング判定を行う
         # Nplolog 近似準備開始次数　この次数からNfrom-1までは maxTry 回数で打ち切る
@@ -1842,7 +1850,7 @@ def pltsaveimage(savepath, prefix):
 # (31) 画像の両側と仮の中心線のベジエ曲線を返す関数
 
 
-def getAverageBezline(img, N=6, n_samples=32, Amode=0, maxTry=0, moption=True):
+def getAverageBezline(img, N=6, n_samples=32, Amode=0, maxTry=0, moption=True): # ここはTrueで正しい
     # img 画像
     # N ベジエ近似の次数
     # n_samples 左右輪郭線から取るサンプル点の数
@@ -1862,15 +1870,19 @@ def getAverageBezline(img, N=6, n_samples=32, Amode=0, maxTry=0, moption=True):
 
     # 左右をそれぞれベジエ 曲線で近似し、その平均として中心軸を仮決定
     if Amode == 0:
-        cpl, fL = bezL.fit0(moption=moption)
-        cpr, fR = bezR.fit0(moption=moption)
+        if moption:
+            cpl, fL = bezL.fit0(moption=getMutPoints(conLeft,cntL))
+            cpr, fR = bezR.fit0(moption=getMutPoints(conRight,cntR))
+        else:
+            cpl, fL = bezL.fit0(moption=[])
+            cpr, fR = bezR.fit0(moption=[])            
     else:
-        cpl, fL = bezL.fit1(maxTry,moption=moption)
-        cpr, fR = bezR.fit1(maxTry,moption=moption)
-
-    fC = (fL+fR)/2
-    cpc = [x for x in (np.array(cpl)+np.array(cpr))/2]
-    return cpl, cpr, cpc, fL, fR, fC, cntL, cntR
+        if moption:
+            cpl, fL = bezL.fit1T(moption=getMutPoints(conLeft,cntL))
+            cpr, fR = bezR.fit1T(moption=getMutPoints(conRight,cntR))
+        else:
+            cpl, fL = bezL.fit1T(moption=[])
+            cpr, fR = bezR.fit1T(moption=[]) 
 
 # (32) 中心線の法線と輪郭の交点を数式処理により求める
 def crossPointsLRonEx(fl, fr, fc, t0):
