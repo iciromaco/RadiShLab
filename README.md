@@ -121,7 +121,7 @@ python もOpenCV もバージョンアップが早く、かつバージョンの
 Anaconda Prompt で次のコマンドを実行してください。
 
 ```
-conda config --append channels conda-forge
+conda config --add channels conda-forge
 ```
 
 ### 2. 仮想環境の作成 
