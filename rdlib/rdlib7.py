@@ -1,7 +1,7 @@
 # rdlib6.py 安定版のつもり
 import pickle
 from glob import glob
-import os
+import os,sys
 # os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
 from PIL import Image
 import cv2
