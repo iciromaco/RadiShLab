@@ -1,9 +1,9 @@
-# rdlib6.py 安定版のつもり
+# rdlib8.py 安定版のつもり
 import pickle
 from glob import glob
-import os,sys
+import os,sys,io
 # os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
-from PIL import Image
+from PIL import Image, ImageTk
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -2088,3 +2088,18 @@ def loadPkl(fname, folder="."):
     cat = pickle.load(f)
     f.close
     return cat
+
+# opencv 画像を tk 画像に変換
+def cv2tkimg(cvimg,resize = (320,320), first=False):
+    if len(cvimg.shape) == 2:
+        pilimg = Image.fromarray(cvimg)
+    else:
+        pilimg = Image.fromarray(cv2.cvtColor(cvimg,cv2.COLOR_BGR2RGB))
+    if resize:
+        pilimg.thumbnail(resize) # 破壊的変換なので注意
+    if first:
+        bio = io.BytesIO()
+        pilimg.save(bio, format="PNG")
+        del pilimg
+        return bio.getvalue()
+    return ImageTk.PhotoImage(pilimg)
