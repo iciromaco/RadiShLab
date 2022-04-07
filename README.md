@@ -182,6 +182,7 @@ Anaconda で仮想環境を作った場合、ライブラリは最小限しか�
 - tensorflow 2.6
 - keras 2.6
 - pandas
+- ImageTk
 - openpyxl
 - optuna
 - wandb
