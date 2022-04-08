@@ -145,9 +145,9 @@ conda create -n RL python=3.8 opencv=4.5 tensorflow=2.6 kearas=2.6 matplotlib sy
 ### 3. ライブラリのインストール
 #### core 
 
-- opencv $$4.5$$
-- tensorflow $$2.6$$
-- keras $$2.6$$
+- opencv **4.5**
+- tensorflow **2.6**
+- keras **2.6**
 - matplotlib (3.5)
 - sympy (1.10)
 
