@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from statistics import mean
 from collections import deque
-import optuna
+# import optuna
 
 # from sympy import *
 from sympy import diff, Symbol, Matrix, symbols, solve, simplify, binomial, Abs, im, re, lambdify
@@ -1372,7 +1372,8 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # fit1 の tensorflowによる実装
-    def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=300, err_th=1.0, threstune=1.00, trial=None, scatter=False, moption=[]):
+    # def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=300, err_th=1.0, threstune=1.00, trial=None, scatter=False, moption=[]):
+    def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=300, err_th=1.0, threstune=1.00, scatter=False, moption=[]):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか withEC が真ならカウントも返す
         # tpara  fit0() にわたす初期パラメータ値
@@ -1580,12 +1581,13 @@ class BezierCurve:
             if maxTry > 0 and trynum >= maxTry:
                 break
             # Optuna を使っている場合の打ち切り
+            '''
             if trial:
                 trial.report(error,trynum)
                 if trial.should_prune() or error > 1e3:
                     print("Optuna による打ち切り")
                     raise optuna.TrialPruned()
-                
+            '''    
         self.ts = bestts.copy()
         fx,fy=bestfunc
             
