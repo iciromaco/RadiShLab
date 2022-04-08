@@ -153,9 +153,9 @@ conda create -n RL python=3.8 opencv=4.5 tensorflow=2.6 kearas=2.6 matplotlib sy
 
 以上は上記仮想環境生成時にインストールされる。
 
--- pillow (9.0)
--- numpy (1.22)
--- scipy (1.7.3)
+- pillow (9.0)
+- numpy (1.22)
+- scipy (1.7.3)
 
 これらは上のライブラリをインストールすると依存関係により同時にインストールされる。
 
