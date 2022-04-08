@@ -1,4 +1,4 @@
-# RadiShLab (4th)
+# RadiShLab (8th)
 
 ![logo](https://user-images.githubusercontent.com/24559785/76580094-066f5e00-6512-11ea-9963-66e3bb6d2cbc.png)
 Radish Shape Analysis Laboratory
@@ -139,56 +139,57 @@ python はライブラリ間の依存関係が複雑でしばしば最新でな�
 ### CUIで仮想環境作成
 Anaconda Promptを起動して次のように打ち込んでください。
 ```
-conda create -n RL python=3.8  opencv=4.5  jupyter jupyterlab tensorflow=2.6 kearas=2.6 omatplotlib pillow sympy kivy openpyxl pandas ptuna wandb
+conda create -n RL python=3.8 opencv=4.5 tensorflow=2.6 kearas=2.6 matplotlib sympy
 ```
 
 ### 3. ライブラリのインストール
-#### OpenCV の導入
+#### core 
 
-画像処理には，画像処理ライブラリ OpenCV を使います．Google Colaboratory には，つねにその最新に近いバージョンがインストールされています．OpenCV は Anacondaの標準ライブラリではないので，Google Colaboratoryと同じバージョンをインストールしておきましょう．OpenCVは頻繁にバージョンアップされ，ときどき仕様が変わるので注意が必要です．
+- opencv **4.5**
+- tensorflow **2.6**
+- keras **2.6**
+- matplotlib (3.5)
+- sympy (1.10)
 
-1. Google Colaboratory に使われている OpenCV のバージョンを確認する．   
-![230624](https://user-images.githubusercontent.com/24559785/73751807-bacdd580-4757-11ea-9bfd-cc0d698ad277.png)
-2. Anaconda Navigator から仮想環境のターミナルを起動   
- ![231152](https://user-images.githubusercontent.com/24559785/73752501-fddc7880-4758-11ea-87d8-8a3e3a17d50e.png)
-3. ターミナルで次のコマンドを実行   
-```
-conda install -c conda-forge opencv=4.5
+以上は上記仮想環境生成時にインストールされる。
 
-Proceed ([y]/n)? y
+- pillow (9.0)
+- numpy (1.22)
+- scipy (1.7.3)
+
+これらは上のライブラリをインストールすると依存関係により同時にインストールされる。
+
+#### サンプルプログラムの実行に必要なライブラリ
+
+- jupyter
+- jupyterlab
+- kivi
+- PySimpleGUI
+
+次のようにしてインストール
+```
+conda install jupyter jupyterlab kivy PySimpleGUI
 ```
 
-### kivy
-```
-conda install -c conda-forge kivy
-```
 GUI(kivy)で日本語が使いたい場合は、
 ```
 pip install japanize-kivy
 ```
 
-このプロジェクトではGUIプログラムには [kivy](https://kivy.org) を使っています。
-python 用の GUI のライブラリにはまだこれこそがスタンダードだ、というものがありませんがので、今後もっと使いやすいものが出てきたら変更するかもしれません。
+このプロジェクトではこれまでGUIプログラムには [kivy](https://kivy.org) を使っていましたが、今後 PySimpleGUI に移行予定。 
 
-#### core なライブラリ
-Anaconda で仮想環境を作った場合、ライブラリは最小限しか組み込まれていないので、次のライブラリも追加インストールしてください。
-- numpy
-- Pillw (PIL)
-- matplotlib
-- seaborn
-- jupyter
-- sympy 1.10
-- scikit-learn 
-- tensorflow 2.6
-- keras 2.6
+#### その他
+統計と表作成
 - pandas
-- ImageTk
+- seabone
 - openpyxl
+
+最適化
 - optuna
 - wandb
-```
-conda install Pillow numpy jupyter matplotlib seaborn sympy scikit-learn pandas openpyxl optuna wandb tensorflow=2.6 keras
-```
+
+高速化
+- Cython
 
 ## Anaconda の更新
 
@@ -226,7 +227,7 @@ Google Colaboratory のプログラムは、通常はクラウド上の仮想Lin
 
 ----
 
-## &copy; 2017-2021
+## &copy; 2017-2022
 - Seiichiro Dan： Osaka Gakuin Univ.
 - Yumiko Dan, Yasuko Yoshida： Kobe Univ.
 
@@ -234,6 +235,7 @@ Google Colaboratory のプログラムは、通常はクラウド上の仮想Lin
 更新記録    
 - April 4,2021, rdlib4.py ベジエ曲線上でサンプル点の最寄りの位置を計算する関数　nearest() において、曲線の記述を sympy から numpy関数に変換して計算することで５０％以上の時間短縮。
 - April 8,2021, rdlib5.py 追加。当てはめ関数のtensorflow版を追加。fit1T, fit2T. N006 のライブラリを rdlib5.py に置き換え。
+- April 2022, rdlib8.py。オーバフィッティング判定、端部のオーバフィッティング抑制オプションを追加。
 ____
 
 ## Related Links

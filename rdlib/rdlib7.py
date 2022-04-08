@@ -1,4 +1,4 @@
-# rdlib6.py 安定版のつもり
+# rdlib7.py 安定版のつもり
 import pickle
 from glob import glob
 import os,sys
