@@ -1,4 +1,5 @@
-# rdlib8.py 安定版のつもり
+# rdlib10.py 安定版のつもり 2022.04.20
+# BezierCurve クラスを別ファイルにしました
 import pickle
 from glob import glob
 import os,sys,io
@@ -9,7 +10,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from statistics import mean
 from collections import deque
-from rdlib import BezierCurve
 # import optuna
 
 # from sympy import *
@@ -363,7 +363,10 @@ def RDreform(img, order=1, ksize=0, shrink=SHRINK):
         return img
     if ksize == 0:  # ぼかしのサイズが指定されていないときは最大白領域の面積を基準に定める
         ksize = calcksize(img)
+
+
     img2 = cv2.GaussianBlur(img, (ksize, ksize), 0)  # ガウスぼかしを適用
+
     img2 = getMajorWhiteArea(
         img2, order=order, dilation=2)  # 指定白領域を少しだけ大きめに取り出す
 
@@ -401,7 +404,10 @@ def RDreform_D(img, ksize=5, shrink=SHRINK):
         n += 1
     img3 = cv2.dilate(tmpimg, kernel, iterations=n)  # 同じ回数膨張させる
     # あらためて輪郭を求め直す
-
+    _lnum, limg, stats, cog = cv2.connectedComponentsWithStats(img3)
+    areamax = np.argmax(stats[1:, 4])+1  # ０番を除く面積最大値のインデックス
+    img3 = np.zeros_like(img3)
+    img3[limg==areamax] = 255
     cnt, _hierarchy = cv2findContours34(
         img3, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)  # あらためて輪郭を抽出
     outimg = np.zeros_like(img3)
@@ -415,14 +421,15 @@ def RDreform_D(img, ksize=5, shrink=SHRINK):
         outimg = cv2.drawContours(outimg, [approx], 0, 255, thickness=-1)
     else:
         outimg = np.ones_like(img3)*255
+
     return outimg
 
 # (10) Grabcut による大根領域の抜き出し
 # GrabCutのためのマスクを生成する
 def mkGCmask(img, order=1):
     # カラー画像の場合はまずグレー画像に変換
-    gray = RDreform(img, order=order, ksize=0, shrink=SHRINK)
 
+    gray = RDreform(img, order=order, ksize=0, shrink=SHRINK)
     # 大きめのガウシアンフィルタでぼかした後に大津の方法で２階調化
     ksize = calcksize(gray)  # RDForm で使う平滑化のカーネルサイズ
     bsize = ksize
@@ -437,7 +444,6 @@ def mkGCmask(img, order=1):
 
     # 収縮処理で確実に内部である領域をマスク
     mask2 = cv2.erode(coreimg, kernel, iterations=ksize)
-
     return mask1, mask2
 
 # (11) 大根部分だけセグメンテーションし、結果とマスクを返す
@@ -465,10 +471,8 @@ def getRadish(img, order=1, shrink=SHRINK):
     silimg = np.zeros(grabimg.shape[:2], np.uint8)
     graygrabimg = cv2.cvtColor(grabimg, cv2.COLOR_BGR2GRAY)
     silimg[graygrabimg != 0] = 255
-
-    silimg = getMajorWhiteArea(silimg, order=1, dilation=0)
+    silimg = getMajorWhiteArea(silimg, order=1, dilation=0) #
     silimg = RDreform_D(silimg, ksize=calcksize(silimg), shrink=shrink)
-
     return grabimg, silimg
 
 # (12) 重心の位置を求める
@@ -1332,14 +1336,18 @@ def loadPkl(fname, folder="."):
     return cat
 
 # opencv 画像を tk 画像に変換
-def cv2tkimg(cvimg,resize = None):
+def cv2tkimgwithPIL(cvimg,resize = None):
+    pilimg = Image.fromarray(cvimg)
     if resize:
-        pilimg = Image.fromarray(cvimg)
         pilimg.thumbnail(resize) # 破壊的変換なので注意
         newcvimg = np.array(pilimg, dtype=np.uint8)
     elif resize==None:
-        newcvimg = cvimg.copy()
-    return cv2.imencode('.png', newcvimg)[1].tobytes() 
+        newcvimg = cvimg
+    return cv2.imencode('.png', newcvimg)[1].tobytes(), pilimg
+
+def cv2tkimg(cvimg,resize = None):
+    code,pilimg = cv2tkimgwithPIL(cvimg,resize = resize)
+    return code
 
 '''def cv2tkimg(cvimg,resize = None, first=False): 
     if len(cvimg.shape) == 2:

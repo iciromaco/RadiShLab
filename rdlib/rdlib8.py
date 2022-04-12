@@ -407,7 +407,7 @@ def RDreform(img, order=1, ksize=0, shrink=SHRINK):
 
 # (9)-3
 
-
+# (9)-3
 def RDreform_D(img, ksize=5, shrink=SHRINK):
 
     # 収縮・膨張によりヒゲ根を除去する
@@ -436,7 +436,10 @@ def RDreform_D(img, ksize=5, shrink=SHRINK):
         n += 1
     img3 = cv2.dilate(tmpimg, kernel, iterations=n)  # 同じ回数膨張させる
     # あらためて輪郭を求め直す
-
+    _lnum, limg, stats, cog = cv2.connectedComponentsWithStats(img3)
+    areamax = np.argmax(stats[1:, 4])+1  # ０番を除く面積最大値のインデックス
+    img3 = np.zeros_like(img3)
+    img3[limg==areamax] = 255
     cnt, _hierarchy = cv2findContours34(
         img3, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)  # あらためて輪郭を抽出
     outimg = np.zeros_like(img3)
@@ -450,8 +453,9 @@ def RDreform_D(img, ksize=5, shrink=SHRINK):
         outimg = cv2.drawContours(outimg, [approx], 0, 255, thickness=-1)
     else:
         outimg = np.ones_like(img3)*255
-    return outimg
 
+    return outimg
+    
 # (10) Grabcut による大根領域の抜き出し
 # GrabCutのためのマスクを生成する
 

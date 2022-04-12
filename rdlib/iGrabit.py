@@ -712,6 +712,7 @@ class GrabCutConsole(BoxLayout):
         img = self.srcimg.copy()
         bgdmodel = np.zeros((1,65),np.float64)
         fgdmodel = np.zeros((1,65),np.float64)
+
         if (self.frame_or_mask == 0): 
             cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
             self.frame_or_mask = 1
