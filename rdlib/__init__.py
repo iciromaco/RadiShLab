@@ -1,1 +1,2 @@
-from rdlib.rdlib8 import *
+from rdlib.rdlib10 import *
+import rdlib.BezierCurve as BezierCurve
