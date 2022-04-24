@@ -1,15 +1,15 @@
-# rdlib10.py 安定版のつもり
+# rdlib6.py 安定版のつもり
 import pickle
 from glob import glob
-import os,sys,io
-os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
-from PIL import Image, ImageTk
+import os,sys
+# os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
+from PIL import Image
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from statistics import mean
 from collections import deque
-# import optuna
+import optuna
 
 # from sympy import *
 from sympy import diff, Symbol, Matrix, symbols, solve, simplify, binomial, Abs, im, re, lambdify
@@ -20,12 +20,13 @@ from sympy import var
 import tensorflow as tf
 from keras import optimizers
 from scipy.special import comb
-import scipy.stats as stats
 
 # px,py =var('px:4'),var('py:4')
 
 # OpenCV のファイル入出力が2バイト文字パス名に対応していないための対処
 # （参考）https://qiita.com/SKYS/items/cbde3775e2143cad7455
+
+
 def imread(filename, flags=cv2.IMREAD_COLOR, dtype=np.uint8):
     try:
         n = np.fromfile(filename, dtype)
@@ -34,6 +35,7 @@ def imread(filename, flags=cv2.IMREAD_COLOR, dtype=np.uint8):
     except Exception as e:
         print(e)
         return None
+
 
 def imwrite(filename, img, params=None):
     try:
@@ -49,6 +51,7 @@ def imwrite(filename, img, params=None):
     except Exception as e:
         print(e)
         return False
+
 
 def assertglobal(params, verbose=False):
     global CONTOURS_APPROX, HARRIS_PARA, CONTOURS_APPROX, SHRINK, \
@@ -82,6 +85,7 @@ def assertglobal(params, verbose=False):
         # if verbose:
         #     print(item, "=", params[item])
 
+
 assertglobal(params={
     'HARRIS_PARA': 1.0,  # ハリスコーナー検出で、コーナーとみなすコーナーらしさの指標  1.0 なら最大値のみ
     'CONTOURS_APPROX': 0.0002,  # 輪郭近似精度
@@ -97,6 +101,8 @@ assertglobal(params={
 })
 
 # OpenCV バージョン３とバージョン４の輪郭抽出関数の違いを吸収する関数
+
+
 def cv2findContours34(image, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_NONE):
     v = list(cv2.__version__)
     if v[0] == '3':
@@ -110,6 +116,8 @@ def cv2findContours34(image, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_NON
 # (1)画像のリストアップ
 # 指定フォルダ内の画像の収集
 # 画像パスの収集
+
+
 def collectimagepaths(path, imgexts=['jpg', 'jpge', 'png']):
     allfiles = glob(path+'/*')
     imgfiles = []
@@ -120,12 +128,16 @@ def collectimagepaths(path, imgexts=['jpg', 'jpge', 'png']):
     return imgfiles
 
 # 画像の収集
+
+
 def collectimages(path, imgexts=['jpg', 'jpge', 'png']):
     imgfiles = collectimagepaths(path, imgexts)
     imgs = [cv2.imread(afile, -1) for afile in imgfiles]
     return imgs
 
 # サムネイルの作成
+
+
 def makethumbnail(path, savedir='.', imgexts=['jpg', 'jpge', 'png']):
     imgfiles = collectimagepaths(path, imgexts)
     i = 0
@@ -145,29 +157,29 @@ def makethumbnail(path, savedir='.', imgexts=['jpg', 'jpge', 'png']):
 
 # (2)画像の表示
 # プロット用関数
+
+
 def plotimg(img, layout=111):
-    if(type(layout))==str:
-        layout = int(layout)
     if img.ndim == 2:
         pltgry(img, layout)
     elif img.ndim == 3:
         pltcol(img, layout)
 
+
 def pltgry(img, layout=111):
-    if(type(layout))==str:
-        layout = int(layout)
     plt.subplot(layout)
     plt.axis('off')
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_GRAY2RGB))
 
+
 def pltcol(img, layout=111):
-    if(type(layout))==str:
-        layout = int(layout)
     plt.subplot(layout)
     plt.axis('off')
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 
 # (3) mkparaimage で２枚並べた画像を表示
+
+
 def mkparaimage2(img1, img2):
     h1, w1 = img1.shape[:2]
     h2, w2 = img2.shape[:2]
@@ -188,6 +200,7 @@ def mkparaimage2(img1, img2):
 
     return paraimg
 
+
 def mkparaimage(imglist):
     if len(imglist) == 0:
         return
@@ -200,6 +213,8 @@ def mkparaimage(imglist):
 
 # (4) マージンをつける
 MinimamMargin = 10
+
+
 def makemargin(img, mr=1.5, mm=MinimamMargin):
     # 画像サイズが元の短径の mr 倍になるようにマージンをつける
     h, w = img.shape[:2]
@@ -217,6 +232,8 @@ def makemargin(img, mr=1.5, mm=MinimamMargin):
 
 # (4)-2 マージンのカット
 # 白黒画像(0/255)が前提
+
+
 def cutmargin(img, mr=1.0, mm=0, withRect=False):
     # default ではバウンディングボックスで切り出し
     # makemargin(切り出した画像,mr,mm)でマージンをつけた画像を返す
@@ -236,6 +253,8 @@ def cutmargin(img, mr=1.0, mm=0, withRect=False):
         return bimg
 
 # (5) 最大白領域の取り出し
+
+
 def getMajorWhiteArea0(img, order=1):
     # order 何番目に大きい領域を取り出したいか
     # dilation 取り出す白領域をどれだけ多めにするか
@@ -261,6 +280,8 @@ def getMajorWhiteArea0(img, order=1):
     return labelimg, cnt, areaindex
 
 # (5)-2
+
+
 def getMajorWhiteArea(img, order=1, dilation=0, binary=False):
     # order 何番目に大きい領域を取り出したいか
     # dilation 取り出す白領域をどれだけ多めにするか
@@ -283,6 +304,8 @@ def getMajorWhiteArea(img, order=1, dilation=0, binary=False):
     return oimg
 
 # (6) 処理結果画像（fimg)に処理前画像（bimg)の輪郭を描く
+
+
 def draw2(bimg, fimg, thickness=2, color=(255, 0, 200)):
     bimg2 = getMajorWhiteArea(bimg, binary=True)
     if len(fimg.shape) > 2:
@@ -300,6 +323,8 @@ def draw2(bimg, fimg, thickness=2, color=(255, 0, 200)):
     return canvas
 
 # (7) (x1,y1)から（x2,y2) に向かう直線のX軸に対する角度
+
+
 def getDegreeOfALine(x1, y1, x2, y2):
     dx = x2-x1
     dy = y2-y1
@@ -315,6 +340,8 @@ def getDegreeOfALine(x1, y1, x2, y2):
     return deg
 
 # (8) (x1,y1)から（x2,y2) に向かう直線の延長上の十分離れた２点の座標
+
+
 def getTerminalPsOnLine(x1, y1, x2, y2):
     dx = x2-x1
     dy = y2-y1
@@ -347,6 +374,8 @@ def calcksize(img):
     return ksize
 
 # (9)-2
+
+
 def RDreform(img, order=1, ksize=0, shrink=SHRINK):
     # ksize : ガウスぼかしの量、shrink 膨張収縮による平滑化のパラメータ
     # order : 取り出したい白領域の順位
@@ -362,10 +391,7 @@ def RDreform(img, order=1, ksize=0, shrink=SHRINK):
         return img
     if ksize == 0:  # ぼかしのサイズが指定されていないときは最大白領域の面積を基準に定める
         ksize = calcksize(img)
-
-
     img2 = cv2.GaussianBlur(img, (ksize, ksize), 0)  # ガウスぼかしを適用
-
     img2 = getMajorWhiteArea(
         img2, order=order, dilation=2)  # 指定白領域を少しだけ大きめに取り出す
 
@@ -375,6 +401,8 @@ def RDreform(img, order=1, ksize=0, shrink=SHRINK):
     return RDreform_D(img2, ksize=ksize, shrink=SHRINK)
 
 # (9)-3
+
+
 def RDreform_D(img, ksize=5, shrink=SHRINK):
 
     # 収縮・膨張によりヒゲ根を除去する
@@ -403,10 +431,7 @@ def RDreform_D(img, ksize=5, shrink=SHRINK):
         n += 1
     img3 = cv2.dilate(tmpimg, kernel, iterations=n)  # 同じ回数膨張させる
     # あらためて輪郭を求め直す
-    _lnum, limg, stats, cog = cv2.connectedComponentsWithStats(img3)
-    areamax = np.argmax(stats[1:, 4])+1  # ０番を除く面積最大値のインデックス
-    img3 = np.zeros_like(img3)
-    img3[limg==areamax] = 255
+
     cnt, _hierarchy = cv2findContours34(
         img3, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)  # あらためて輪郭を抽出
     outimg = np.zeros_like(img3)
@@ -420,15 +445,16 @@ def RDreform_D(img, ksize=5, shrink=SHRINK):
         outimg = cv2.drawContours(outimg, [approx], 0, 255, thickness=-1)
     else:
         outimg = np.ones_like(img3)*255
-
     return outimg
 
 # (10) Grabcut による大根領域の抜き出し
 # GrabCutのためのマスクを生成する
+
+
 def mkGCmask(img, order=1):
     # カラー画像の場合はまずグレー画像に変換
-
     gray = RDreform(img, order=order, ksize=0, shrink=SHRINK)
+
     # 大きめのガウシアンフィルタでぼかした後に大津の方法で２階調化
     ksize = calcksize(gray)  # RDForm で使う平滑化のカーネルサイズ
     bsize = ksize
@@ -443,9 +469,12 @@ def mkGCmask(img, order=1):
 
     # 収縮処理で確実に内部である領域をマスク
     mask2 = cv2.erode(coreimg, kernel, iterations=ksize)
+
     return mask1, mask2
 
 # (11) 大根部分だけセグメンテーションし、結果とマスクを返す
+
+
 def getRadish(img, order=1, shrink=SHRINK):
     # 白領域の面積が order で指定した順位の領域を抜き出す
 
@@ -470,8 +499,10 @@ def getRadish(img, order=1, shrink=SHRINK):
     silimg = np.zeros(grabimg.shape[:2], np.uint8)
     graygrabimg = cv2.cvtColor(grabimg, cv2.COLOR_BGR2GRAY)
     silimg[graygrabimg != 0] = 255
-    silimg = getMajorWhiteArea(silimg, order=1, dilation=0) #
+
+    silimg = getMajorWhiteArea(silimg, order=1, dilation=0)
     silimg = RDreform_D(silimg, ksize=calcksize(silimg), shrink=shrink)
+
     return grabimg, silimg
 
 # (12) 重心の位置を求める
@@ -485,6 +516,8 @@ def getCoG(img):
     return c_x, c_y, cnt[areamax]
 
 # (13) 回転した上でマージンをカットした画像を返す
+
+
 def rotateAndCutMargin(img, deg, c_x, c_y):
     # 非常に稀であるが、回転すると全体が描画領域外に出ることがあるので作業領域を広く確保
     # mat = cv2.getRotationMatrix2D((x0,y0), deg-90, 1.0) # アフィン変換マトリクス
@@ -510,6 +543,8 @@ def rotateAndCutMargin(img, deg, c_x, c_y):
     return resultimg
 
 # (14) 大きさを正規化したシルエットの生成
+
+
 def getNormSil(img, tiltzero=True, mr=1.5, unitSize=UNIT):
     #  img 入力画像
     #  tiltzero  True なら傾き補正する
@@ -524,6 +559,8 @@ def getNormSil(img, tiltzero=True, mr=1.5, unitSize=UNIT):
     return makeUnitImage(img, mr=mr, unitSize=UNIT)
 
 # (15) 長辺の mr 倍サイズの枠の中央に対象を配置した画像を返す
+
+
 def makeUnitImage(img, mr=1.5, unitSize=UNIT):
     # 長辺が UNIT ピクセルになるよう縮小し、(mrxUNIT)x(mrxUNIT)の画像の中央に配置する。
     h, w = img.shape[:2]
@@ -545,6 +582,8 @@ def makeUnitImage(img, mr=1.5, unitSize=UNIT):
     return canvas
 
 # (16) 近似楕円の軸方向が水平垂直となるように回転補正した画像を求める
+
+
 def tiltZeroImg(img):
     h, w = img.shape[:2]
     img0, rx, ry, rw, rh = cutmargin(
@@ -576,6 +615,8 @@ def tiltZeroImg(img):
     return img1
 
 # (17) 輪郭点列を得る
+
+
 def getContour(img):
     # 輪郭情報 主白連結成分の輪郭点列のみ返す関数
     contours, _hierarchy = cv2findContours34(
@@ -584,6 +625,8 @@ def getContour(img):
     return cnt00
 
 # (18) 幅１の輪郭データを開く
+
+
 def openAContour(cnt):
     # cnt 幅１の領域の輪郭データ
     cnt0 = cnt.squeeze()  # すでに squeeze()されていた場合は変化しない
@@ -601,14 +644,20 @@ def openAContour(cnt):
 
 # (19) 輪郭表現の相互変換
 # 輪郭構造体をただのリストに変換  -> [[1,2],[2,3]....]
+
+
 def contolist(con):
     return con.squeeze().tolist()
 
 # リストを輪郭線構造体に変換  -> array([[[1,2]],[[2,3]],...])
+
+
 def listtocon(list):
     return np.array([[p] for p in list])
 
 # (20)  輪郭の描画
+
+
 def drawContours(canvas, con, color=255, thickness=1):
     if type(con) == np.ndarray:
         if con.ndim == 3:  # 普通の輪郭情報
@@ -621,6 +670,8 @@ def drawContours(canvas, con, color=255, thickness=1):
             drawContours(canvas, c, color=255, thickness=1)
 
 # (21) 曲率関数
+
+
 def curvature(func):  # func は sympy 形式の t の関数（fx,fy）のペア
     t = symbols('t')
     fx, fy = func
@@ -633,6 +684,8 @@ def curvature(func):  # func は sympy 形式の t の関数（fx,fy）のペア
 
 # 画像の座標系は数学の座標系とｙ方向が逆なので正負が反転する
 # (22) 輪郭中の曲率最大点のインデックスと輪郭データを返す
+
+
 def maxCurvatureP(rdimg, con=[], cuttop=0, cutbottom=0.8, sband=0.25, N=8):
     # rdimg 画像、con 輪郭データ
     # cuttop, cutbottom 個体の高さに対してこの範囲は除外する
@@ -664,6 +717,8 @@ def maxCurvatureP(rdimg, con=[], cuttop=0, cutbottom=0.8, sband=0.25, N=8):
     return maxindex, con
 
 # (23) 中心軸端点の推定
+
+
 def findTips(img, con=[], top=0.1, bottom=0.8, topCD=0.5, bottomCD=0.5, mode=2):
     # 入力　
     #   img シルエット画像
@@ -704,7 +759,7 @@ def findTips(img, con=[], top=0.1, bottom=0.8, topCD=0.5, bottomCD=0.5, mode=2):
             v1 = (p2[0]-p1[0], p2[1]-p1[1])  # p1p2 ベクトル
             p3 = ((p1[0]+p2[0])/2, (p1[1]+p2[1])/2)  # p3 = p1とp2の中点
             v2 = (p3[0]-p0[0], p3[1]-p0[1])  # p0p3 ベクトル
-            # v1 の複素表現  画像データは下がプラスなので虚成分を反転して考えないといけない
+            # v1 の複素表現  画像データは下がプラスなので虚成分を反転して考えないといけない
             pv1 = v1[0] - 1j*v1[1]
             pv2 = v2[0] - 1j*v2[1]  # v2 の複素表現
             nv1 = abs(pv1)  # v1 の長さ
@@ -862,57 +917,46 @@ def getSamples(cont, N=20, mode='Equidistant'):
 #from sympy.abc import a,b,c
 #from sympy import var
 
-# 輪郭点列中の両端の２標本点間の点列の序列中央の座標を返す関数
-def getMutPoints(cont=[],Samples=[]):
-    if len(Samples)>0:
-        wx1 = np.where(cont[:,0]==Samples[1][0])[0] # X座標が１番と一致する要素番号
-        wy1 = np.where(cont[:,1]==Samples[1][1])[0] # Y座標が１番と一致する要素番号
-        im1 = wx1[np.in1d(wx1, wy1)][0] # Sample[1]のcontにおけるインデックス
-        wx2 = np.where(cont[:,0]==Samples[-2][0])[0] # X座標が-2番と一致する要素番号
-        wy2 = np.where(cont[:,1]==Samples[-2][1])[0] # Y座標が-2番と一致する要素番号
-        im2 = wx2[np.in1d(wx2, wy2)][0] # Sample[1]のcontにおけるインデックス
-        return [cont[im1//2],cont[(im2+len(cont)-1)//2]]
-    else:
-        return []
+#  稠密なパラメータを得る（点列は一定間隔にならないので、点列が一定間隔になるようなパラメータ列を求める）
 
-#  稠密なパラメータを得る（点列は一定間隔にならないので、点列が一定間隔になるようなパラメータ列を求める）
-#  稠密なパラメータを得る（点列は一定間隔にならないので、点列が一定間隔になるようなパラメータ列を求める）
-def getDenseParameters(func, st=0.0, et=1.0, n_samples=31, span=0, needlength=False):
+
+def getDenseParameters(func, n_samples=0, span=0, needlength=False):
     # func 曲線のパラメータ表現 = (fx,fy)
     # n_samples 必要なパラメータ数 = サンプル数
     # span 稠密さの係数　1 なら 候補パラメータの刻みが１画素以内に収まるように　２なら２画素以内に…
     if func == None:  # 近似式が与えられていない場合
         return np.linspace(0, 1, n_samples)
     else:
-        fx,fy = func
+        fx, fy = func
         dfx, dfy = diff(fx), diff(fy)
         nfx, nfy = lambdify('t', fx, "numpy"), lambdify('t', fy, "numpy")
         ndfx, ndfy = lambdify('t', dfx, "numpy"), lambdify('t', dfy, "numpy")
-        para = [st]  # 候補パラメータを格納するリスト　
-        bzpoints = [[int(nfx(st)), int(nfy(st))]]  # パラメータに対応する座標のリスト
-        if span == 0:  # 稠密さの係数が与えられていない場合はサンプル30点でおおざっぱに全長を見積もって決める
-            ss = np.linspace(st, et, 30)
+
+        if span == 0:  # 稠密さの係数が与えられていない場合はサンプル10点でおおざっぱに全長を見積もって決める
+            ss = np.linspace(0, 1, 10)
             ps = np.array([[int(nfx(s)), int(nfy(s))] for s in ss])
-            axlength = cv2.arcLength(ps, closed=False) # 経路長
+            axlength = cv2.arcLength(ps, closed=False)  # 経路長
             # 経路長が実際の長さより短めの値に算出される。その３分の１なので実際のサンプル間の長さの３分の１以下になる
             span = axlength/(n_samples-1)/3
-        s1 = st
-        while s1 < et:
-            absdx = abs(ndfx(s1))  # x微係数
-            absdy = abs(ndfy(s1))  # y微係数
+        para = [0.0]  # 候補パラメータを格納するリスト　
+        bzpoints = [[int(nfx(0)), int(nfy(0))]]  # パラメータに対応する座標のリスト
+        ss = 0.0
+        while ss < 1:
+            absdx = abs(ndfx(ss))  # x微係数
+            absdy = abs(ndfy(ss))  # y微係数
             absd = np.sqrt(float(absdx**2 + absdy**2))  # 傾き
             pstep = span/absd if absd > 0 else 1/n_samples  # 傾きの逆数＝ｘかｙが最大span移動するだけのパラメータ変化
-            s1 += 0.7*pstep  # span を超えないよう、７掛けで控えめにパラメータを増やす　
-            s1 = et if s1 > et else s1
-            para.append(s1)  # リストへ追加
-            # s1 に対応する曲線上の点をリストに追加
-            bzpoints.append([int(nfx(s1)), int(nfy(s1))])
+            ss += 0.7*pstep  # span を超えないよう、７掛けで控えめにパラメータを増やす　
+            ss = 1.0 if ss > 1 else ss
+            para.append(ss)  # リストへ追加
+            # ss に対応する曲線上の点をリストに追加
+            bzpoints.append([int(nfx(ss)), int(nfy(ss))])
         bzpoints = np.array(bzpoints)
         axlength = cv2.arcLength(bzpoints, closed=False)  # 弧長
         lengths = np.array([0]+[cv2.arcLength(bzpoints[:i+1], closed=False)
-                                for i in range(1, len(bzpoints))])  # 各点までの弧長の配
+                                for i in range(1, len(bzpoints))])  # 各点までの弧長の配列
         tobefound = np.linspace(0, axlength, n_samples)  # 全長をサンプルの数で区切る
-        ftpara = [st]
+        ftpara = [0.0]
         found = [0.0]
         i = 1
         for slength in tobefound[1:-1]:
@@ -920,16 +964,787 @@ def getDenseParameters(func, st=0.0, et=1.0, n_samples=31, span=0, needlength=Fa
                 i += 1
             ftpara.append(float(para[i]))
             found.append(lengths[i])
-        ftpara.append(et)
+        ftpara.append(float(para[-1]))
         found.append(axlength)
         if needlength:
             return ftpara, found
         else:
             return ftpara
 
+# ベジエ曲線のクラス定義
+class BezierCurve:
+    # インスタンス変数
+    # f [X座標関数式,Y座標関数式]
+    # samples 標本点のリスト
+    # ts 標本点に対するベジエパラメータ
+
+    # クラス変数
+    # xx driftThres = 0.01 # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
+    # xx errorThres = 0.01 # 繰り返しを打ち切る誤差変化量
+    dCount = 3  # ２分探索の打ち切り回数 （3以上が望ましい）
+    convg_coe = 1e-5 # 5.0e-8  # 収束の見切り　　１回あたりの誤差減少が少なすぎる時の打ち切り条件を決める値 3e-8〜8e-8 が最適
+    swing_penalty = 0 # 2.5e-8 # 接戦の傾きを標本間の傾きに合わせるための重み
+    smoothness_coe = 0 # 1.0e-8 # 標本間距離をなるべく短くするための重み 3e-9〜3e-8
+    mloop_itt = 3 # fitT mode 0 の繰り返しループにおける、minimize() の繰り返し回数。
+    debugmode = False
+    AsymptoticPriority = 'distance'  # パラメータ更新法
+    wandb = False
+    openmode = False
+
+    # 'distance':距離優先、'span':間隔優先
+
+    def __init__(self, N=5, samples=[], prefunc=None, tpara=[]):
+        self.samples = samples  # 標本点
+        self.prefunc = prefunc  # 関数式
+        # self.f  ベジエ曲線の式 = [fx,fy]
+        # 'px0','px1'... が制御点のX座標を表すシンボル
+        # 'py0','py1'...が制御点のY座標を表すシンボル
+        self.N = N
+        # ベジエ曲線を定義するのに使うシンボルの宣言
+        P = [Symbol('P' + str(i)) for i in range(N+1)]  # 制御点を表すシンボル（数値変数ではない）
+        px = [var('px'+str(i)) for i in range(N+1)]  # 制御点のx座標を表すシンボル
+        py = [var('py'+str(i)) for i in range(N+1)]  # 制御点のy座標を表すシンボル
+        t = symbols('t')
+        v = var('v')
+        for i in range(N+1):     # 制御点のシンボルと成分の対応付け
+            P[i] = Matrix([px[i], py[i]])
+        # N次のベジエ曲線の定義式制御点 P0～PN とパラメータtの関数として定義
+        v = 1-t
+        bezf = Matrix([0, 0])
+        for i in range(0, N+1):
+            bezf = bezf + binomial(N, i)*v**(N-i)*t**i*P[i]
+        self.f = bezf
+        # もし、inf データが含まれるならば、補間する（計算で求められた座標データがサンプルの場合にありうる）
+        if len(samples) > 0:
+            self.samples = self.interporation(samples)
+        # 初期パラメータのセット
+        if len(tpara) > 0:
+            self.ts = tpara
+        else:
+            self.ts = self.assignPara2Samples(prefunc=prefunc)
+
+    # 当てはめの自乗誤差の平均値を算出する関数
+    def f_meanerr(self, fx, fy, ts):
+        sps = self.samples
+        # fx, fy : t の symfy関数、ts: ベジエのパラメータのリスト, sps サンプル点のリスト
+        t = symbols('t')
+        nfx, nfy = lambdify(t, fx, "numpy"), lambdify(t, fy, "numpy")
+        onps = [[nfx(ts[i]), nfy(ts[i])] for i in range(len(ts))]
+        return mean([(sps[i][0]-onps[i][0])**2+(sps[i][1]-onps[i][1])**2 for i in range(len(sps))])
+
+    # 解なしの部分に np.inf が入っているのでその抜けを前後から推定してデータを埋める
+    def interporation(self, plist):
+        # plist : np.inf が混入している可能性のある座標の numpy array
+        foundinf = 0
+        while np.sum(plist) == np.inf:  # np.inf を含むなら除去を繰り返す
+            for i in range(len(plist)):
+                if np.sum(plist[i]) == np.inf:
+                    foundinf += 1
+                    print("欠", end="")
+                    # 当該は無限で、前後は無限ではない場合
+                    if (i != 0 and i != len(plist)-1) and np.sum(plist[i-1]+plist[i+1]) != np.inf:
+                        plist = np.r_[plist[0:i], [
+                            (plist[i-1]+plist[i+1])/2], plist[i+1:]]
+                    elif len(plist[i:]) >= 3 and np.sum(plist[i+1]+plist[i+2]) != np.inf:
+                        plist = np.r_[plist[0:i], [plist[i+2] -
+                                                   2*(plist[i+2]-plist[i+1])], plist[i+1:]]
+                    elif len(plist[0:i]) >= 2 and np.sum(plist[i-1]+plist[i-2]) != np.inf:
+                        plist = np.r_[plist[0:i], [plist[i-2] -
+                                                   2*(plist[i-2]-plist[i-1])], plist[i+1:]]
+        if foundinf:
+          print("A total of {} data are missing.".format(foundinf))
+        return plist
+
+    # サンプル点が等間隔になるようにパラメータを設定する
+    def assignPara2Samples(self, prefunc=None):
+        samples = self.samples
+        if len(samples) == 0:  # 標本点を与えずにベジエ曲線の一般式として使うこともできる
+            return
+        if prefunc != None:  # 近似式が与えられている場合
+            return getDenseParameters(func=prefunc, n_samples=len(samples), span=0)
+        # 曲線の式が不明である場合は、単純に０〜１を等間隔に刻んだ値を返す
+        else:  # パラメータが与えられていない場合、0～1をリニアに各サンプル点までので経路長で刻む
+            # axlength = np.array(cv2.arcLength(samples, False)) # 点列に沿って測った総経路長
+            # 各サンプル点の始点からの経路長の全長に対する比を、各点のベジエパラメータの初期化とする
+            # return [cv2.arcLength(samples[:i+1],False)  for i in range(len(samples))]/axlength
+            return [i/(len(samples)-1) for i in range(len(samples))]
+
+    # 制御点のi番目を代入
+    def setACP(self, f, i, cp):
+        [x, y] = cp
+        sx = var('px'+str(i))
+        sy = var('py'+str(i))
+        f[0] = f[0].subs(sx, x)
+        f[1] = f[1].subs(sy, y)
+        return f
+
+    # 制御点座標をセットして関数式を完成
+    def setCPs(self, cps):
+        f = self.f.copy()
+        for i in range(self.N+1):
+            self.setACP(f, i, cps[i])
+        return f
+
+    # ベジエ近似レベル０（標本点のパラメータを等間隔と仮定してあてはめ）
+    def fit0(self, prefunc=None, tpara=[]):
+        # ts 標本点に対するパラメータ割り当て
+        samples = self.samples  # 標本点
+        x, y = samples[:, 0], samples[:, 1]  # 標本点のｘ座標列とｙ座標列
+        # t 標本点に結びつけるパラメータは引数として与えられているならそれを、さもなくばリニアに設定
+        if len(tpara) > 0: #パラメータが与えられているならそれを使う
+            ts = self.ts = tpara
+        elif prefunc != None: # 関数が与えられているなら、それをもとに等間隔になるよう初期パラメータ設定
+            ts = self.ts = self.assignPara2Samples(prefunc=prefunc) 
+        else: # さもなくば、self.prefunc で等間隔か [0,1] を等間隔
+            ts = self.ts = self.assignPara2Samples(prefunc=None) 
+        N = self.N  # ベジエの次数
+        M = len(samples)  # サンプル数
+        # バーンスタイン関数の定義
+
+        def bs(n, t):
+            return binomial(N, n)*(1-t)**(N-n)*t**n
+        # 標本点と、それに対応する曲線上の点の距離の総和を最小化するような制御点を求める
+        if BezierCurve.openmode:
+            exA = np.array([[sum([bs(i, ts[k])*bs(n, ts[k]) for k in range(M)])
+                             for i in range(N+1)] for n in range(N+1)], 'float64')
+            if np.linalg.matrix_rank(exA,tol=1e-20) != exA.shape[0]:
+                print("Rank Warning(tol:1e-20)")
+            exBX = np.array([[sum([x[k]*bs(n, ts[k]) for k in range(M)])]
+                             for n in range(N+1)], 'float64')
+            exBY = np.array([[sum([y[k]*bs(n, ts[k]) for k in range(M)])]
+                             for n in range(N+1)], 'float64')
+            cpsx = np.linalg.solve(exA, exBX)
+            cpsy = np.linalg.solve(exA, exBY)
+
+        else:  # 両端点をサンプルの両端に固定する場合
+            exA = np.array([[sum([bs(i, ts[k])*bs(n, ts[k]) for k in range(M)])
+                             for i in range(1, N)] for n in range(1, N)], 'float64')
+            if np.linalg.matrix_rank(exA,tol=1e-20) != exA.shape[0]:
+                print("Rank Warning(tol:1e-20)")
+            exBX = np.array([[sum([bs(n, ts[k])*(x[k]-x[0]*(1-ts[k])**N - x[-1]*ts[k]**N)
+                                   for k in range(M)])] for n in range(1, N)], 'float64')
+            exBY = np.array([[sum([bs(n, ts[k])*(y[k]-y[0]*(1-ts[k])**N - y[-1]*ts[k]**N)
+                                   for k in range(M)])] for n in range(1, N)], 'float64')
+            cpsx = np.r_[[[x[0]]], np.linalg.solve(exA, exBX), [[x[-1]]]]
+            cpsy = np.r_[[[y[0]]], np.linalg.solve(exA, exBY), [[y[-1]]]]
+
+        cps = [[i[0][0], i[1][0]] for i in zip(cpsx, cpsy)]
+        func = self.setCPs(cps)
+
+        return cps, func
+
+    #  パラメトリック曲線　curvefunc 上で各サンプル点に最寄りの点のパラメータを対応づける
+    def refineTparaN(self, bezierparameters, curvefunc, stt, end):
+        # bezierparameters 標本点と結びつけられたベジエパラメータ
+        # curvefunc 曲線の式
+        # stt,end パラメータを割り当てる標本番号の最初と最後（最後は含まない）
+
+        sps = self.samples
+        ts = bezierparameters
+        f = curvefunc
+
+        def searchband(n):
+            if n == 0:
+                return 0, ts[1]/2.0
+            elif n == len(ts)-1:
+                return (ts[-2]+1.0)/2.0, 1
+            else:
+                return (ts[n-1]+ts[n])/2.0, (ts[n]+ts[n+1])/2.0
+
+        # 曲線 linefunc(t) 上で座標(x,y) に最も近い点のパラメータを2分サーチして探す関数 Numpy化で高速化 2021.04.04
+        def nearest(x, y, oldt, curvefunc, pmin, pmax, err_th=0.75, dcount=5):
+            # x,y 座標、oldt 暫定割り当てのパラメータ、pmin,pmax 探索範囲、dcount 再起呼び出しの残り回数
+            # ベジエ曲線の関数を記号式から numpy 関数式に変換
+
+            def us(p):
+                x, y = p
+                return np.array([float(x), float(y)])
+
+            def nearestNp(p, oldt, funcX, funcY, pmin, pmax, dcount=5):
+                # def nearestNp(p, oldt, funcX, funcY, diffX, diffY, pmin, pmax, dcount=5):
+                # sympy 表現の座標を数値化
+                epsilon = 1e-07
+                ps = funcX(pmin), funcY(pmin)  # パラメータ最小点
+                pe = funcX(pmax), funcY(pmax)  # パラメータ最大点
+                ls = np.linalg.norm(us(ps) - p)  # pmin と p の距離
+                le = np.linalg.norm(us(pe) - p)  # pmax と p の距離
+                mid = mid = (le*pmin+ls*pmax)/(ls+le)  # pmin と pmax のパラメータの平均
+                pm = funcX(mid), funcY(mid)  # 中間パラメータ点
+                lold = funcX(oldt)
+                lm = np.linalg.norm(us(pm) - p)  # pmid と p の距離
+                m = min([ls, lm, le, lold])
+                if m == lold:  # 改善されない
+                    return oldt
+                elif m == lm:
+                    newt = mid
+                    dd = min(mid - pmin, pmax - mid)/2.0
+                    newpmin = mid - dd
+                    newpmax = mid + dd
+                elif m == le:
+                    newt = pmax
+                    newpmin = mid  # (mid + pmax)/2.0
+                    newpmax = pmax - epsilon
+                else:
+                    newt = pmin
+                    newpmin = pmin + epsilon
+                    newpmax = mid  # (pmin + mid)/2.0
+                ddx = funcX(newpmax)-funcX(newpmin)  # x の範囲の見積もり
+                ddy = funcY(newpmax)-funcY(newpmin)  # y の範囲の見積もり
+                ddv = ddx*ddx + ddy*ddy
+                if m < err_th or ddv < err_th*err_th or (dcount <= 0 and m > err_th*2):
+                    return newt
+                else:
+                    return nearestNp(p, newt, funcX, funcY, newpmin, newpmax, dcount-1)
+
+            p = np.array([x, y])
+            t = symbols('t')
+            (funcX, funcY) = curvefunc  # funcX,funcY は 't' の関数
+            # (diffX, diffY) = (diff(funcX, 't'), diff(funcY, 't'))  # 導関数
+            # 関数と導関数を numpy 関数化　（高速化目的）
+            (funcX, funcY) = (lambdify(t, funcX, "numpy"), lambdify(t, funcY, "numpy"))
+            # (diffX, diffY) = (lambdify(t, diffX, "numpy"), lambdify(t, diffY, "numpy"))
+            # return nearestNp(p, oldt, funcX, funcY, diffX, diffY, pmin, pmax, dcount=dcount)
+            return nearestNp(p, oldt, funcX, funcY, pmin, pmax, dcount=dcount)
+
+        if stt == end:
+            return ts
+
+        nmid = (stt+end)//2  # 探索対象の中央のデータを抜き出す
+        px, py = sps[nmid]  # 中央のデータの座標
+        band = searchband(nmid)
+        tmid = ts[nmid]
+
+        midpara = nearest(
+            px, py, tmid, f, band[0], band[1], dcount=BezierCurve.dCount)  # 最も近い点を探す
+
+        ts[nmid] = midpara
+        ts = self.refineTparaN(ts, f, stt, nmid)
+        ts = self.refineTparaN(ts, f, nmid+1, end)
+
+        return ts
+
+    # ベジエ近似　パラメータの繰り返し再調整あり
+    def fit1(self, maxTry=0, withErr=False, tpara=[], pat=10, err_th=0.75, threstune=1.00):
+        # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
+        # withErr 誤差情報を返すかどうか
+        # tpara  fit0() にわたす初期パラメータ値
+        # pat 10 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
+        # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
+        #
+        sps = self.samples
+
+        # #######################
+        # Itterations start here フィッティングのメインプログラム
+        # #######################
+        trynum = 0  # 繰り返し回数
+        lastgood = -1
+        rmcounter = 0  # エラー増加回数のカウンター
+        priority = BezierCurve.AsymptoticPriority
+
+        cps, func = self.fit0(tpara=tpara)  # レベル０フィッティングを実行
+        [fx, fy] = bestfunc = func
+        bestcps = cps
+        ts = bestts = self.ts.copy()
+
+        minerror = self.f_meanerr(fx, fy, ts=ts)  # 当てはめ誤差
+        if BezierCurve.debugmode:
+            print("initial error:{:.5f}".format(minerror))
+
+        while True:
+            # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
+            
+            if priority == 'distance' or priority == 'hyblid':
+                ts = self.refineTparaN(ts, [fx, fy], 0, len(sps))
+            # 標本点が等間隔であることを重視し、曲線上の対応点も等間隔であるということを評価尺度とする方法
+            elif priority == 'span':
+                ts = self.assignPara2Samples(prefunc=[fx, fy])
+
+            # レベル０フィッティングを再実行
+            cps, func = self.fit0(tpara=ts)
+            [fx, fy] = func
+
+            # あてはめ誤差を求める
+            error = self.f_meanerr(fx, fy, ts=ts)
+            if BezierCurve.wandb:
+                BezierCurve.wandb.log({"loss": error})
+            if error < minerror:
+                convg_coe = BezierCurve.convg_coe*100
+                convergenceflag = True if (minerror - error)/(trynum - lastgood) < convg_coe*(error-err_th) else False
+                lastgood = trynum
+                bestts = ts.copy()  # 今までで一番よかったパラメータセットを更新
+                bestfunc = func  # 今までで一番よかった関数式を更新
+                minerror = error  # 最小誤差を更新
+                bestcps = cps  # 最適制御点リストを更新
+                print(".", end='')
+            else:
+                print("^", end='')
+
+            # 繰り返し判定調整量
+            # 繰り返しが100回を超えたら条件を緩めていく
+            thresrate = 1.0 if trynum <= 100 else threstune**(trynum-100)
+            if BezierCurve.debugmode:
+                print("{} err:{:.5f}({:.5f}) rmcounter {})".format(
+                    trynum, error, minerror, rmcounter))
+
+            rmcounter = 0 if error <= minerror else rmcounter + 1  # エラー増加回数のカウントアップ　減り続けているなら０
+            if convergenceflag or error < err_th*thresrate or rmcounter > pat:
+                # pat回続けてエラーが増加したらあきらめる デフォルトは10
+                if convergenceflag:
+                  print('C')
+                elif error < err_th*thresrate :
+                  print('E')
+                else:
+                  print('P')
+                if BezierCurve.debugmode:
+                    if rmcounter > pat:
+                        print("W")
+                    else:
+                        print("M")
+                if priority == 'hyblid':
+                    rmcounter = 0
+                    priority = 'span'
+                else:
+                    break
+
+            trynum += 1
+            if trynum % 100 == 0:
+                print("")
+            if maxTry > 0 and trynum >= maxTry:
+                break
+
+        self.ts = bestts
+        print("")
+        if withErr:
+            return bestcps, bestfunc, minerror
+        else:
+            return bestcps, bestfunc
+
+    # fit1 の tensorflowによる実装
+    def fit1T(self, mode=1, maxTry=0, withErr=False, prefunc=None,tpara=[], optimizer_name='Adam',lr=0,  lrP=0, pat=10, err_th=0.75, threstune=1.00, trial=None):
+        # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
+        # withErr 誤差情報を返すかどうか
+        # tpara  fit0() にわたす初期パラメータ値
+        # mode 0: 制御点とパラメータを両方同時に tensorflow で最適化する
+        # mode 1: パラメータの最適化は tensorflow で、制御点はパラメータを固定して未定係数法で解く
+        # fit1T では priority=distance のみ考え、span は考慮しない
+        # lr オプティマイザーの学習係数（媒介変数 ts 用）
+        # lrP 制御点用オプティマイザーの学習係数の倍率 lr*lrP を制御点の学習係数とする。
+        # prefunc tpara を求める基準となる関数式がある場合は指定
+        # pat 10 これで指定する回数最小エラーが更新されなかったら繰り返しを打ち切る
+        # err_th 0.75  エラーの収束条件
+        # threstune 1.0  100回以上繰り返しても収束しないとき、この割合で収束条件を緩める
+        # trial Optuna のインスタンス
+        default_lrs={'Adam':[0.0015,1140],'AMSgrad':[0.005,650],'Adagrad':[0.02,250],
+                    'Adadelta':[0.013,3500],'Nadam':[0.001,500], 'Adamax':[0.0075,1000],
+                    'RMSprop':[0.0003,1300],'SGD':[5e-6,2e6],'Ftrl':[0.12,1000]}
+        
+        if lr == 0: lr = default_lrs[optimizer_name][0]
+        if lrP == 0: lrP = default_lrs[optimizer_name][1]
+
+        errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
+        for i in range(3):
+          errq.append(np.inf)
+        sps = self.samples
+        x_data = [x for [x, y] in sps[1:-1]]
+        y_data = [y for [x, y] in sps[1:-1]]
+        N = self.N
+        # #######################
+        # Itterations start here フィッティングのメインプログラム
+        # #######################
+        trynum = 0  # 繰り返し回数
+        lastgood = -1
+        rmcounter = 0  # エラー増加回数のカウンター
+        priority = BezierCurve.AsymptoticPriority
+
+        # 初期の仮パラメータを決めるため、fit0(2N)で近似してみる ただし、24乗あたりが solver 限界
+        # 20次を超えるとオーバフィッティングが発生しがちなのでmax 18としておく
+        doubleN = 2*N if N < 9 else 18
+        prebez = BezierCurve(N=doubleN,samples=self.samples)
+        precps, prefunc = prebez.fit0(prefunc=prefunc, tpara=tpara)
+        # 仮近似曲線をほぼ等距離に区切るようなパラメータを求める
+        # 改めて fit0 でN次近似した関数を初期近似とする
+        # cps, func = self.fit0(prefunc = prefunc, tpara=tpara)  # レベル０フィッティングを実行
+        cps, func = self.fit0(prefunc = prefunc)  # レベル０フィッティングを実行
+        (fx,fy) = bestfunc = func
+        bestcps = cps
+        ts = bestts = self.ts.copy()
+
+        minerror = self.f_meanerr(fx, fy, ts=ts)  # 初期当てはめ誤差の算出
+        errq = deque(maxlen=3) # エラーを３回分記録するためのバッファ
+        for i in range(2):
+          errq.append(np.inf)
+        errq.append(minerror)
+
+        if BezierCurve.debugmode:
+            print("initial error:{:.5f}".format(minerror))
+
+        # 両端点の接線方向単位ベクトルの計算
+        def calcnvecOnTerminal(fx,fy,ts):         
+              t = symbols('t')
+              diffx, diffy = diff(fx, t), diff(fy, t) # 導関数
+              # 端点の接線方向の単位ベクトル
+              ndvec1 = np.array([float(diffx.subs(t, ts[0])),float(diffy.subs(t, ts[0]))])
+              ndvec1 =  ndvec1/np.linalg.norm(ndvec1)
+              ndvec2 = np.array([float(diffx.subs(t, ts[-1])),float(diffy.subs(t, ts[-1]))])
+              ndvec2 =  ndvec2/np.linalg.norm(ndvec2)
+              return ndvec1,ndvec2
+
+        # tensorflow の変数
+        if mode == 0:
+            Px = tf.Variable([cps[i+1][0]
+                              for i in range(N-1)], dtype='float32')
+            Py = tf.Variable([cps[i+1][1]
+                              for i in range(N-1)], dtype='float32')
+
+        tts = tf.Variable(ts[1:-1]) 
+        if optimizer_name == 'Adam': # 
+            opt = tf.optimizers.Adam(learning_rate=lr) # lr 0.005
+            optP = tf.optimizers.Adam(learning_rate=lr*lrP) # lrP 650
+        elif optimizer_name == 'AMSgrad':
+            opt = tf.optimizers.Adam(learning_rate=lr,amsgrad=True) # lr 0.0015
+            optP = tf.optimizers.Adam(learning_rate=lr*lrP,amsgrad=True)  # lrP 1140       
+        elif optimizer_name == 'Adadelta':
+            # opt = tf.optimizers.Adadelta(learning_rate=lr, rho=0.975)
+            # optP = tf.optimizers.Adadelta(learning_rate=lr*lrP, rho=0.975)
+            opt = tf.optimizers.Adadelta(learning_rate=lr) # lr 0.013
+            optP = tf.optimizers.Adadelta(learning_rate=lr*lrP) # lrP 3500 
+        elif optimizer_name == 'Nadam':
+            opt = tf.optimizers.Nadam(learning_rate=lr) # lr = 0.001
+            optP = tf.optimizers.Nadam(learning_rate=lr*lrP) # lrP 500 
+        elif optimizer_name == 'Adamax':
+            opt = tf.optimizers.Adamax(learning_rate=lr) # lr 0.0075
+            optP = tf.optimizers.Adamax(learning_rate=lr*lrP) # lrP 1000
+        elif optimizer_name == 'Adagrad':
+            opt = tf.optimizers.Adagrad(learning_rate=lr) # lr 0.02
+            optP = tf.optimizers.Adagrad(learning_rate=lr*lrP) # lrP 250      
+        elif optimizer_name == 'RMSprop':
+            opt = tf.optimizers.RMSprop(learning_rate=lr) # lr =  0.0003
+            optP = tf.optimizers.RMSprop(learning_rate=lr*lrP) # lrP 1300        
+        elif optimizer_name == 'SGD':
+            opt = tf.optimizers.SGD(learning_rate=lr) # lr = 5e-6
+            optP = tf.optimizers.SGD(learning_rate=lr*lrP) # lrP = 2e6
+        elif optimizer_name == 'Ftrl':
+            opt = tf.optimizers.Ftrl(learning_rate=lr) # lr = 0.12
+            optP = tf.optimizers.Ftrl(learning_rate=lr*lrP) # lrP = 1000
+
+        tloss = sloss = tloss1 = tloss2 = tfZERO = tf.constant(0.0,tf.float32)
+        tfONE = tf.constant(1.0,dtype=tf.float32)
+
+        while True:
+            olderror = self.f_meanerr(fx, fy, ts=ts) 
+            for loopc in range(BezierCurve.mloop_itt):
+                # パラメータの再構成（各標本点に関連付けられたパラメータをその時点の近似曲線について最適化する）
+                # 関数化したかったが、tape をつかっているせいなのか、エラーがでてできなかった
+                with tf.GradientTape(persistent=True) as metatape:
+                    with tf.GradientTape(persistent=True) as t2:
+                        with tf.GradientTape(persistent=True) as t1:
+                            vs = tfONE-tts
+                            # tts**0 と (1-tts)**0 を含めると微係数が nan となるのでループから外している
+                            bezfx = vs**N*cps[0][0]
+                            bezfy = vs**N*cps[0][1]
+                            for i in range(1, N):
+                                if mode == 0:
+                                    bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*Px[i-1]
+                                    bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*Py[i-1]
+                                elif mode == 1:
+                                    bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*cps[i][0]
+                                    bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*cps[i][1]
+                            bezfx = bezfx + tts**N*cps[N][0]
+                            bezfy = bezfy + tts**N*cps[N][1]
+
+                            meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
+                            meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
+                            meanerror = tf.add(meanerrx, meanerry)
+                        
+                        # 1次微分
+                        # smoothness_coe 高波長の発生を抑える
+                        if BezierCurve.smoothness_coe > 0 or BezierCurve.swing_penalty > 0:
+                            d1_bezfx = t1.gradient(bezfx,tts)
+                            d1_bezfy = t1.gradient(bezfy,tts)                                             
+                        # swing_penalty 接線方向と標本点を結ぶ方向とのずれが大きいとペナルティを科す
+                        if BezierCurve.swing_penalty > 0:
+                            # 接線方向の単位ベクトルのテンソル
+                            norml = tf.sqrt(tf.add(tf.square(d1_bezfx),tf.square(d1_bezfy))) # 接線ベクトルのノルムのテンソル
+                            nd1_bezfx = tf.math.divide_no_nan(d1_bezfx,norml)
+                            nd1_bezfy = tf.math.divide_no_nan(d1_bezfy,norml)
+                            (dnvec0x,dnvec0y) = tf.concat([[nd1_bezfx],[nd1_bezfy]],axis=0) # 接線ベクトルの単位ベクトル
+                            # 標本点間を結ぶベクトルの単位ベクトルを求める
+                            svecx = tf.concat([[bezfx[1]-sps[0][0]],bezfx[2:]-bezfx[:-2],[sps[-1][0]-bezfx[-2]]],axis=0) # サンプル点を挟むサンプル点を結ぶベクトルｘ
+                            svecy = tf.concat([[bezfy[1]-sps[0][1]],bezfy[2:]-bezfy[:-2],[sps[-1][1]-bezfy[-2]]],axis=0) # 同ｙ
+                            snorml = tf.sqrt(tf.add(tf.square(svecx),tf.square(svecy)))
+                            nsvecx = tf.math.divide_no_nan(svecx,snorml)
+                            nsvecy = tf.math.divide_no_nan(svecy,snorml)
+                            (snvecx,snvecy) = tf.concat([[nsvecx],[nsvecy]],axis=0) # 標本点間ベクトルの単位ベクトル
+                            # dnvec と snvec の一致度  1-内積の平均値をペナルティ0とする
+                            tloss0 = tf.reduce_mean(tfONE-tf.add(dnvec0x*snvecx,dnvec0y*snvecy))
+                            # 両端だけ追加でペナルティを加える
+                            # パラメータの指す端点と2番目の点を結ぶ単位ベクトル
+                            nvec1 = tf.concat([[bezfx[0]-sps[0][0]],[bezfy[0]-sps[0][1]]],axis=0)
+                            (nvec1x,nvec1y) = tf.math.divide_no_nan(nvec1,tf.sqrt(tf.reduce_sum(tf.square(nvec1))))
+                            nvec2 = tf.concat([[sps[-1][0]-bezfx[-1]],[sps[-1][1]-bezfy[-1]]],axis=0)
+                            (nvec2x,nvec2y) = tf.math.divide_no_nan(nvec2,tf.sqrt(tf.reduce_sum(tf.square(nvec2))))
+                            # 導関数から両端点における接線方向の単位ベクトルを計算
+                            (dnvec1x,dnvec1y) = tf.concat([[nd1_bezfx[0]],[nd1_bezfy[0]]],axis=0)
+                            (dnvec2x,dnvec2y) = tf.concat([[nd1_bezfx[-1]],[nd1_bezfy[-1]]],axis=0)
+                            tloss1 = tfONE-(dnvec1x*nvec1x+dnvec1y*nvec1y)
+                            tloss2 = tfONE-(dnvec2x*nvec2x+dnvec2y*nvec2y)
+                            tloss = tf.add(tloss0,(tloss1+tloss2)/(len(ts)-2)) # 
+
+                    # 標本点間の滑らかさの制約として２次微分を０に近づける
+                    if BezierCurve.smoothness_coe > 0:
+                    # ２次微分
+                        d2_bezfx = t2.gradient(d1_bezfx,tts) # 両端は計算から外す
+                        d2_bezfy = t2.gradient(d1_bezfy,tts)     
+                        sloss = tf.reduce_mean(tf.sqrt(tf.add(tf.square(d2_bezfx),tf.square(d2_bezfy))))
+                    gloss = meanerror + BezierCurve.swing_penalty*tloss + BezierCurve.smoothness_coe*sloss
+
+                # ts を誤差逆伝搬で更新
+                opt.minimize(gloss, tape=metatape, var_list=tts)
+                # ts を更新
+                ts[1:-1] = tts.numpy() 
+                # check order and reorder 順序関係がおかしい場合強制的に変更       
+                ec = 0
+                for i in range(1,len(ts)-1):
+                    if ts[i] <= ts[i-1]:
+                        ec += 1
+                        ts[i] = ts[i-1] + 1e-6
+                    if ts[i] >= 1.0-(len(ts)-i-2)*(1e-6):
+                        ec += 1
+                        ts[i] = min(1.0-(len(ts)-i-2)*(1e-6), ts[i+1]) - 1e-6
+                if ec > 0:
+                    print("e%d" % (ec),end="")
+            # tts を更新
+            self.ts = ts
+            tts.assign(ts[1:-1])
+
+            if mode == 0:
+                # 上で求めたベジエパラメータに対し制御点を最適化
+                for loopc in range(BezierCurve.mloop_itt):
+                    with tf.GradientTape(persistent=True) as metatape:
+                        with tf.GradientTape(persistent=True) as t2:
+                            with tf.GradientTape(persistent=True) as t1:
+                                vs = tfONE-tts
+                                # tts**0 と (1-tts)**0 を含めると微係数が nan となるのでループから外している
+                                bezfx = vs**N*cps[0][0]
+                                bezfy = vs**N*cps[0][1]
+                                for i in range(1, N):
+                                    bezfx = bezfx + comb(N, i)*vs**(N-i)*tts**i*Px[i-1]
+                                    bezfy = bezfy + comb(N, i)*vs**(N-i)*tts**i*Py[i-1]
+                                bezfx = bezfx + tts**N*cps[N][0]
+                                bezfy = bezfy + tts**N*cps[N][1]
+
+                                meanerrx = tf.reduce_mean(tf.square(bezfx - x_data))
+                                meanerry = tf.reduce_mean(tf.square(bezfy - y_data))
+                                meanerror = tf.add(meanerrx, meanerry)
+                            
+                            # 1次微分
+                            # smoothness_coe 高波長の発生を抑える
+                            if BezierCurve.smoothness_coe > 0 or BezierCurve.swing_penalty > 0:
+                                d1_bezfx = t1.gradient(bezfx,tts)
+                                d1_bezfy = t1.gradient(bezfy,tts)                                             
+                            # swing_penalty 接線方向と標本点を結ぶ方向とのずれが大きいとペナルティを科す
+                            if BezierCurve.swing_penalty > 0:
+                                # 接線方向の単位ベクトルのテンソル
+                                norml = tf.sqrt(tf.add(tf.square(d1_bezfx),tf.square(d1_bezfy))) # 接線ベクトルのノルムのテンソル
+                                nd1_bezfx = tf.math.divide_no_nan(d1_bezfx,norml)
+                                nd1_bezfy = tf.math.divide_no_nan(d1_bezfy,norml)
+                                (dnvec0x,dnvec0y) = tf.concat([[nd1_bezfx],[nd1_bezfy]],axis=0) # 接線ベクトルの単位ベクトル
+                                # 標本点間を結ぶベクトルの単位ベクトルを求める
+                                svecx = tf.concat([[bezfx[1]-sps[0][0]],bezfx[2:]-bezfx[:-2],[sps[-1][0]-bezfx[-2]]],axis=0) # サンプル点を挟むサンプル点を結ぶベクトルｘ
+                                svecy = tf.concat([[bezfy[1]-sps[0][1]],bezfy[2:]-bezfy[:-2],[sps[-1][1]-bezfy[-2]]],axis=0) # 同ｙ
+                                snorml = tf.sqrt(tf.add(tf.square(svecx),tf.square(svecy)))
+                                nsvecx = tf.math.divide_no_nan(svecx,snorml)
+                                nsvecy = tf.math.divide_no_nan(svecy,snorml)
+                                (snvecx,snvecy) = tf.concat([[nsvecx],[nsvecy]],axis=0) # 標本点間ベクトルの単位ベクトル
+                                # dnvec と snvec の一致度  1-内積の平均値をペナルティ0とする
+                                tloss0 = tf.reduce_mean(tfONE-tf.add(dnvec0x*snvecx,dnvec0y*snvecy))
+                                # 両端だけ追加でペナルティを加える
+                                # パラメータの指す端点と2番目の点を結ぶ単位ベクトル
+                                nvec1 = tf.concat([[bezfx[0]-sps[0][0]],[bezfy[0]-sps[0][1]]],axis=0)
+                                (nvec1x,nvec1y) = tf.math.divide_no_nan(nvec1,tf.sqrt(tf.reduce_sum(tf.square(nvec1))))
+                                nvec2 = tf.concat([[sps[-1][0]-bezfx[-1]],[sps[-1][1]-bezfy[-1]]],axis=0)
+                                (nvec2x,nvec2y) = tf.math.divide_no_nan(nvec2,tf.sqrt(tf.reduce_sum(tf.square(nvec2))))
+                                # 導関数から両端点における接線方向の単位ベクトルを計算
+                                (dnvec1x,dnvec1y) = tf.concat([[nd1_bezfx[0]],[nd1_bezfy[0]]],axis=0)
+                                (dnvec2x,dnvec2y) = tf.concat([[nd1_bezfx[-1]],[nd1_bezfy[-1]]],axis=0)
+                                tloss1 = tfONE-(dnvec1x*nvec1x+dnvec1y*nvec1y)
+                                tloss2 = tfONE-(dnvec2x*nvec2x+dnvec2y*nvec2y)
+                                tloss = tf.add(tloss0,(tloss1+tloss2)/(len(ts)-2)) # 
+
+                        # 標本点間の滑らかさの制約として２次微分を０に近づける
+                        if BezierCurve.smoothness_coe > 0:
+                        # ２次微分
+                            d2_bezfx = t2.gradient(d1_bezfx,tts) # 両端は計算から外す
+                            d2_bezfy = t2.gradient(d1_bezfy,tts)     
+                            sloss = tf.reduce_mean(tf.sqrt(tf.add(tf.square(d2_bezfx),tf.square(d2_bezfy))))
+                        gloss = meanerror + BezierCurve.swing_penalty*tloss + BezierCurve.smoothness_coe*sloss
+
+                    optP.minimize(gloss, tape=metatape, var_list=[Px, Py])
+
+                for i in range(1, N):
+                    cps[i][0] = Px[i-1].numpy()
+                    cps[i][1] = Py[i-1].numpy() 
+                func = self.setCPs(cps)
+            elif mode == 1:
+                cps, func = self.fit0(tpara=ts)
+
+            # 誤差評価
+            fx,fy = func
+            error = self.f_meanerr(fx, fy, ts=ts) 
+            old3err = errq.popleft() # ３回前のエラーを取り出し
+            errq.append(error) # 最新エラーをバッファに挿入
+            convg_coe = BezierCurve.convg_coe # if mode == 1 else BezierCurve.convg_coe/10.0 # 収束判定基準
+            convergenceflag = (trynum - lastgood > 3 or trynum - lastgood == 1) and ((old3err - error)/3.0 < convg_coe*(error-err_th))
+
+            if BezierCurve.wandb:
+                if BezierCurve.smoothness_coe > 0 or BezierCurve.swing_penalty > 0:
+                    BezierCurve.wandb.log({"loss":error,"tloss": tloss.numpy(),'sloss':sloss.numpy()})
+                else:
+                    BezierCurve.wandb.log({"loss":error})
+            if error < minerror: 
+                if trynum - lastgood > 3:
+                  convergenceflag = False
+                bestts = ts  # 今までで一番よかったパラメータセットを更新
+                bestfunc = func  # 今までで一番よかった関数式を更新
+                minerror = error  # 最小誤差を更新
+                bestcps = cps  # 最適制御点リストを更新
+                print(".", end='')                  
+                lastgood = trynum
+                rmcounter = 0
+            else:
+                rmcounter = rmcounter + 1 # エラー増加回数のカウントアップ　減り続けているなら０
+                convergenceflag = False
+                print("^", end='') 
+
+            # 繰り返しが100回を超えたら条件を緩めていく
+            thresrate = 1.0 if trynum <= 100 else threstune**(trynum-100)
+            if BezierCurve.debugmode:
+                print("{} err:{:.5f}({:.5f}) rmcounter {})".format(
+                    trynum, error, minerror, rmcounter))
+            
+            # エラーが増加したときだけ fit0 を実行
+            # if convergenceflag or errq[-2] < error:
+                # fit0 で近似し、間隔均等になるように初期パラメータを決定
+                # cps, func = self.fit0(tpara=tts.numpy())
+                # ts = self.assignPara2Samples(prefunc=func)
+
+            if (convergenceflag and (trynum > 50)) or error < err_th*thresrate or ((trynum > 100) and rmcounter > pat):
+                # pat回続けてエラーが増加したらあきらめる デフォルトは１00 （fit1T は繰り返し1回あたりの変動が小さい）
+                if (convergenceflag and (trynum > 50)):
+                  print('C')
+                elif error < err_th*thresrate :
+                  print('E')
+                else:
+                  print('P')
+
+                if BezierCurve.debugmode:
+                    if rmcounter > pat:
+                        print("W")
+                    else:
+                        print("M")
+                break
+
+            trynum += 1
+            if trynum % 100 == 0:
+                print("")
+            if maxTry > 0 and trynum >= maxTry:
+                break
+            # Optuna を使っている場合の打ち切り
+            if trial:
+                trial.report(error,trynum)
+                if trial.should_prune() or error > 1e3:
+                    print("Optuna による打ち切り")
+                    raise optuna.TrialPruned()
+            
+        self.ts = bestts
+  
+        print("")
+        if withErr:
+            return bestcps, bestfunc, minerror
+        else:
+            return bestcps, bestfunc
+
+    # 段階的ベジエ近似
+    def fit2(self, mode=0, Nprolog=3, Nfrom=5, Nto=12, preTry=200, maxTry=0, lr=0.005, lrP=400, pat=10, err_th=0.75, threstune=1.0, withErr=False, tpara=[], withFig=False):
+        # mode 0 -> fit1() を使う, mode 1 -> fit1T(mode=1)を使う, mode 2 -> fit1T(mode=0) を使う
+        # Nplolog 近似準備開始次数　この次数からNfrom-1までは maxTry 回数で打ち切る
+        # Nfrom 近似開始次数　この次数以降は収束したら終了
+        # Nto 最大近似次数 Nto < Nfrom  の場合は誤差しきい値による打ち切り
+        # maxTry 各次数での繰り返し回数
+        # prefunc 初期近似関数
+        # err_th 打ち切り誤差
+        # pat この回数エラーが減らない場合はあきらめる
+        # withErr 誤差と次数を返すかどうか
+
+        Ncurrent = Nprolog - 1
+        func = self.prefunc
+        ts = tpara
+        err = err_th + 1
+        results = {}
+        while Ncurrent < Nto and err_th < err:
+            Ncurrent = Ncurrent + 1
+            # abez = BezierCurve(N=Ncurrent, samples=self.samples, tpara=ts, prefunc=func)
+            abez = BezierCurve(N=Ncurrent, samples=self.samples, tpara=[], prefunc=None)
+            print(Ncurrent, end="")
+            # 最大 maxTry 回あてはめを繰り返す
+            if mode == 0:
+                cps, func, err = abez.fit1(
+                    maxTry=preTry if Ncurrent < Nfrom else maxTry, withErr=True, tpara=[], pat=pat, err_th=err_th, threstune=threstune)
+            elif mode == 1:
+                cps, func, err = abez.fit1T(
+                    mode=1, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, lrP=lrP,withErr=True, tpara=[], pat=pat, err_th=err_th, threstune=threstune)
+            elif mode == 2:
+                cps, func, err = abez.fit1T(
+                    mode=0, maxTry=preTry if Ncurrent < Nfrom else maxTry, lr=lr, lrP=lrP,withErr=True, tpara=[], pat=pat, err_th=err_th, threstune=threstune)
+            ts = abez.ts
+            results[str(Ncurrent)] = (cps, func, err)
+            # 次数を上げてインスタンス生成
+        print(err,end="")
+        if withErr:
+            return Ncurrent, results
+        else:
+            return cps, func
+
+    # デバッグモードのオンオフ
+    def toggledebugmode(set=True, debug=False):
+        if set:
+            BezierCurve.debugmode = debug
+        else:  # set が False のときはトグル反応
+            BezierCurve.debugmode = not BezierCurve.debugmode
+        print("debugmode:", BezierCurve.debugmode)
+
+    # パラメータのセットと表示　引数なしで呼ぶ出せば初期化
+    def setParameters(priority='distance', dCount=3, convg_coe=1e-5,swing_penalty=0.0,smoothness_coe=0.0, debugmode=False, openmode=False,wandb=None):
+
+        BezierCurve.AsymptoticPriority = priority  # パラメータ割り当てフェーズにおける評価尺度
+
+        # xx BezierCurve.driftThres = driftThres # 繰り返しにおけるパラメータ変動幅の平均値に対するしきい値
+        # xx BezierCurve.errorThres = errorThres # 繰り返しにおける誤差変動幅に対するしきい値
+        BezierCurve.dCount = dCount  # サンプル点の最寄り点の2分探索の回数
+        BezierCurve.debugmode = debugmode
+        BezierCurve.openmode = openmode
+        BezierCurve.wandb = wandb
+        BezierCurve.priority = priority
+        BezierCurve.convg_coe = convg_coe
+        BezierCurve.swing_penalty = swing_penalty
+        BezierCurve.smoothness_coe = smoothness_coe
+        print("AsymptoticPriority : ", priority)
+        print("dCount    : ", dCount)
+        #print("driftThres: ",driftThres)
+        #print("errorThres: ",errorThres)
+        print("debugmode : ", debugmode)
+        print("openmode  : ", openmode)
+        print("wandb  : ", wandb)
+        print("convg_coe :", convg_coe)
+        print("swing_penalty :", swing_penalty)
+        print("smoothness_coe :", smoothness_coe)
+        print("")
+
 # (28) カラーの名前をからコードに
+
+
 def n2c(name):
-    cmap = plt.get_cmap("tab10")  # 
+    cmap = plt.get_cmap("tab10")  # カラーマップ
     # 0:darkblue,1:orange,2:green,3:red,4:purple,
     # 5:brown,6:lpurple,7:gray,8:leaf,9:rikyu
     # 0#1f77b4:1#ff7f0e:2#2ca02c:3#d62728:4#9467bd
@@ -948,10 +1763,12 @@ def n2c(name):
         return cmap(0)
 
 # (29) ベジエフィッティングの結果の描画
+
+
 def drawBez(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], cpr=[], cpc=[],
-            cntL=[], cntR=[], cntC=[], ladder=None, PosL=[], PosR=[], PosC=[], saveImage=False, savepath="",savesize=(320,320),
+            cntL=[], cntR=[], cntC=[], ladder=None, PosL=[], PosR=[], PosC=[], saveImage=False, savepath="",
             resolution=128, n_ladder=20, ct=['red', 'red', 'red', 'blue', 'blue', 'blue', 'purple', 'red', 'rikyugreen', 'orange'],
-            figsize=(6, 6), dpi=100, layout=111, axisoptions=['off','tight','equal'],bzlabel="", linestyle='solid'):
+            figsize=(6, 6), dpi=100, layout=111, bzlabel="", linestyle='solid'):
 
     # rdimg 入力画像、stt,end 曲線の描画範囲、
     # bezL,bezR,bezC ベジエ曲線、cpl,cpr,cpc 制御点
@@ -962,28 +1779,26 @@ def drawBez(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], 
     # resolution 曲線を描画する際に生成する描画点の数
 
     if figsize != None:
-        fig = plt.figure(figsize=figsize, dpi=dpi)
-    if(type(layout))==str:
-        layout = int(layout)
+        plt.figure(figsize=figsize, dpi=dpi)
+
     plt.subplot(layout)
-    drawBez0(rdimg,stt=stt, end=end, bezL=bezL, bezR=bezR, bezC=bezC, cpl=cpl, cpr=cpr, cpc=cpc,
-             cntL=cntL, cntR=cntR, cntC=cntC, ladder=ladder, PosL=PosL, PosR=PosR, PosC=PosC, saveImage=saveImage, savepath=savepath,savesize=savesize,
-             resolution=resolution, n_ladder=n_ladder, ct=ct, bzlabel=bzlabel, linestyle=linestyle,axisoptions=axisoptions)
+
+    drawBez0(rdimg, stt=stt, end=end, bezL=bezL, bezR=bezR, bezC=bezC, cpl=cpl, cpr=cpr, cpc=cpc,
+             cntL=cntL, cntR=cntR, cntC=cntC, ladder=ladder, PosL=PosL, PosR=PosR, PosC=PosC, saveImage=saveImage, savepath=savepath,
+             resolution=resolution, n_ladder=n_ladder, ct=ct, bzlabel=bzlabel, linestyle=linestyle)
 
 # (29)-2 # 重ね書き用
 
-def drawBez0(rdimg,stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], cpr=[], cpc=[],
-             cntL=[], cntR=[], cntC=[], ladder=None, PosL=[], PosR=[], PosC=[], saveImage=False, savepath="",savesize=(320,320),
+
+def drawBez0(rdimg, stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], cpr=[], cpc=[],
+             cntL=[], cntR=[], cntC=[], ladder=None, PosL=[], PosR=[], PosC=[], saveImage=False, savepath="",
              resolution=128, n_ladder=20, ct=['red', 'red', 'red', 'blue', 'blue', 'blue', 'purple', 'red', 'rikyugreen', 'orange'],
-             bzlabel="", linestyle='solid',axisoptions=['off','tight','equal']):
+             bzlabel="", linestyle='solid'):
     if type(linestyle) == int:
         if 0 < linestyle and linestyle < 4:
             linestyle = ["solid", "dashed", "dashdot", "dotted"][linestyle]
         else:
             linestyle = 'solid'
-    # matplotlib の仕様変更への対応 数字列指定した場合
-    if ct[0].isdecimal() == True:
-        ct = [n2c(int(i)) for i in ct]
     # いわゆる自乗誤差の一般式
     s, t = symbols('s,t')
 
@@ -1073,31 +1888,27 @@ def drawBez0(rdimg,stt=0.02, end=0.98, bezL=None, bezR=None, bezC=None, cpl=[], 
             for x0, x1, y0, y1 in zip(plot20rx, plot20cx, plot20ry, plot20cy):
                 if x0 != np.inf and y0 != np.inf:
                     plt.plot([x0, x1], [y0, y1], color=ct[9])  # orange
-    for op in axisoptions:
-        plt.axis(op)
     if saveImage:
-        pltsaveimage(savepath, 'Bez',savesize=savesize)
+        pltsaveimage(savepath, 'Bez')
 
 # (30) matplotlib で描いた画像の保存
-def pltsaveimage(savepath, prefix,savesize):
-    set_pltsize(fig=plt.gcf(),size=savesize)
-    if type(savepath)==str: 
-        # 結果を保存する
-        savedir, filename = os.path.split(savepath)
-        #  _,subdir = os.path.split(savedir)
-        os.makedirs(savedir, exist_ok=True)  # 保存先フォルダがなければ作成
-        savepath = os.path.join(savedir, prefix+filename)
-        if os.path.exists(savepath):
-            os.remove(savepath)
-        plt.savefig(savepath,bbox_inches='tight')
-        plt.clf()
-    elif type(savepath)==io.BytesIO:
-        plt.savefig(savepath,bbox_inches='tight',format='png')
-        plt.clf()
-        return savepath.getvalue()
+
+
+def pltsaveimage(savepath, prefix):
+    # 結果を保存する
+    savedir, filename = os.path.split(savepath)
+    #  _,subdir = os.path.split(savedir)
+    os.makedirs(savedir, exist_ok=True)  # 保存先フォルダがなければ作成
+    savepath = os.path.join(savedir, prefix+filename)
+    if os.path.exists(savepath):
+        os.remove(savepath)
+    print("TEST", savepath)
+    plt.savefig(savepath)
 
 # (31) 画像の両側と仮の中心線のベジエ曲線を返す関数
-def getAverageBezline(img, N=6, n_samples=32, Amode=0, maxTry=0, moption=True): # ここはTrueで正しい
+
+
+def getAverageBezline(img, N=6, n_samples=32, Amode=0, maxTry=0):
     # img 画像
     # N ベジエ近似の次数
     # n_samples 左右輪郭線から取るサンプル点の数
@@ -1117,21 +1928,19 @@ def getAverageBezline(img, N=6, n_samples=32, Amode=0, maxTry=0, moption=True): 
 
     # 左右をそれぞれベジエ 曲線で近似し、その平均として中心軸を仮決定
     if Amode == 0:
-        if moption:
-            cpl, fL = bezL.fit0(moption=getMutPoints(conLeft,cntL))
-            cpr, fR = bezR.fit0(moption=getMutPoints(conRight,cntR))
-        else:
-            cpl, fL = bezL.fit0(moption=[])
-            cpr, fR = bezR.fit0(moption=[])            
+        cpl, fL = bezL.fit0()
+        cpr, fR = bezR.fit0()
     else:
-        if moption:
-            cpl, fL = bezL.fit1T(moption=getMutPoints(conLeft,cntL))
-            cpr, fR = bezR.fit1T(moption=getMutPoints(conRight,cntR))
-        else:
-            cpl, fL = bezL.fit1T(moption=[])
-            cpr, fR = bezR.fit1T(moption=[]) 
+        cpl, fL = bezL.fit1(maxTry)
+        cpr, fR = bezR.fit1(maxTry)
+
+    fC = (fL+fR)/2
+    cpc = [x for x in (np.array(cpl)+np.array(cpr))/2]
+    return cpl, cpr, cpc, fL, fR, fC, cntL, cntR
 
 # (32) 中心線の法線と輪郭の交点を数式処理により求める
+
+
 def crossPointsLRonEx(fl, fr, fc, t0):
     # fl,fr,fc 左側、右側、中心線のパラメトリック曲線
     # t0 曲線上の位置を特定するパラメータ
@@ -1161,6 +1970,8 @@ def crossPointsLRonEx(fl, fr, fc, t0):
     return ldata, rdata
 
 # (33) 中心線の法線と輪郭の交点を図的処理により求める
+
+
 def crossPointsLRonImg(img, fc, t0, debugmode=False):
     # fc 中心線のパラメトリック曲線
     # t0 曲線上の位置を特定するパラメータ
@@ -1204,6 +2015,8 @@ def crossPointsLRonImg(img, fc, t0, debugmode=False):
     return [crpLx, crpLy], [crpRx, crpRy]
 
 # (34) 1点を通る直線（x0,y0を通り傾きdy/dx)と輪郭画像の交点を求める
+
+
 def crossPointsLRonImg0(img, x0, y0, dx, dy):
     # 輪郭線を描いた画像を用意する
     con = getContour(img)
@@ -1286,43 +2099,10 @@ def crossPointsLRonImg0(img, x0, y0, dx, dy):
 
     return (crpLx, crpLy), (crpRx+x0, crpRy)
 
-# OverFitting判定　標本点間の異常判定
-#実輪郭の各標本点間を4分割し、4分位点３つと標本点２つの5点を区間代表とし、近似曲線の対応区間で対応する５点との距＃
-def isOverFitting(func,ts,cont,err_th=1.0,of_th=1.0):
-    if len(cont) == 0:
-        return []
-    Nsamples = len(ts)
-    # 実輪郭線側の標本点間弧長を計算する
-    axlength = np.array(cv2.arcLength(cont,closed=False))  # 全周の長さ
-    span = axlength/(Nsamples-1) # 平均標本点間距離
-    lengths = np.array([cv2.arcLength(cont[:i+1], closed=False) for i in range(len(cont))])
-                                                    # 始点から全輪郭点にいたる弧長
-    spidx = np.array([np.abs(lengths - i).argmin() for i in np.linspace(0, axlength, Nsamples)])
-                                                    # 等間隔にとった標本点のインデックス
-    rs1 = []
-    for i in range(Nsamples-1):
-        qls = np.linspace(lengths[spidx[i]],lengths[spidx[i+1]],5)
-        qidx = np.array([np.abs(lengths - l).argmin() for l in qls])
-        rq5 = np.array([cont[s] for s in qidx]) 
-        rs1.append(rq5) # 各区分の両端と4分割点計5点ずつのリスト
-    # 近似曲線側の弧長を計算する
-    rs2 = []
-    fx,fy = func
-    nfx, nfy = lambdify('t', fx, "numpy"), lambdify('t', fy, "numpy")
-    for i in range(Nsamples-1):
-        d5 = getDenseParameters(func, st=ts[i], et=ts[i+1], n_samples=5) # 標本点のパラメタ間を4分割
-        aq5 = np.array([[nfx(s),nfy(s)] for s in d5]) # 近似曲線上で区間を4等分する座標のリスト
-        rs2.append(aq5)
-    # 代表5点の残差の標準偏差 
-    difs = np.array([np.std(np.sum((rq5-aq5)*(rq5-aq5),axis=1)) for (rq5,aq5) in zip(rs1,rs2)])
-    #q75, q25 = np.percentile(difs, [75,25]) # 四分位点
-    #odds0 = np.where((difs>q75+1.5*(q75-q25))) # 異常値のインデックス
-    odds = np.where(difs > err_th*of_th*span)[0] # 
-    # print(odds,[difs[i] for i in odds0])
-    return odds  
-
 # (-1)変数データのストアとリストア
 # 変数内データを pickle 形式で保存
+
+
 def storePkl(val, fname, folder="."):
     os.makedirs(folder, exist_ok=True)
     f = open(folder+"/"+fname, 'wb')
@@ -1330,95 +2110,10 @@ def storePkl(val, fname, folder="."):
     f.close
 
 # pickle 形式で保存されたデータを変数に復元
+
+
 def loadPkl(fname, folder="."):
     f = open(folder+"/"+fname, 'rb')
     cat = pickle.load(f)
     f.close
     return cat
-
-# opencv 画像を tk 画像に変換
-def cv2tkimgwithPIL(cvimg,resize = None):
-    pilimg = Image.fromarray(cvimg)
-    if resize:
-        pilimg.thumbnail(resize) # 破壊的変換なので注意
-        newcvimg = np.array(pilimg, dtype=np.uint8)
-    elif resize==None:
-        newcvimg = cvimg
-    return cv2.imencode('.png', newcvimg)[1].tobytes(), pilimg
-
-def cv2tkimg(cvimg,resize = None):
-    code,pilimg = cv2tkimgwithPIL(cvimg,resize = resize)
-    return code
-
-'''def cv2tkimg(cvimg,resize = None, first=False): 
-    if len(cvimg.shape) == 2:
-        pilimg = Image.fromarray(cvimg)
-    else:
-        pilimg = Image.fromarray(cv2.cvtColor(cvimg,cv2.COLOR_BGR2RGB))
-    if resize:
-        pilimg.thumbnail(resize) # 破壊的変換なので注意
-    cvimg = np.array(pilimg, dtpe=np.uint8)
-    if first:
-        bio = io.BytesIO()
-        pilimg.save(bio, format="PNG")
-        del pilimg
-        return bio.getvalue()
-    return ImageTk.PhotoImage(pilimg)'''
-
-# matplotlib のサイズ指定 https://kavigupta.org/2019/05/18/Setting-the-size-of-figures-in-matplotlib/
-from matplotlib.image import imread
-import tempfile
-import os
-class CustomNamedTemporaryFile: # https://stackoverflow.com/questions/23212435/permission-denied-to-write-to-my-temporary-file
-    def __init__(self, mode='wb', delete=True):
-        self._mode = mode
-        self._delete = delete
-
-    def __enter__(self):
-        # Generate a random temporary file name
-        file_name = os.path.join(tempfile.gettempdir(), os.urandom(24).hex())
-        # Ensure the file is created
-        open(file_name, "x").close()
-        # Open the file in the given mode
-        self._tempFile = open(file_name, self._mode)
-        return self._tempFile
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._tempFile.close()
-        if self._delete:
-            os.remove(self._tempFile.name)
-
-# matplotlib で描画した場合の画像のサイズを得る
-def get_pltsize(fig=None, ext=".png", dpi=0):
-    if fig == None:
-        fig = plt.gcf()
-    with CustomNamedTemporaryFile("w+") as f:
-        if dpi==0:
-            dpi = fig.dpi
-        fig.savefig(f.name+ext, bbox_inches='tight', dpi=dpi)
-        height, width, _channels = imread(f.name+ext).shape
-        return width, height
-    
-def set_pltsize(fig=None,eps=1, give_up=2, min_size_px=10,dpi=0,size=(320,320)):
-    if fig == None:
-        fig = plt.gcf()
-    if dpi == 0:
-        dpi = fig.dpi
-    target_width, target_height = size
-    set_width, set_height = target_width/dpi, target_height/dpi # setsize in inch
-    deltas = [] # how far we have
-    while True:
-        fig.set_size_inches([set_width, set_height])
-        actual_width, actual_height = get_pltsize(fig)
-        set_width *= target_width / actual_width
-        set_height *= target_height / actual_height
-        deltas.append(abs(actual_width - target_width) + abs(actual_height - target_height))
-        if deltas[-1] < eps:
-            break
-        if len(deltas) > give_up and sorted(deltas[-give_up:]) == deltas[-give_up:]:
-            break
-        if set_width*dpi < min_size_px or set_height*dpi < min_size_px:
-            break
-    return (actual_width,actual_height)
-
-#  fig.subplots_adjust(left=0, right=1, bottom=0, top=1) # 余白なし

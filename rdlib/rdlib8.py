@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from statistics import mean
 from collections import deque
-# import optuna
+import optuna
 
 # from sympy import *
 from sympy import diff, Symbol, Matrix, symbols, solve, simplify, binomial, Abs, im, re, lambdify
@@ -407,7 +407,7 @@ def RDreform(img, order=1, ksize=0, shrink=SHRINK):
 
 # (9)-3
 
-# (9)-3
+
 def RDreform_D(img, ksize=5, shrink=SHRINK):
 
     # 収縮・膨張によりヒゲ根を除去する
@@ -436,10 +436,7 @@ def RDreform_D(img, ksize=5, shrink=SHRINK):
         n += 1
     img3 = cv2.dilate(tmpimg, kernel, iterations=n)  # 同じ回数膨張させる
     # あらためて輪郭を求め直す
-    _lnum, limg, stats, cog = cv2.connectedComponentsWithStats(img3)
-    areamax = np.argmax(stats[1:, 4])+1  # ０番を除く面積最大値のインデックス
-    img3 = np.zeros_like(img3)
-    img3[limg==areamax] = 255
+
     cnt, _hierarchy = cv2findContours34(
         img3, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)  # あらためて輪郭を抽出
     outimg = np.zeros_like(img3)
@@ -453,9 +450,8 @@ def RDreform_D(img, ksize=5, shrink=SHRINK):
         outimg = cv2.drawContours(outimg, [approx], 0, 255, thickness=-1)
     else:
         outimg = np.ones_like(img3)*255
-
     return outimg
-    
+
 # (10) Grabcut による大根領域の抜き出し
 # GrabCutのためのマスクを生成する
 
@@ -1376,8 +1372,7 @@ class BezierCurve:
             return bestcps, bestfunc
 
     # fit1 の tensorflowによる実装
-    # def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=300, err_th=1.0, threstune=1.00, trial=None, scatter=False, moption=[]):
-    def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=300, err_th=1.0, threstune=1.00, scatter=False, moption=[]):
+    def fit1T(self, mode=1, maxTry=0, withErr=False, withEC=False,prefunc=None,tpara=[], lr=0,  lrP=0, pat=300, err_th=1.0, threstune=1.00, trial=None, scatter=False, moption=[]):
         # maxTry 繰り返し回数指定　0 なら誤差条件による繰り返し停止
         # withErr 誤差情報を返すかどうか withEC が真ならカウントも返す
         # tpara  fit0() にわたす初期パラメータ値
@@ -1585,13 +1580,12 @@ class BezierCurve:
             if maxTry > 0 and trynum >= maxTry:
                 break
             # Optuna を使っている場合の打ち切り
-            '''
             if trial:
                 trial.report(error,trynum)
                 if trial.should_prune() or error > 1e3:
                     print("Optuna による打ち切り")
                     raise optuna.TrialPruned()
-            '''    
+                
         self.ts = bestts.copy()
         fx,fy=bestfunc
             
@@ -2096,26 +2090,16 @@ def loadPkl(fname, folder="."):
     return cat
 
 # opencv 画像を tk 画像に変換
-def cv2tkimg(cvimg,resize = None):
-    if resize:
-        pilimg = Image.fromarray(cvimg)
-        pilimg.thumbnail(resize) # 破壊的変換なので注意
-        newcvimg = np.array(pilimg, dtype=np.uint8)
-    elif resize==None:
-        newcvimg = cvimg.copy()
-    return cv2.imencode('.png', newcvimg)[1].tobytes() 
-
-'''def cv2tkimg(cvimg,resize = None, first=False): 
+def cv2tkimg(cvimg,resize = (320,320), first=False):
     if len(cvimg.shape) == 2:
         pilimg = Image.fromarray(cvimg)
     else:
         pilimg = Image.fromarray(cv2.cvtColor(cvimg,cv2.COLOR_BGR2RGB))
     if resize:
         pilimg.thumbnail(resize) # 破壊的変換なので注意
-    cvimg = np.array(pilimg, dtpe=np.uint8)
     if first:
         bio = io.BytesIO()
         pilimg.save(bio, format="PNG")
         del pilimg
         return bio.getvalue()
-    return ImageTk.PhotoImage(pilimg)'''
+    return ImageTk.PhotoImage(pilimg)

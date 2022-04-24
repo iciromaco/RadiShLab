@@ -24,11 +24,12 @@ from kivy.graphics.texture import Texture
 from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle, Point, GraphicException
 
-sys.path.append('./rdlib')
+#sys.path.append('./rdlib')
 import pprint
 pprint.pprint(sys.path)
-import filedialog # self made library
-import rdlib8 as rd # self made library
+# import filedialog # self made library
+import rdlib as rd # self made library
+from rdlib import LoadDialog,SaveDialog
 
 # Prohibit red circle displayed by right click
 from kivy.config import Config
@@ -258,7 +259,8 @@ def cv2kvtexture(img, force3 = True):
     width = img2.shape[1]
     texture = Texture.create(size=(width,height))
     colorfmt = 'rgb' if img2.shape[2]==3 else 'rgba'
-    texture.blit_buffer(img2.tostring(), colorfmt=colorfmt)
+    # texture.blit_buffer(img2.tostring(), colorfmt=colorfmt)
+    texture.blit_buffer(img2.tobytes(), colorfmt=colorfmt)
     return texture
 
 # Main Widget
@@ -322,6 +324,7 @@ class GrabCutConsole(BoxLayout):
         self.resetMode() # mode ボタンを全て非選択に
         gryimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2GRAY) # グレイ画像作成
         self.mask = np.zeros(srcimg.shape[:2],np.uint8) # GrabCut 用マスクの初期化
+        print("A",self.mask.shape)
         self.maskStack = [self.mask.copy()] # マスクのバックアップ
         self.silhouette = smask = rd.getMajorWhiteArea(gryimg,binary=True) # シルエット画像作成
         outimg = cv2.cvtColor(srcimg,cv2.COLOR_BGR2BGRA) # アルファチャネル追加
@@ -712,7 +715,8 @@ class GrabCutConsole(BoxLayout):
         img = self.srcimg.copy()
         bgdmodel = np.zeros((1,65),np.float64)
         fgdmodel = np.zeros((1,65),np.float64)
-
+        print("B",self.mask.shape)
+        print("C",img.shape)
         if (self.frame_or_mask == 0): 
             cv2.grabCut(img,self.mask,rect,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_RECT)
             self.frame_or_mask = 1

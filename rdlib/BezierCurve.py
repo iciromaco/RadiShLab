@@ -1,5 +1,22 @@
 # Class Bezier Curbe
 # ベジエ曲線のクラス定義
+import cv2
+import numpy as np
+from statistics import mean
+from collections import deque
+from rdlib import *
+os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
+# from sympy import *
+from sympy import diff, Symbol, Matrix, symbols, solve, simplify, binomial, Abs, im, re, lambdify
+from sympy.abc import a, b, c
+# init_session()
+from sympy import var
+
+import tensorflow as tf
+from keras import optimizers
+from scipy.special import comb
+import scipy.stats as stats
+
 class BezierCurve:
     # インスタンス変数
     # f [X座標関数式,Y座標関数式]
