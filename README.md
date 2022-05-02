@@ -139,7 +139,7 @@ python はライブラリ間の依存関係が複雑でしばしば最新でな�
 ### CUIで仮想環境作成
 Anaconda Promptを起動して次のように打ち込んでください。
 ```
-conda create -n RL python=3.8 opencv=4.5 tensorflow=2.6 kearas=2.6 matplotlib sympy
+conda create -n RL python=3.8 opencv=4.5 tensorflow=2.6 keras=2.6 matplotlib sympy
 ```
 
 ### 3. ライブラリのインストール
