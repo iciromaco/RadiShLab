@@ -2,7 +2,7 @@
 import PyInstaller.__main__
 PyInstaller.__main__.run([
     'RadishLabTools.py','--onefile','--nowindow','--clean',
-    '--add-binary="C\:/Users/dan/anaconda3/envs/RL/Lib/site-packages/tensorflow/lite/experimental/microfrontend/python/ops/_audio_microfrontend_op.so;tensorflow/lite/experimental/microfrontend/python/ops/"',
+    '--add-binary="./_audio_microfrontend_op.so;tensorflow/lite/experimental/microfrontend/python/ops/"',
     '--add-data="./RDSamples/*;RDSamples"',
     '--add-data="./res/picdicpics/*;res/picdicpics"',
     '--add-data="./res/*;res',
